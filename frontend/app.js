@@ -94,6 +94,16 @@ const englishTranslations = {
   "Implantations": "Locations",
   "Etablissements": "Locations",
   "Nouvel etablissement": "New location",
+  "Type d'etablissement": "Location type",
+  "Entrepot": "Warehouse",
+  "Boutique": "Store",
+  "Siege social": "Headquarters",
+  "Centre R&D": "R&D center",
+  "Comptabilite": "Accounting",
+  "Bureau": "Office",
+  "Autre": "Other",
+  "Rechercher une adresse": "Search for an address",
+  "Commencez a saisir une adresse...": "Start typing an address...",
   "Adresse": "Address",
   "Code postal": "Postal code",
   "Ville": "City",
@@ -185,6 +195,11 @@ const englishTranslations = {
   "Equipe creee.": "Team created.",
   "Etablissement mis a jour.": "Location updated.",
   "Etablissement cree.": "Location created.",
+  "Recherche d'adresse...": "Searching addresses...",
+  "Aucune adresse trouvee.": "No address found.",
+  "Selection de l'adresse...": "Loading address...",
+  "Adresse completee automatiquement.": "Address completed automatically.",
+  "Google Places n'est pas configure.": "Google Places is not configured.",
   "Mode clair": "Light mode",
   "Mode sombre": "Dark mode",
 };
@@ -788,6 +803,61 @@ function organizationIcon(type) {
   return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg>`;
 }
 
+const establishmentTypeLabels = {
+  warehouse: "Entrepot",
+  store: "Boutique",
+  headquarters: "Siege social",
+  research: "Centre R&D",
+  accounting: "Comptabilite",
+  office: "Bureau",
+  other: "Autre",
+};
+
+function establishmentIcon(type) {
+  const icons = {
+    warehouse: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-6 9 6v12M7 21v-8h10v8M7 17h10"></path></svg>`,
+    store: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9l2-6h14l2 6M5 13v8h14v-8M9 21v-6h6v6"></path><path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"></path></svg>`,
+    headquarters: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21h16M6 21V5h8v16M14 9h4v12M9 8h2M9 12h2M9 16h2"></path></svg>`,
+    research: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3M8 15h8"></path></svg>`,
+    accounting: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="2" width="16" height="20" rx="2"></rect><path d="M8 6h8M8 10h2M14 10h2M8 14h2M14 14h2M8 18h2M14 18h2"></path></svg>`,
+    office: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M9 8h1M14 8h1M9 12h1M14 12h1M9 16h1M14 16h1"></path></svg>`,
+    other: organizationIcon("site"),
+  };
+  return icons[type] || icons.other;
+}
+
+function countryCodeFromName(country) {
+  const codes = {
+    France: "fr",
+    Belgique: "be",
+    Suisse: "ch",
+    "Royaume-Uni": "gb",
+    Espagne: "es",
+    Italie: "it",
+    Allemagne: "de",
+    "Pays-Bas": "nl",
+    Portugal: "pt",
+    "Etats-Unis": "us",
+  };
+  return codes[country] || "";
+}
+
+function countryNameFromCode(code) {
+  const countries = {
+    fr: "France",
+    be: "Belgique",
+    ch: "Suisse",
+    gb: "Royaume-Uni",
+    es: "Espagne",
+    it: "Italie",
+    de: "Allemagne",
+    nl: "Pays-Bas",
+    pt: "Portugal",
+    us: "Etats-Unis",
+  };
+  return countries[String(code || "").toLowerCase()] || "";
+}
+
 function setAdminView(view) {
   $$(".admin-nav-button").forEach((button) => button.classList.toggle("is-active", button.dataset.adminView === view));
   $$(".admin-section-view").forEach((section) => {
@@ -827,10 +897,10 @@ function renderOrganization() {
       const location = [site.city, site.country].filter(Boolean).join(", ");
       return `
         <button class="organization-item edit-establishment ${site.active ? "" : "is-inactive"}" type="button" data-id="${site.id}">
-          <span class="organization-icon site">${organizationIcon("site")}</span>
+          <span class="organization-icon site type-${escapeHtml(site.establishment_type || "office")}">${establishmentIcon(site.establishment_type || "office")}</span>
           <span>
             <strong>${escapeHtml(site.name)}</strong>
-            <small>${state.language === "en" ? `${site.device_count} computer${site.device_count === 1 ? "" : "s"}` : `${site.device_count} machine${site.device_count === 1 ? "" : "s"}`}${location ? ` - ${escapeHtml(location)}` : ""}</small>
+            <small>${translate(establishmentTypeLabels[site.establishment_type] || establishmentTypeLabels.office)} - ${state.language === "en" ? `${site.device_count} computer${site.device_count === 1 ? "" : "s"}` : `${site.device_count} machine${site.device_count === 1 ? "" : "s"}`}${location ? ` - ${escapeHtml(location)}` : ""}</small>
           </span>
           <span class="organization-chevron">&rsaquo;</span>
         </button>
@@ -870,7 +940,11 @@ function resetEstablishmentForm() {
   form.reset();
   form.elements.id.value = "";
   form.elements.country.value = "France";
+  form.elements.establishmentType.value = "office";
   form.elements.active.checked = true;
+  $("#address-search").value = "";
+  $("#address-search-status").textContent = "";
+  hideAddressSuggestions();
   $("#establishment-editor-title").textContent = "Nouvel etablissement";
   renderEstablishmentMap();
 }
@@ -881,6 +955,7 @@ function editEstablishment(id) {
   const form = $("#establishment-form");
   form.elements.id.value = site.id;
   form.elements.name.value = site.name || "";
+  form.elements.establishmentType.value = site.establishment_type || "office";
   form.elements.address.value = site.address || "";
   form.elements.postalCode.value = site.postal_code || "";
   form.elements.city.value = site.city || "";
@@ -921,6 +996,77 @@ async function loadOrganization() {
   state.establishments = data.establishments || [];
   renderOrganization();
   updateOrganizationDatalists();
+}
+
+let addressSearchTimer = 0;
+let addressSearchController = null;
+
+function hideAddressSuggestions() {
+  $("#address-suggestions").classList.add("is-hidden");
+  $("#address-suggestions").innerHTML = "";
+}
+
+async function searchAddresses() {
+  const form = $("#establishment-form");
+  const query = $("#address-search").value.trim();
+  if (query.length < 3) {
+    $("#address-search-status").textContent = "";
+    hideAddressSuggestions();
+    return;
+  }
+  if (addressSearchController) addressSearchController.abort();
+  addressSearchController = new AbortController();
+  $("#address-search-status").textContent = translate("Recherche d'adresse...");
+  const params = new URLSearchParams({
+    q: query,
+    country: countryCodeFromName(form.elements.country.value),
+    language: state.language,
+  });
+  try {
+    const data = await api(`/admin/address/autocomplete?${params}`, { signal: addressSearchController.signal });
+    const suggestions = data.suggestions || [];
+    $("#address-search-status").textContent = suggestions.length ? "" : translate("Aucune adresse trouvee.");
+    $("#address-suggestions").innerHTML = suggestions
+      .map(
+        (suggestion) => `
+          <button class="address-suggestion" type="button" role="option" data-place-id="${escapeHtml(suggestion.placeId)}">
+            ${organizationIcon("site")}
+            <span>${escapeHtml(suggestion.label)}</span>
+          </button>
+        `,
+      )
+      .join("");
+    $("#address-suggestions").classList.toggle("is-hidden", suggestions.length === 0);
+    $$(".address-suggestion").forEach((button) => {
+      button.addEventListener("click", () => selectAddressSuggestion(button.dataset.placeId));
+    });
+  } catch (error) {
+    if (error.name === "AbortError") return;
+    hideAddressSuggestions();
+    $("#address-search-status").textContent = translate(error.message);
+  }
+}
+
+async function selectAddressSuggestion(placeId) {
+  const form = $("#establishment-form");
+  $("#address-search-status").textContent = translate("Selection de l'adresse...");
+  hideAddressSuggestions();
+  try {
+    const params = new URLSearchParams({ placeId, language: state.language });
+    const address = await api(`/admin/address/details?${params}`);
+    form.elements.address.value = address.address || "";
+    form.elements.postalCode.value = address.postalCode || "";
+    form.elements.city.value = address.city || "";
+    const countryValue = countryNameFromCode(address.countryCode);
+    if (countryValue) form.elements.country.value = countryValue;
+    form.elements.latitude.value = address.latitude ?? "";
+    form.elements.longitude.value = address.longitude ?? "";
+    $("#address-search").value = address.formattedAddress || address.address || "";
+    $("#address-search-status").textContent = translate("Adresse completee automatiquement.");
+    renderEstablishmentMap();
+  } catch (error) {
+    $("#address-search-status").textContent = translate(error.message);
+  }
 }
 
 async function loadAdminData() {
@@ -1078,6 +1224,7 @@ function bindEvents() {
     const id = values.id;
     const payload = {
       name: values.name,
+      establishmentType: values.establishmentType,
       address: values.address,
       postalCode: values.postalCode,
       city: values.city,
@@ -1104,6 +1251,17 @@ function bindEvents() {
   });
   ["latitude", "longitude"].forEach((name) => {
     $("#establishment-form").elements[name].addEventListener("input", renderEstablishmentMap);
+  });
+  $("#address-search").addEventListener("input", () => {
+    window.clearTimeout(addressSearchTimer);
+    addressSearchTimer = window.setTimeout(searchAddresses, 320);
+  });
+  $("#establishment-form").elements.country.addEventListener("change", () => {
+    if ($("#address-search").value.trim().length >= 3) searchAddresses();
+  });
+  document.addEventListener("click", (event) => {
+    if (event.target.closest(".address-search-field")) return;
+    hideAddressSuggestions();
   });
   $("#token-form").addEventListener("submit", async (event) => {
     event.preventDefault();

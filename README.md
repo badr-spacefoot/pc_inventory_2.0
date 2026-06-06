@@ -167,6 +167,7 @@ Secrets backend:
 - `ALLOWED_ORIGINS`
 - `EBAY_BROWSE_API_TOKEN` optionnel
 - `KEEPA_API_KEY` optionnel
+- `GOOGLE_MAPS_API_KEY` optionnel, pour la recherche et l'autocompletion des adresses
 - `ENRICHMENT_CACHE_DAYS` optionnel
 
 Ne jamais mettre `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_PASSWORD` ou `ADMIN_SESSION_SECRET` dans le front GitHub Pages.
@@ -219,10 +220,26 @@ Variables optionnelles:
 ```powershell
 supabase secrets set EBAY_BROWSE_API_TOKEN="..."
 supabase secrets set KEEPA_API_KEY="..."
+supabase secrets set GOOGLE_MAPS_API_KEY="..."
 supabase secrets set ENRICHMENT_CACHE_DAYS="30"
 ```
 
 L'enrichissement n'est pas lance a chaque affichage. Par defaut, un resultat de moins de `ENRICHMENT_CACHE_DAYS` jours est ignore. Pour automatiser, creer un schedule Supabase qui appelle regulierement l'Edge Function sur `/admin/enrich` avec un token admin serveur, ou declencher manuellement depuis le dashboard.
+
+## Autocompletion des adresses
+
+Le module Organisation peut rechercher une adresse avec Google Places, puis remplir automatiquement l'adresse, le code postal, la ville, le pays, la latitude et la longitude.
+
+1. Dans Google Cloud Console, activer **Places API (New)** et la facturation.
+2. Creer une cle API reservee au serveur.
+3. Restreindre la cle a **Places API (New)**. Ne pas placer cette cle dans `frontend/` ou dans GitHub Pages.
+4. Ajouter la valeur dans le secret GitHub `GOOGLE_MAPS_API_KEY`, ou directement dans Supabase:
+
+```bash
+supabase secrets set GOOGLE_MAPS_API_KEY="..."
+```
+
+La recherche passe par l'Edge Function Supabase et exige une session admin valide. Sans cette cle, la saisie manuelle des adresses et la carte OpenStreetMap restent disponibles.
 
 Les prix marche sont approximatifs: le dashboard affiche donc un `confidence_score`. Plus il y a de signaux recents et concordants, plus la confiance augmente.
 

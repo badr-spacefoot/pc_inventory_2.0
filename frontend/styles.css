@@ -631,6 +631,36 @@ pre {
   color: var(--site-ink);
 }
 
+.organization-icon.type-warehouse {
+  background: color-mix(in srgb, #d18b24 16%, var(--surface));
+  color: #b36c08;
+}
+
+.organization-icon.type-store {
+  background: color-mix(in srgb, #d94f70 14%, var(--surface));
+  color: #c53b5c;
+}
+
+.organization-icon.type-headquarters {
+  background: color-mix(in srgb, #387cc9 15%, var(--surface));
+  color: #387cc9;
+}
+
+.organization-icon.type-research {
+  background: color-mix(in srgb, #7a55b7 15%, var(--surface));
+  color: #7a55b7;
+}
+
+.organization-icon.type-accounting {
+  background: color-mix(in srgb, #26826d 15%, var(--surface));
+  color: #26826d;
+}
+
+.organization-icon.type-office {
+  background: color-mix(in srgb, #637168 15%, var(--surface));
+  color: var(--muted);
+}
+
 .organization-chevron {
   color: var(--muted);
   font-size: 22px;
@@ -662,6 +692,82 @@ pre {
   border-radius: 8px;
   overflow: hidden;
   background: var(--soft);
+}
+
+.address-search-field {
+  position: relative;
+}
+
+.address-search-control {
+  position: relative;
+  display: block;
+}
+
+.address-search-control svg {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  width: 18px;
+  height: 18px;
+  transform: translateY(-50%);
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.address-search-control input {
+  padding-left: 40px;
+}
+
+.address-suggestions {
+  position: absolute;
+  top: calc(100% - 2px);
+  left: 0;
+  right: 0;
+  z-index: 15;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.address-suggestion {
+  width: 100%;
+  min-height: 46px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  padding: 7px 9px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+
+.address-suggestion:hover,
+.address-suggestion:focus-visible {
+  background: var(--soft);
+  outline: none;
+}
+
+.address-suggestion svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: var(--brand);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#address-search-status:empty {
+  display: none;
 }
 
 .establishment-map iframe {

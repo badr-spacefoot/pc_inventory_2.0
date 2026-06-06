@@ -12,6 +12,8 @@ create table if not exists public.teams (
 create table if not exists public.establishments (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
+  establishment_type text not null default 'office'
+    check (establishment_type in ('warehouse', 'store', 'headquarters', 'research', 'accounting', 'office', 'other')),
   address text,
   postal_code text,
   city text,
@@ -26,6 +28,7 @@ alter table public.teams add column if not exists description text;
 alter table public.teams add column if not exists color text not null default '#16735f';
 alter table public.teams add column if not exists active boolean not null default true;
 alter table public.establishments add column if not exists address text;
+alter table public.establishments add column if not exists establishment_type text not null default 'office';
 alter table public.establishments add column if not exists postal_code text;
 alter table public.establishments add column if not exists city text;
 alter table public.establishments add column if not exists country text not null default 'France';

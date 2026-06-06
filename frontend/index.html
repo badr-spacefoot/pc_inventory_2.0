@@ -291,6 +291,27 @@
                     <input name="name" required maxlength="120" />
                   </label>
                   <label>
+                    Type d'etablissement
+                    <select name="establishmentType">
+                      <option value="warehouse">Entrepot</option>
+                      <option value="store">Boutique</option>
+                      <option value="headquarters">Siege social</option>
+                      <option value="research">Centre R&amp;D</option>
+                      <option value="accounting">Comptabilite</option>
+                      <option value="office" selected>Bureau</option>
+                      <option value="other">Autre</option>
+                    </select>
+                  </label>
+                  <label class="wide address-search-field">
+                    Rechercher une adresse
+                    <span class="address-search-control">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+                      <input id="address-search" autocomplete="off" placeholder="Commencez a saisir une adresse..." />
+                    </span>
+                    <span id="address-search-status" class="helper"></span>
+                    <div id="address-suggestions" class="address-suggestions is-hidden" role="listbox"></div>
+                  </label>
+                  <label>
                     Adresse
                     <input name="address" maxlength="240" />
                   </label>
@@ -304,7 +325,18 @@
                   </label>
                   <label>
                     Pays
-                    <input name="country" value="France" maxlength="120" />
+                    <select name="country">
+                      <option value="France" selected>France</option>
+                      <option value="Belgique">Belgique</option>
+                      <option value="Suisse">Suisse</option>
+                      <option value="Royaume-Uni">Royaume-Uni</option>
+                      <option value="Espagne">Espagne</option>
+                      <option value="Italie">Italie</option>
+                      <option value="Allemagne">Allemagne</option>
+                      <option value="Pays-Bas">Pays-Bas</option>
+                      <option value="Portugal">Portugal</option>
+                      <option value="Etats-Unis">Etats-Unis</option>
+                    </select>
                   </label>
                   <label>
                     Latitude

@@ -10,6 +10,7 @@ const collectionAccessToken = Deno.env.get("COLLECTION_ACCESS_TOKEN") ?? "";
 const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ?? "*").split(",").map((origin) => origin.trim());
 const ebayBrowseApiToken = Deno.env.get("EBAY_BROWSE_API_TOKEN") ?? "";
 const keepaApiKey = Deno.env.get("KEEPA_API_KEY") ?? "";
+const googleMapsApiKey = Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
 const enrichmentCacheDays = Number(Deno.env.get("ENRICHMENT_CACHE_DAYS") ?? 30);
 
 const supabase = createClient(supabaseUrl, serviceRoleKey, {
@@ -636,7 +637,7 @@ async function handleAdminOrganization(request: Request) {
       supabase.from("teams").select("id,name,description,color,active,created_at").order("name"),
       supabase
         .from("establishments")
-        .select("id,name,address,postal_code,city,country,latitude,longitude,active,created_at")
+        .select("id,name,establishment_type,address,postal_code,city,country,latitude,longitude,active,created_at")
         .order("name"),
       supabase.from("devices").select("team_id,establishment_id"),
     ]);
@@ -691,13 +692,17 @@ async function handleAdminSaveEstablishment(request: Request, id?: string) {
   if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
   const body = await request.json().catch(() => ({}));
   const name = safeString(body.name, 120);
+  const establishmentType = safeString(body.establishmentType, 40) || "office";
+  const allowedTypes = ["warehouse", "store", "headquarters", "research", "accounting", "office", "other"];
   const latitude = body.latitude === "" || body.latitude === null || body.latitude === undefined ? null : safeNumber(body.latitude);
   const longitude = body.longitude === "" || body.longitude === null || body.longitude === undefined ? null : safeNumber(body.longitude);
   if (!name) return badRequest(request, "Nom de l'etablissement requis.");
+  if (!allowedTypes.includes(establishmentType)) return badRequest(request, "Type d'etablissement invalide.");
   if (latitude !== null && (latitude < -90 || latitude > 90)) return badRequest(request, "Latitude invalide.");
   if (longitude !== null && (longitude < -180 || longitude > 180)) return badRequest(request, "Longitude invalide.");
   const values = {
     name,
+    establishment_type: establishmentType,
     address: safeString(body.address, 240) || null,
     postal_code: safeString(body.postalCode, 20) || null,
     city: safeString(body.city, 120) || null,
@@ -710,7 +715,7 @@ async function handleAdminSaveEstablishment(request: Request, id?: string) {
     ? supabase.from("establishments").update(values).eq("id", id)
     : supabase.from("establishments").insert(values);
   const { data, error } = await query
-    .select("id,name,address,postal_code,city,country,latitude,longitude,active,created_at")
+    .select("id,name,establishment_type,address,postal_code,city,country,latitude,longitude,active,created_at")
     .single();
   if (error) {
     if (error.code === "23505") return badRequest(request, "Un etablissement porte deja ce nom.", 409);
@@ -718,6 +723,96 @@ async function handleAdminSaveEstablishment(request: Request, id?: string) {
   }
   await audit(id ? "establishment_updated" : "establishment_created", "establishment", data.id, values);
   return json(request, { establishment: data }, id ? 200 : 201);
+}
+
+function googleAddressComponent(components: Json[], type: string, short = false) {
+  const component = components.find((item) => Array.isArray(item.types) && item.types.includes(type));
+  return safeString(short ? component?.shortText : component?.longText);
+}
+
+async function handleAdminAddressAutocomplete(request: Request) {
+  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  if (!googleMapsApiKey) return badRequest(request, "Google Places n'est pas configure.", 503);
+  const url = new URL(request.url);
+  const input = safeString(url.searchParams.get("q"), 220);
+  const countryCode = safeString(url.searchParams.get("country"), 2).toLowerCase();
+  const languageCode = safeString(url.searchParams.get("language"), 5) || "fr";
+  if (input.length < 3) return json(request, { suggestions: [] });
+
+  const payload: Json = {
+    input,
+    languageCode,
+    includeQueryPredictions: false,
+  };
+  if (/^[a-z]{2}$/.test(countryCode)) payload.includedRegionCodes = [countryCode];
+
+  const response = await fetch("https://places.googleapis.com/v1/places:autocomplete", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": googleMapsApiKey,
+      "X-Goog-FieldMask": "suggestions.placePrediction.placeId,suggestions.placePrediction.text.text",
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    console.error("Google autocomplete error", response.status, await response.text());
+    return badRequest(request, "Recherche d'adresse indisponible.", 502);
+  }
+  const data = await response.json();
+  const suggestions = (Array.isArray(data.suggestions) ? data.suggestions : [])
+    .map((item: Json) => {
+      const prediction = item.placePrediction as Json | undefined;
+      const text = prediction?.text as Json | undefined;
+      return {
+        placeId: safeString(prediction?.placeId),
+        label: safeString(text?.text),
+      };
+    })
+    .filter((item: Json) => item.placeId && item.label);
+  return json(request, { suggestions });
+}
+
+async function handleAdminAddressDetails(request: Request) {
+  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  if (!googleMapsApiKey) return badRequest(request, "Google Places n'est pas configure.", 503);
+  const url = new URL(request.url);
+  const placeId = safeString(url.searchParams.get("placeId"), 300);
+  const languageCode = safeString(url.searchParams.get("language"), 5) || "fr";
+  if (!placeId) return badRequest(request, "Place ID requis.");
+
+  const response = await fetch(
+    `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}?languageCode=${encodeURIComponent(languageCode)}`,
+    {
+      headers: {
+        "X-Goog-Api-Key": googleMapsApiKey,
+        "X-Goog-FieldMask": "formattedAddress,addressComponents,location",
+      },
+    },
+  );
+  if (!response.ok) {
+    console.error("Google place details error", response.status, await response.text());
+    return badRequest(request, "Details de l'adresse indisponibles.", 502);
+  }
+  const data = await response.json();
+  const components = Array.isArray(data.addressComponents) ? data.addressComponents : [];
+  const location = (data.location ?? {}) as Json;
+  const streetNumber = googleAddressComponent(components, "street_number");
+  const route = googleAddressComponent(components, "route");
+  const city =
+    googleAddressComponent(components, "locality") ||
+    googleAddressComponent(components, "postal_town") ||
+    googleAddressComponent(components, "administrative_area_level_2");
+  return json(request, {
+    address: [streetNumber, route].filter(Boolean).join(" ") || safeString(data.formattedAddress),
+    postalCode: googleAddressComponent(components, "postal_code"),
+    city,
+    country: googleAddressComponent(components, "country"),
+    countryCode: googleAddressComponent(components, "country", true).toLowerCase(),
+    latitude: safeNumber(location.latitude),
+    longitude: safeNumber(location.longitude),
+    formattedAddress: safeString(data.formattedAddress),
+  });
 }
 
 async function handleAdminDeviceDetail(request: Request, id: string) {
@@ -789,6 +884,8 @@ Deno.serve(async (request) => {
     if (request.method === "POST" && path.endsWith("/collect/legacy-scan")) return await handleLegacyScan(request);
     if (request.method === "GET" && path.endsWith("/admin/devices")) return await handleAdminDevices(request);
     if (request.method === "GET" && path.endsWith("/admin/organization")) return await handleAdminOrganization(request);
+    if (request.method === "GET" && path.endsWith("/admin/address/autocomplete")) return await handleAdminAddressAutocomplete(request);
+    if (request.method === "GET" && path.endsWith("/admin/address/details")) return await handleAdminAddressDetails(request);
     if (request.method === "POST" && path.endsWith("/admin/teams")) return await handleAdminSaveTeam(request);
     const teamMatch = path.match(/\/admin\/teams\/([0-9a-f-]+)$/i);
     if (request.method === "POST" && teamMatch) return await handleAdminSaveTeam(request, teamMatch[1]);
