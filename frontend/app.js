@@ -26,6 +26,17 @@ const labels = {
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
+function setTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  localStorage.setItem("it_inventory_theme", theme);
+  const toggle = $("#theme-toggle");
+  if (toggle) {
+    const dark = theme === "dark";
+    toggle.setAttribute("aria-label", dark ? "Activer le mode clair" : "Activer le mode sombre");
+    toggle.title = dark ? "Mode clair" : "Mode sombre";
+  }
+}
+
 function toast(message) {
   const node = $("#toast");
   node.textContent = message;
@@ -711,6 +722,10 @@ function hydrateDatalists() {
 
 function bindEvents() {
   $("#download-script").href = CONFIG.scriptUrl;
+  setTheme(document.documentElement.dataset.theme || "light");
+  $("#theme-toggle").addEventListener("click", () => {
+    setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+  });
 
   $$(".tab").forEach((tab) => {
     tab.addEventListener("click", () => {

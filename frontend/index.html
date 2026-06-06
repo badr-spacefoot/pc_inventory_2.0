@@ -4,6 +4,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Spacefoot IT Inventory</title>
+    <script>
+      document.documentElement.dataset.theme =
+        localStorage.getItem("it_inventory_theme") ||
+        (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    </script>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -12,10 +17,21 @@
         <p class="eyebrow">Spacefoot</p>
         <h1>Inventaire IT</h1>
       </div>
-      <nav class="tabs" aria-label="Navigation principale">
-        <button class="tab is-active" data-view="collect">Collecte</button>
-        <button class="tab" data-view="admin">Admin</button>
-      </nav>
+      <div class="topbar-actions">
+        <nav class="tabs" aria-label="Navigation principale">
+          <button class="tab is-active" data-view="collect">Collecte</button>
+          <button class="tab" data-view="admin">Admin</button>
+        </nav>
+        <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Activer le mode sombre" title="Changer de theme">
+          <svg class="sun-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"></circle>
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"></path>
+          </svg>
+          <svg class="moon-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"></path>
+          </svg>
+        </button>
+      </div>
     </header>
 
     <main>
