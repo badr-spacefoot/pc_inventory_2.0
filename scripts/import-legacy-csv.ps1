@@ -5,7 +5,6 @@ param(
   [Parameter(Mandatory = $true)]
   [string]$ApiUrl,
 
-  [Parameter(Mandatory = $true)]
   [string]$CollectionAccessToken,
 
   [string]$DefaultEmailDomain = "legacy.local",
@@ -19,6 +18,18 @@ if (-not (Test-Path -LiteralPath $CsvPath)) {
   throw "CSV introuvable: $CsvPath"
 }
 
+if ([string]::IsNullOrWhiteSpace($CollectionAccessToken)) {
+  $secureToken = Read-Host "COLLECTION_ACCESS_TOKEN" -AsSecureString
+  $tokenPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureToken)
+  try {
+    $CollectionAccessToken = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($tokenPointer)
+  } finally {
+    if ($tokenPointer -ne [IntPtr]::Zero) {
+      [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($tokenPointer)
+    }
+  }
+}
+
 $rows = Import-Csv -LiteralPath $CsvPath -Encoding UTF8
 $headers = @{
   "X-Collection-Access-Token" = $CollectionAccessToken
@@ -29,30 +40,51 @@ $count = 0
 $failed = 0
 
 foreach ($row in $rows) {
-  $firstName = ($row."Prénom" | ForEach-Object { "$_".Trim() })
-  $lastName = ($row."Nom" | ForEach-Object { "$_".Trim() })
+  # Read by column position so Windows PowerShell encoding does not corrupt accented headers.
+  $values = @($row.PSObject.Properties | ForEach-Object { "$($_.Value)".Trim() })
+  if ($values.Count -lt 16) {
+    $failed++
+    Write-Host "Import KO: ligne CSV incomplete" -ForegroundColor Red
+    continue
+  }
+
+  $timestamp = $values[0]
+  $firstName = $values[1]
+  $lastName = $values[2]
   $emailLocal = (($firstName + "." + $lastName).ToLowerInvariant() -replace "[^a-z0-9._-]", "")
 
+  $collectedAt = $timestamp
+  $parsedDate = [datetime]::MinValue
+  if ([datetime]::TryParseExact(
+    $timestamp,
+    "dd/MM/yyyy HH:mm:ss",
+    [Globalization.CultureInfo]::InvariantCulture,
+    [Globalization.DateTimeStyles]::AssumeLocal,
+    [ref]$parsedDate
+  )) {
+    $collectedAt = $parsedDate.ToUniversalTime().ToString("o")
+  }
+
   $payload = @{
-    timestamp = $row."Timestamp"
+    timestamp = $collectedAt
     firstName = $firstName
     lastName = $lastName
     email = "$emailLocal@$DefaultEmailDomain"
-    team = $row."Team"
-    site = $row."Établissement"
+    team = $values[3]
+    site = $values[4]
     service = $DefaultService
-    osType = $row."OS Type"
-    pcName = $row."Nom de la machine"
-    user = $row."Utilisateur OS"
-    manufacturer = $row."Fabricant"
-    model = $row."Modèle"
-    serial = $row."Numéro de série"
-    os = $row."Système d’exploitation"
-    cpu = $row."CPU"
-    ram = $row."RAM"
-    ip = $row."IP"
-    mac = $row."MAC"
-    notes = $row."Notes"
+    osType = $values[5]
+    pcName = $values[6]
+    user = $values[7]
+    manufacturer = $values[8]
+    model = $values[9]
+    serial = $values[10]
+    os = $values[11]
+    cpu = $values[12]
+    ram = $values[13]
+    ip = $values[14]
+    mac = $values[15]
+    notes = if ($values.Count -gt 16) { $values[16] } else { "" }
   }
 
   try {
@@ -63,6 +95,9 @@ foreach ($row in $rows) {
     $failed++
     Write-Host "Import KO: $($payload.pcName) / $($payload.serial)" -ForegroundColor Red
     Write-Host $_.Exception.Message
+    if ($_.ErrorDetails.Message) {
+      Write-Host $_.ErrorDetails.Message
+    }
   }
 }
 
