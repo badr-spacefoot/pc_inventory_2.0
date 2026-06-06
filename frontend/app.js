@@ -502,7 +502,12 @@ function buildCommand(collectionToken) {
 }
 
 async function loadAdminData() {
-  const [data] = await Promise.all([api("/admin/devices"), loadAccessTokens()]);
+  const data = await api("/admin/devices");
+  loadAccessTokens().catch((error) => {
+    state.accessTokens = [];
+    renderAccessTokens();
+    toast(`Module tokens indisponible: ${error.message}`);
+  });
   state.devices = data.devices || [];
   const teams = [...new Set(state.devices.map((d) => d.team_name))];
   const establishments = [...new Set(state.devices.map((d) => d.establishment_name))];
