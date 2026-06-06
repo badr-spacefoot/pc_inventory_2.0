@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Spacefoot IT Inventory</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Spacefoot</p>
+        <h1>Inventaire IT</h1>
+      </div>
+      <nav class="tabs" aria-label="Navigation principale">
+        <button class="tab is-active" data-view="collect">Collecte</button>
+        <button class="tab" data-view="admin">Admin</button>
+      </nav>
+    </header>
+
+    <main>
+      <section id="collect" class="view is-active">
+        <div class="split">
+          <section class="panel">
+            <div class="panel-head">
+              <p class="eyebrow">Acces utilisateur</p>
+              <h2>Declarer un poste</h2>
+            </div>
+            <p class="notice">
+              Une page web seule ne peut pas lire le numero de serie, le CPU, la RAM ou le stockage complet.
+              La collecte materielle passe donc par un script local lance volontairement par l'utilisateur.
+            </p>
+            <form id="collect-form" class="form-grid">
+              <label>
+                Token de collecte
+                <input name="accessToken" type="password" autocomplete="off" required />
+              </label>
+              <label>
+                Nom
+                <input name="lastName" autocomplete="family-name" required />
+              </label>
+              <label>
+                Prenom
+                <input name="firstName" autocomplete="given-name" required />
+              </label>
+              <label>
+                Email
+                <input name="email" type="email" autocomplete="email" required />
+              </label>
+              <label>
+                Equipe
+                <input name="team" list="team-list" required />
+              </label>
+              <label>
+                Etablissement
+                <input name="establishment" list="establishment-list" required />
+              </label>
+              <label>
+                Service
+                <input name="service" required />
+              </label>
+              <label class="wide">
+                Commentaire optionnel
+                <textarea name="comment" rows="4"></textarea>
+              </label>
+              <button type="submit" class="primary">Generer la commande</button>
+            </form>
+          </section>
+
+          <section class="panel command-panel">
+            <div class="panel-head">
+              <p class="eyebrow">Script local</p>
+              <h2>Commande PowerShell</h2>
+            </div>
+            <div id="command-empty" class="empty-state">
+              Remplissez le formulaire pour obtenir une commande personnalisee.
+            </div>
+            <div id="command-result" class="is-hidden">
+              <p class="helper">
+                Lancez cette commande dans PowerShell. Elle telecharge le script, collecte les informations du poste
+                et les envoie a l'API.
+              </p>
+              <pre><code id="powershell-command"></code></pre>
+              <div class="actions">
+                <button id="copy-command" class="secondary" type="button">Copier</button>
+                <a id="download-script" class="secondary" href="../scripts/collect-windows.ps1" download>Telecharger le script</a>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="admin" class="view">
+        <section id="admin-login" class="panel narrow">
+          <div class="panel-head">
+            <p class="eyebrow">Admin</p>
+            <h2>Connexion</h2>
+          </div>
+          <form id="admin-login-form" class="form-grid one">
+            <label>
+              Mot de passe admin
+              <input name="password" type="password" autocomplete="current-password" required />
+            </label>
+            <button type="submit" class="primary">Se connecter</button>
+          </form>
+        </section>
+
+        <section id="admin-dashboard" class="is-hidden">
+          <div class="dashboard-head">
+            <div>
+              <p class="eyebrow">Dashboard</p>
+              <h2>Vue du parc informatique</h2>
+            </div>
+            <div class="actions">
+              <button id="refresh-admin" class="secondary" type="button">Actualiser</button>
+              <button id="enrich-admin" class="secondary" type="button">Enrichir les donnees</button>
+              <button id="export-csv" class="primary" type="button">Export CSV</button>
+              <button id="logout-admin" class="secondary" type="button">Deconnexion</button>
+            </div>
+          </div>
+
+          <section class="metric-grid" id="metrics"></section>
+
+          <section class="panel">
+            <div class="filters">
+              <label>
+                Recherche
+                <input id="global-search" placeholder="Nom, hostname, modele, serial..." />
+              </label>
+              <label>
+                Equipe
+                <select id="filter-team"></select>
+              </label>
+              <label>
+                Etablissement
+                <select id="filter-establishment"></select>
+              </label>
+              <label>
+                OS
+                <select id="filter-os"></select>
+              </label>
+              <label>
+                Anciennete
+                <select id="filter-age">
+                  <option value="">Toutes</option>
+                  <option value="recent">Recent</option>
+                  <option value="aging">A surveiller</option>
+                  <option value="old">A remplacer</option>
+                </select>
+              </label>
+              <label>
+                Modele
+                <select id="filter-model"></select>
+              </label>
+              <label>
+                Statut
+                <select id="filter-status">
+                  <option value="">Tous</option>
+                  <option value="active">Actif</option>
+                  <option value="replace">A remplacer</option>
+                  <option value="stock">En stock</option>
+                  <option value="lost">Perdu</option>
+                  <option value="retired">Sorti du parc</option>
+                </select>
+              </label>
+              <label>
+                Score CPU
+                <select id="filter-cpu-score">
+                  <option value="">Tous</option>
+                  <option value="low">Faible</option>
+                  <option value="medium">Moyen</option>
+                  <option value="high">Bon</option>
+                </select>
+              </label>
+              <label>
+                Valeur
+                <select id="filter-value">
+                  <option value="">Toutes</option>
+                  <option value="low">Moins de 180 EUR</option>
+                  <option value="medium">180-350 EUR</option>
+                  <option value="high">Plus de 350 EUR</option>
+                </select>
+              </label>
+            </div>
+          </section>
+
+          <section class="dashboard-grid">
+            <section class="panel table-panel">
+              <div class="panel-head inline">
+                <h3>Machines</h3>
+                <span id="result-count"></span>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Hostname</th>
+                      <th>Utilisateur</th>
+                      <th>Equipe</th>
+                      <th>Etablissement</th>
+                      <th>OS</th>
+                      <th>Modele</th>
+                      <th>Derniere remontee</th>
+                      <th>Statut</th>
+                    </tr>
+                  </thead>
+                  <tbody id="devices-table"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <aside class="panel detail-panel">
+              <div class="panel-head">
+                <p class="eyebrow">Detail</p>
+                <h3 id="detail-title">Selectionnez une machine</h3>
+              </div>
+              <div id="device-detail" class="detail-empty">Aucune machine selectionnee.</div>
+            </aside>
+          </section>
+
+          <section class="charts-grid">
+            <div class="panel chart" data-chart="establishments"></div>
+            <div class="panel chart" data-chart="teams"></div>
+            <div class="panel chart" data-chart="os"></div>
+            <div class="panel chart" data-chart="stale"></div>
+            <div class="panel chart" data-chart="age"></div>
+            <div class="panel chart" data-chart="models"></div>
+            <div class="panel chart" data-chart="ram"></div>
+            <div class="panel chart" data-chart="storage"></div>
+            <div class="panel chart" data-chart="fleet-value"></div>
+            <div class="panel chart" data-chart="value-by-site"></div>
+            <div class="panel chart" data-chart="replace-top"></div>
+            <div class="panel chart" data-chart="age-performance"></div>
+          </section>
+        </section>
+      </section>
+    </main>
+
+    <datalist id="team-list"></datalist>
+    <datalist id="establishment-list"></datalist>
+    <div id="toast" role="status" aria-live="polite"></div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

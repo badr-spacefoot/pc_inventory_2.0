@@ -1,0 +1,6 @@
+.tools/
+*.zip
+.env
+.env.*
+!.env.example
+supabase/.temp/
