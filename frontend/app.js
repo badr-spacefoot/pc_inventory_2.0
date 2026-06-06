@@ -11,6 +11,8 @@ const state = {
   selectedDeviceId: "",
   accessTokens: [],
   rawAccessTokens: {},
+  teams: [],
+  establishments: [],
 };
 
 const labels = {
@@ -536,6 +538,148 @@ function buildCommand(collectionToken) {
   return `powershell -ExecutionPolicy Bypass -NoProfile -Command "iwr '${scriptUrl}' -OutFile $env:TEMP\\collect-windows.ps1; & $env:TEMP\\collect-windows.ps1 -ApiUrl '${apiUrl}' -CollectionToken '${collectionToken}'"`;
 }
 
+function organizationIcon(type) {
+  if (type === "team") {
+    return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path></svg>`;
+  }
+  return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg>`;
+}
+
+function setAdminView(view) {
+  $$(".admin-nav-button").forEach((button) => button.classList.toggle("is-active", button.dataset.adminView === view));
+  $$(".admin-section-view").forEach((section) => {
+    section.classList.toggle("is-hidden", !section.classList.contains(`section-${view}`));
+  });
+}
+
+function updateOrganizationDatalists() {
+  $("#team-list").innerHTML = state.teams
+    .filter((team) => team.active)
+    .map((team) => `<option value="${escapeHtml(team.name)}"></option>`)
+    .join("");
+  $("#establishment-list").innerHTML = state.establishments
+    .filter((site) => site.active)
+    .map((site) => `<option value="${escapeHtml(site.name)}"></option>`)
+    .join("");
+}
+
+function renderOrganization() {
+  $("#teams-manager-list").innerHTML = state.teams
+    .map(
+      (team) => `
+        <button class="organization-item edit-team ${team.active ? "" : "is-inactive"}" type="button" data-id="${team.id}">
+          <span class="organization-icon" style="--item-color:${escapeHtml(team.color || "#16735f")}">${organizationIcon("team")}</span>
+          <span>
+            <strong>${escapeHtml(team.name)}</strong>
+            <small>${team.device_count} machine(s)${team.description ? ` - ${escapeHtml(team.description)}` : ""}</small>
+          </span>
+          <span class="organization-chevron">&rsaquo;</span>
+        </button>
+      `,
+    )
+    .join("") || `<p class="helper">Aucune equipe.</p>`;
+
+  $("#establishments-manager-list").innerHTML = state.establishments
+    .map((site) => {
+      const location = [site.city, site.country].filter(Boolean).join(", ");
+      return `
+        <button class="organization-item edit-establishment ${site.active ? "" : "is-inactive"}" type="button" data-id="${site.id}">
+          <span class="organization-icon site">${organizationIcon("site")}</span>
+          <span>
+            <strong>${escapeHtml(site.name)}</strong>
+            <small>${site.device_count} machine(s)${location ? ` - ${escapeHtml(location)}` : ""}</small>
+          </span>
+          <span class="organization-chevron">&rsaquo;</span>
+        </button>
+      `;
+    })
+    .join("") || `<p class="helper">Aucun etablissement.</p>`;
+
+  $$(".edit-team").forEach((button) => button.addEventListener("click", () => editTeam(button.dataset.id)));
+  $$(".edit-establishment").forEach((button) =>
+    button.addEventListener("click", () => editEstablishment(button.dataset.id)),
+  );
+}
+
+function resetTeamForm() {
+  const form = $("#team-form");
+  form.reset();
+  form.elements.id.value = "";
+  form.elements.color.value = "#16735f";
+  form.elements.active.checked = true;
+  $("#team-editor-title").textContent = "Nouvelle equipe";
+}
+
+function editTeam(id) {
+  const team = state.teams.find((item) => item.id === id);
+  if (!team) return;
+  const form = $("#team-form");
+  form.elements.id.value = team.id;
+  form.elements.name.value = team.name || "";
+  form.elements.description.value = team.description || "";
+  form.elements.color.value = team.color || "#16735f";
+  form.elements.active.checked = Boolean(team.active);
+  $("#team-editor-title").textContent = team.name;
+}
+
+function resetEstablishmentForm() {
+  const form = $("#establishment-form");
+  form.reset();
+  form.elements.id.value = "";
+  form.elements.country.value = "France";
+  form.elements.active.checked = true;
+  $("#establishment-editor-title").textContent = "Nouvel etablissement";
+  renderEstablishmentMap();
+}
+
+function editEstablishment(id) {
+  const site = state.establishments.find((item) => item.id === id);
+  if (!site) return;
+  const form = $("#establishment-form");
+  form.elements.id.value = site.id;
+  form.elements.name.value = site.name || "";
+  form.elements.address.value = site.address || "";
+  form.elements.postalCode.value = site.postal_code || "";
+  form.elements.city.value = site.city || "";
+  form.elements.country.value = site.country || "France";
+  form.elements.latitude.value = site.latitude ?? "";
+  form.elements.longitude.value = site.longitude ?? "";
+  form.elements.active.checked = Boolean(site.active);
+  $("#establishment-editor-title").textContent = site.name;
+  renderEstablishmentMap();
+}
+
+function renderEstablishmentMap() {
+  const form = $("#establishment-form");
+  const latitude = Number(form.elements.latitude.value);
+  const longitude = Number(form.elements.longitude.value);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !form.elements.latitude.value || !form.elements.longitude.value) {
+    $("#establishment-map").innerHTML = `
+      <div class="map-empty">
+        ${organizationIcon("site")}
+        Renseignez latitude et longitude pour afficher la carte.
+      </div>
+    `;
+    return;
+  }
+  const delta = 0.015;
+  const bbox = [longitude - delta, latitude - delta, longitude + delta, latitude + delta].join(",");
+  const src = `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${encodeURIComponent(`${latitude},${longitude}`)}`;
+  const openUrl = `https://www.openstreetmap.org/?mlat=${encodeURIComponent(latitude)}&mlon=${encodeURIComponent(longitude)}#map=16/${encodeURIComponent(latitude)}/${encodeURIComponent(longitude)}`;
+  $("#establishment-map").innerHTML = `
+    <iframe title="Carte de l'etablissement" loading="lazy" src="${src}"></iframe>
+    <a href="${openUrl}" target="_blank" rel="noopener">Ouvrir dans OpenStreetMap</a>
+  `;
+}
+
+async function loadOrganization() {
+  const data = await api("/admin/organization");
+  state.teams = data.teams || [];
+  state.establishments = data.establishments || [];
+  renderOrganization();
+  updateOrganizationDatalists();
+}
+
 async function loadAdminData() {
   const data = await api("/admin/devices");
   loadAccessTokens().catch((error) => {
@@ -543,6 +687,7 @@ async function loadAdminData() {
     renderAccessTokens();
     toast(`Module tokens indisponible: ${error.message}`);
   });
+  loadOrganization().catch((error) => toast(`Module organisation indisponible: ${error.message}`));
   state.devices = data.devices || [];
   const teams = [...new Set(state.devices.map((d) => d.team_name))];
   const establishments = [...new Set(state.devices.map((d) => d.establishment_name))];
@@ -571,6 +716,15 @@ function bindEvents() {
     tab.addEventListener("click", () => {
       $$(".tab").forEach((item) => item.classList.toggle("is-active", item === tab));
       $$(".view").forEach((view) => view.classList.toggle("is-active", view.id === tab.dataset.view));
+    });
+  });
+
+  $$(".admin-nav-button").forEach((button) => {
+    button.addEventListener("click", () => {
+      setAdminView(button.dataset.adminView);
+      if (button.dataset.adminView === "organization") {
+        loadOrganization().catch((error) => toast(error.message));
+      }
     });
   });
 
@@ -621,6 +775,66 @@ function bindEvents() {
 
   $("#refresh-admin").addEventListener("click", () => loadAdminData().catch((error) => toast(error.message)));
   $("#refresh-tokens").addEventListener("click", () => loadAccessTokens().catch((error) => toast(error.message)));
+  $("#new-team").addEventListener("click", resetTeamForm);
+  $("#new-establishment").addEventListener("click", resetEstablishmentForm);
+  $("#team-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form));
+    const id = values.id;
+    const payload = {
+      name: values.name,
+      description: values.description,
+      color: values.color,
+      active: form.elements.active.checked,
+    };
+    const button = form.querySelector('button[type="submit"]');
+    button.disabled = true;
+    try {
+      await api(id ? `/admin/teams/${id}` : "/admin/teams", { method: "POST", body: JSON.stringify(payload) });
+      await loadAdminData();
+      resetTeamForm();
+      toast(id ? "Equipe mise a jour." : "Equipe creee.");
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      button.disabled = false;
+    }
+  });
+  $("#establishment-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form));
+    const id = values.id;
+    const payload = {
+      name: values.name,
+      address: values.address,
+      postalCode: values.postalCode,
+      city: values.city,
+      country: values.country,
+      latitude: values.latitude,
+      longitude: values.longitude,
+      active: form.elements.active.checked,
+    };
+    const button = form.querySelector('button[type="submit"]');
+    button.disabled = true;
+    try {
+      await api(id ? `/admin/establishments/${id}` : "/admin/establishments", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      await loadAdminData();
+      resetEstablishmentForm();
+      toast(id ? "Etablissement mis a jour." : "Etablissement cree.");
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      button.disabled = false;
+    }
+  });
+  ["latitude", "longitude"].forEach((name) => {
+    $("#establishment-form").elements[name].addEventListener("input", renderEstablishmentMap);
+  });
   $("#token-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));

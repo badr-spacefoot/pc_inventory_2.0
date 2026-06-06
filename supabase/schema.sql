@@ -3,14 +3,35 @@ create extension if not exists pgcrypto;
 create table if not exists public.teams (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
+  description text,
+  color text not null default '#16735f',
+  active boolean not null default true,
   created_at timestamptz not null default now()
 );
 
 create table if not exists public.establishments (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
+  address text,
+  postal_code text,
+  city text,
+  country text not null default 'France',
+  latitude numeric,
+  longitude numeric,
+  active boolean not null default true,
   created_at timestamptz not null default now()
 );
+
+alter table public.teams add column if not exists description text;
+alter table public.teams add column if not exists color text not null default '#16735f';
+alter table public.teams add column if not exists active boolean not null default true;
+alter table public.establishments add column if not exists address text;
+alter table public.establishments add column if not exists postal_code text;
+alter table public.establishments add column if not exists city text;
+alter table public.establishments add column if not exists country text not null default 'France';
+alter table public.establishments add column if not exists latitude numeric;
+alter table public.establishments add column if not exists longitude numeric;
+alter table public.establishments add column if not exists active boolean not null default true;
 
 create table if not exists public.users (
   id uuid primary key default gen_random_uuid(),

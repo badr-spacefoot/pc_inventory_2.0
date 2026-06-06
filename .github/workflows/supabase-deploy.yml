@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - "supabase/functions/**"
+      - "supabase/migrations/**"
+      - "supabase/schema.sql"
       - "supabase/config.toml"
       - ".github/workflows/supabase-deploy.yml"
   workflow_dispatch:
@@ -50,6 +52,19 @@ jobs:
           ENRICHMENT_CACHE_DAYS: "30"
           EBAY_BROWSE_API_TOKEN: ${{ secrets.EBAY_BROWSE_API_TOKEN }}
           KEEPA_API_KEY: ${{ secrets.KEEPA_API_KEY }}
+
+      - name: Apply organization schema
+        run: |
+          jq -Rs '{ query: . }' supabase/migrations/20260606190000_organization_management.sql > migration.json
+          curl --fail-with-body \
+            --request POST \
+            "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/database/query" \
+            --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            --header "Content-Type: application/json" \
+            --data @migration.json
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
 
       - name: Deploy inventory API
         run: supabase functions deploy inventory-api --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt

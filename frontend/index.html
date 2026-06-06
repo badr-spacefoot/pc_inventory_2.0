@@ -119,9 +119,24 @@
             </div>
           </div>
 
-          <section class="metric-grid" id="metrics"></section>
+          <nav class="admin-nav" aria-label="Sections d'administration">
+            <button class="admin-nav-button is-active" type="button" data-admin-view="fleet">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect width="16" height="10" x="4" y="4" rx="2"></rect><path d="M8 20h8M12 14v6"></path></svg>
+              Parc
+            </button>
+            <button class="admin-nav-button" type="button" data-admin-view="organization">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M9 9h1M14 9h1M9 13h1M14 13h1M9 17h1M14 17h1"></path></svg>
+              Organisation
+            </button>
+            <button class="admin-nav-button" type="button" data-admin-view="access">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"></circle><path d="m21 2-9.6 9.6M15 7l2 2M18 4l2 2"></path></svg>
+              Acces
+            </button>
+          </nav>
 
-          <section class="panel token-manager">
+          <section class="metric-grid admin-section-view section-fleet" id="metrics"></section>
+
+          <section class="panel token-manager admin-section-view section-access is-hidden">
             <div class="panel-head inline">
               <div>
                 <p class="eyebrow">Acces collecte</p>
@@ -183,7 +198,113 @@
             </div>
           </section>
 
-          <section class="panel">
+          <section class="admin-section-view section-organization is-hidden">
+            <div class="organization-layout">
+              <section class="panel organization-list-panel">
+                <div class="panel-head inline">
+                  <div>
+                    <p class="eyebrow">Structure</p>
+                    <h3>Equipes</h3>
+                  </div>
+                  <button id="new-team" class="secondary icon-button" type="button" aria-label="Nouvelle equipe" title="Nouvelle equipe">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+                  </button>
+                </div>
+                <div id="teams-manager-list" class="organization-list"></div>
+              </section>
+
+              <section class="panel organization-editor">
+                <div class="panel-head">
+                  <p class="eyebrow">Equipe</p>
+                  <h3 id="team-editor-title">Nouvelle equipe</h3>
+                </div>
+                <form id="team-form" class="form-grid one">
+                  <input name="id" type="hidden" />
+                  <label>
+                    Nom
+                    <input name="name" required maxlength="120" />
+                  </label>
+                  <label>
+                    Description
+                    <textarea name="description" rows="3" maxlength="500"></textarea>
+                  </label>
+                  <label class="color-field">
+                    Couleur
+                    <input name="color" type="color" value="#16735f" />
+                  </label>
+                  <label class="switch-field">
+                    <input name="active" type="checkbox" checked />
+                    <span>Equipe active</span>
+                  </label>
+                  <button class="primary" type="submit">Enregistrer l'equipe</button>
+                </form>
+              </section>
+
+              <section class="panel organization-list-panel establishments-panel">
+                <div class="panel-head inline">
+                  <div>
+                    <p class="eyebrow">Implantations</p>
+                    <h3>Etablissements</h3>
+                  </div>
+                  <button id="new-establishment" class="secondary icon-button" type="button" aria-label="Nouvel etablissement" title="Nouvel etablissement">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+                  </button>
+                </div>
+                <div id="establishments-manager-list" class="organization-list"></div>
+              </section>
+
+              <section class="panel organization-editor establishment-editor">
+                <div class="panel-head">
+                  <p class="eyebrow">Etablissement</p>
+                  <h3 id="establishment-editor-title">Nouvel etablissement</h3>
+                </div>
+                <form id="establishment-form" class="form-grid">
+                  <input name="id" type="hidden" />
+                  <label>
+                    Nom
+                    <input name="name" required maxlength="120" />
+                  </label>
+                  <label>
+                    Adresse
+                    <input name="address" maxlength="240" />
+                  </label>
+                  <label>
+                    Code postal
+                    <input name="postalCode" maxlength="20" />
+                  </label>
+                  <label>
+                    Ville
+                    <input name="city" maxlength="120" />
+                  </label>
+                  <label>
+                    Pays
+                    <input name="country" value="France" maxlength="120" />
+                  </label>
+                  <label>
+                    Latitude
+                    <input name="latitude" type="number" min="-90" max="90" step="any" placeholder="48.8566" />
+                  </label>
+                  <label>
+                    Longitude
+                    <input name="longitude" type="number" min="-180" max="180" step="any" placeholder="2.3522" />
+                  </label>
+                  <label class="switch-field">
+                    <input name="active" type="checkbox" checked />
+                    <span>Etablissement actif</span>
+                  </label>
+                  <button class="primary" type="submit">Enregistrer l'etablissement</button>
+                </form>
+                <div id="establishment-map" class="establishment-map">
+                  <div class="map-empty">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                    Renseignez latitude et longitude pour afficher la carte.
+                  </div>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <section class="panel admin-section-view section-fleet">
             <div class="filters">
               <label>
                 Recherche
@@ -246,7 +367,7 @@
             </div>
           </section>
 
-          <section class="dashboard-grid">
+          <section class="dashboard-grid admin-section-view section-fleet">
             <section class="panel table-panel">
               <div class="panel-head inline">
                 <h3>Machines</h3>
@@ -280,7 +401,7 @@
             </aside>
           </section>
 
-          <section class="charts-grid">
+          <section class="charts-grid admin-section-view section-fleet">
             <div class="panel chart" data-chart="establishments"></div>
             <div class="panel chart" data-chart="teams"></div>
             <div class="panel chart" data-chart="os"></div>

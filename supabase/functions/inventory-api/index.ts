@@ -629,6 +629,97 @@ async function handleAdminDevices(request: Request) {
   return json(request, { devices: data });
 }
 
+async function handleAdminOrganization(request: Request) {
+  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  const [{ data: teams, error: teamsError }, { data: establishments, error: establishmentsError }, { data: devices, error: devicesError }] =
+    await Promise.all([
+      supabase.from("teams").select("id,name,description,color,active,created_at").order("name"),
+      supabase
+        .from("establishments")
+        .select("id,name,address,postal_code,city,country,latitude,longitude,active,created_at")
+        .order("name"),
+      supabase.from("devices").select("team_id,establishment_id"),
+    ]);
+  if (teamsError) throw teamsError;
+  if (establishmentsError) throw establishmentsError;
+  if (devicesError) throw devicesError;
+
+  const teamCounts = new Map<string, number>();
+  const establishmentCounts = new Map<string, number>();
+  for (const device of devices ?? []) {
+    if (device.team_id) teamCounts.set(device.team_id, (teamCounts.get(device.team_id) ?? 0) + 1);
+    if (device.establishment_id) {
+      establishmentCounts.set(device.establishment_id, (establishmentCounts.get(device.establishment_id) ?? 0) + 1);
+    }
+  }
+
+  return json(request, {
+    teams: (teams ?? []).map((team) => ({ ...team, device_count: teamCounts.get(team.id) ?? 0 })),
+    establishments: (establishments ?? []).map((site) => ({
+      ...site,
+      device_count: establishmentCounts.get(site.id) ?? 0,
+    })),
+  });
+}
+
+async function handleAdminSaveTeam(request: Request, id?: string) {
+  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  const body = await request.json().catch(() => ({}));
+  const name = safeString(body.name, 120);
+  const color = safeString(body.color, 7) || "#16735f";
+  if (!name) return badRequest(request, "Nom de l'equipe requis.");
+  if (!/^#[0-9a-f]{6}$/i.test(color)) return badRequest(request, "Couleur invalide.");
+  const values = {
+    name,
+    description: safeString(body.description, 500) || null,
+    color,
+    active: body.active !== false,
+  };
+  const query = id
+    ? supabase.from("teams").update(values).eq("id", id)
+    : supabase.from("teams").insert(values);
+  const { data, error } = await query.select("id,name,description,color,active,created_at").single();
+  if (error) {
+    if (error.code === "23505") return badRequest(request, "Une equipe porte deja ce nom.", 409);
+    throw error;
+  }
+  await audit(id ? "team_updated" : "team_created", "team", data.id, values);
+  return json(request, { team: data }, id ? 200 : 201);
+}
+
+async function handleAdminSaveEstablishment(request: Request, id?: string) {
+  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  const body = await request.json().catch(() => ({}));
+  const name = safeString(body.name, 120);
+  const latitude = body.latitude === "" || body.latitude === null || body.latitude === undefined ? null : safeNumber(body.latitude);
+  const longitude = body.longitude === "" || body.longitude === null || body.longitude === undefined ? null : safeNumber(body.longitude);
+  if (!name) return badRequest(request, "Nom de l'etablissement requis.");
+  if (latitude !== null && (latitude < -90 || latitude > 90)) return badRequest(request, "Latitude invalide.");
+  if (longitude !== null && (longitude < -180 || longitude > 180)) return badRequest(request, "Longitude invalide.");
+  const values = {
+    name,
+    address: safeString(body.address, 240) || null,
+    postal_code: safeString(body.postalCode, 20) || null,
+    city: safeString(body.city, 120) || null,
+    country: safeString(body.country, 120) || "France",
+    latitude,
+    longitude,
+    active: body.active !== false,
+  };
+  const query = id
+    ? supabase.from("establishments").update(values).eq("id", id)
+    : supabase.from("establishments").insert(values);
+  const { data, error } = await query
+    .select("id,name,address,postal_code,city,country,latitude,longitude,active,created_at")
+    .single();
+  if (error) {
+    if (error.code === "23505") return badRequest(request, "Un etablissement porte deja ce nom.", 409);
+    throw error;
+  }
+  await audit(id ? "establishment_updated" : "establishment_created", "establishment", data.id, values);
+  return json(request, { establishment: data }, id ? 200 : 201);
+}
+
 async function handleAdminDeviceDetail(request: Request, id: string) {
   if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
   const { data: device, error: deviceError } = await supabase.from("device_inventory_view").select("*").eq("id", id).single();
@@ -697,6 +788,15 @@ Deno.serve(async (request) => {
     if (request.method === "POST" && path.endsWith("/collect/scan")) return await handleScan(request);
     if (request.method === "POST" && path.endsWith("/collect/legacy-scan")) return await handleLegacyScan(request);
     if (request.method === "GET" && path.endsWith("/admin/devices")) return await handleAdminDevices(request);
+    if (request.method === "GET" && path.endsWith("/admin/organization")) return await handleAdminOrganization(request);
+    if (request.method === "POST" && path.endsWith("/admin/teams")) return await handleAdminSaveTeam(request);
+    const teamMatch = path.match(/\/admin\/teams\/([0-9a-f-]+)$/i);
+    if (request.method === "POST" && teamMatch) return await handleAdminSaveTeam(request, teamMatch[1]);
+    if (request.method === "POST" && path.endsWith("/admin/establishments")) return await handleAdminSaveEstablishment(request);
+    const establishmentMatch = path.match(/\/admin\/establishments\/([0-9a-f-]+)$/i);
+    if (request.method === "POST" && establishmentMatch) {
+      return await handleAdminSaveEstablishment(request, establishmentMatch[1]);
+    }
     if (request.method === "POST" && path.endsWith("/admin/enrich")) return await handleAdminEnrich(request);
     if (request.method === "GET" && path.endsWith("/admin/access-tokens")) return await handleAdminListAccessTokens(request);
     if (request.method === "POST" && path.endsWith("/admin/access-tokens")) return await handleAdminCreateAccessToken(request);
