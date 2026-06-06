@@ -8,6 +8,7 @@
       document.documentElement.dataset.theme =
         localStorage.getItem("it_inventory_theme") ||
         (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.lang = localStorage.getItem("it_inventory_language") || "fr";
     </script>
     <link rel="stylesheet" href="./styles.css" />
   </head>
@@ -31,6 +32,15 @@
             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"></path>
           </svg>
         </button>
+        <div class="language-switcher">
+          <button id="language-toggle" class="language-toggle" type="button" aria-label="Changer de langue" title="Changer de langue" aria-expanded="false">
+            <span id="current-language-flag" aria-hidden="true">&#x1F1EB;&#x1F1F7;</span>
+          </button>
+          <div id="language-menu" class="language-menu is-hidden" role="menu">
+            <button type="button" data-language="fr" role="menuitem"><span aria-hidden="true">&#x1F1EB;&#x1F1F7;</span> Français</button>
+            <button type="button" data-language="en" role="menuitem"><span aria-hidden="true">&#x1F1EC;&#x1F1E7;</span> English</button>
+          </div>
+        </div>
       </div>
     </header>
 

@@ -6,25 +6,249 @@ const CONFIG = {
 
 const state = {
   adminToken: localStorage.getItem("it_inventory_admin_token") || "",
+  language: localStorage.getItem("it_inventory_language") || "fr",
   devices: [],
   filtered: [],
   selectedDeviceId: "",
+  selectedDetail: null,
+  selectedScans: [],
   accessTokens: [],
   rawAccessTokens: {},
   teams: [],
   establishments: [],
 };
 
-const labels = {
-  active: "Actif",
-  replace: "A remplacer",
-  stock: "En stock",
-  lost: "Perdu",
-  retired: "Sorti du parc",
+const statusLabels = {
+  fr: { active: "Actif", replace: "A remplacer", stock: "En stock", lost: "Perdu", retired: "Sorti du parc" },
+  en: { active: "Active", replace: "Replace", stock: "In stock", lost: "Lost", retired: "Retired" },
 };
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+const originalText = new WeakMap();
+const originalAttributes = new WeakMap();
+
+const englishTranslations = {
+  "Inventaire IT": "IT Inventory",
+  "Navigation principale": "Main navigation",
+  "Collecte": "Collection",
+  "Activer le mode sombre": "Enable dark mode",
+  "Activer le mode clair": "Enable light mode",
+  "Changer de theme": "Change theme",
+  "Changer de langue": "Change language",
+  "Acces utilisateur": "User access",
+  "Declarer un poste": "Register a computer",
+  "Une page web seule ne peut pas lire le numero de serie, le CPU, la RAM ou le stockage complet. La collecte materielle passe donc par un script local lance volontairement par l'utilisateur.": "A web page alone cannot read the serial number, CPU, RAM, or full storage details. Hardware collection therefore uses a local script run voluntarily by the user.",
+  "Token de collecte": "Collection token",
+  "Nom": "Last name",
+  "Prenom": "First name",
+  "Equipe": "Team",
+  "Etablissement": "Location",
+  "Commentaire optionnel": "Optional comment",
+  "Generer la commande": "Generate command",
+  "Script local": "Local script",
+  "Commande PowerShell": "PowerShell command",
+  "Remplissez le formulaire pour obtenir une commande personnalisee.": "Complete the form to get a personalized command.",
+  "Lancez cette commande dans PowerShell. Elle telecharge le script, collecte les informations du poste et les envoie a l'API.": "Run this command in PowerShell. It downloads the script, collects the computer information, and sends it to the API.",
+  "Copier": "Copy",
+  "Telecharger le script": "Download script",
+  "Connexion": "Sign in",
+  "Mot de passe admin": "Admin password",
+  "Se connecter": "Sign in",
+  "Dashboard": "Dashboard",
+  "Vue du parc informatique": "IT fleet overview",
+  "Actualiser": "Refresh",
+  "Enrichir les donnees": "Enrich data",
+  "Deconnexion": "Sign out",
+  "Sections d'administration": "Administration sections",
+  "Parc": "Fleet",
+  "Organisation": "Organization",
+  "Acces": "Access",
+  "Acces collecte": "Collection access",
+  "Tokens temporaires": "Temporary tokens",
+  "Libelle": "Label",
+  "Duree": "Duration",
+  "1 heure": "1 hour",
+  "24 heures": "24 hours",
+  "7 jours": "7 days",
+  "30 jours": "30 days",
+  "90 jours": "90 days",
+  "1 an": "1 year",
+  "Utilisations maximum": "Maximum uses",
+  "Illimite": "Unlimited",
+  "Generer un token": "Generate token",
+  "Ce token ne sera affiche qu'une fois. Conservez-le dans un endroit securise.": "This token is shown only once. Store it in a secure place.",
+  "Copier le token": "Copy token",
+  "Prefixe": "Prefix",
+  "Expiration": "Expiration",
+  "Utilisations": "Uses",
+  "Derniere utilisation": "Last used",
+  "Etat": "Status",
+  "Structure": "Structure",
+  "Equipes": "Teams",
+  "Nouvelle equipe": "New team",
+  "Description": "Description",
+  "Couleur": "Color",
+  "Equipe active": "Active team",
+  "Enregistrer l'equipe": "Save team",
+  "Implantations": "Locations",
+  "Etablissements": "Locations",
+  "Nouvel etablissement": "New location",
+  "Adresse": "Address",
+  "Code postal": "Postal code",
+  "Ville": "City",
+  "Pays": "Country",
+  "Etablissement actif": "Active location",
+  "Enregistrer l'etablissement": "Save location",
+  "Renseignez latitude et longitude pour afficher la carte.": "Enter latitude and longitude to display the map.",
+  "Ouvrir dans OpenStreetMap": "Open in OpenStreetMap",
+  "Recherche": "Search",
+  "Anciennete": "Age",
+  "Toutes": "All",
+  "Tous": "All",
+  "Recent": "Recent",
+  "A surveiller": "Monitor",
+  "A remplacer": "Replace",
+  "Modele": "Model",
+  "Statut": "Status",
+  "Actif": "Active",
+  "En stock": "In stock",
+  "Perdu": "Lost",
+  "Sorti du parc": "Retired",
+  "Score CPU": "CPU score",
+  "Faible": "Low",
+  "Moyen": "Medium",
+  "Bon": "Good",
+  "Valeur": "Value",
+  "Moins de 180 EUR": "Less than EUR 180",
+  "Plus de 350 EUR": "More than EUR 350",
+  "Machines": "Computers",
+  "Utilisateur": "User",
+  "Derniere remontee": "Last report",
+  "Detail": "Details",
+  "Selectionnez une machine": "Select a computer",
+  "Aucune machine selectionnee.": "No computer selected.",
+  "Valeur estimee": "Estimated value",
+  "CPU faible": "Low CPU",
+  "Stockage faible": "Low storage",
+  "Chargement de l'historique...": "Loading history...",
+  "IP locale": "Local IP",
+  "Stockage": "Storage",
+  "Utilisateur OS": "OS user",
+  "Score age": "Age score",
+  "Generation CPU": "CPU generation",
+  "Annee CPU": "CPU year",
+  "Annee modele": "Model year",
+  "Prix lancement": "Launch price",
+  "Valeur actuelle": "Current value",
+  "Confiance": "Confidence",
+  "Reco": "Recommendation",
+  "Dernier enrichissement": "Last enrichment",
+  "Mettre a jour": "Update",
+  "Historique des scans": "Scan history",
+  "Aucun scan detaille.": "No detailed scans.",
+  "Historique prix marche": "Market price history",
+  "Aucun prix externe collecte.": "No external prices collected.",
+  "Non renseigne": "Not provided",
+  "Aucune donnee.": "No data.",
+  "Machines par etablissement": "Computers by location",
+  "Machines par equipe": "Computers by team",
+  "Non mises a jour": "Not recently updated",
+  "A jour": "Up to date",
+  "Anciennete du parc": "Fleet age",
+  "Modeles presents": "Most common models",
+  "RAM moyenne par equipe": "Average RAM by team",
+  "Valeur actuelle estimee": "Estimated current value",
+  "Valeur par etablissement": "Value by location",
+  "Top machines a remplacer": "Top computers to replace",
+  "Age materiel vs CPU": "Hardware age vs CPU",
+  "Enrichissement requis.": "Enrichment required.",
+  "Enrichissement...": "Enriching...",
+  "Aucune equipe.": "No teams.",
+  "Aucun etablissement.": "No locations.",
+  "Aucun token genere.": "No tokens generated.",
+  "Revoquer": "Revoke",
+  "Revoque": "Revoked",
+  "Expire": "Expired",
+  "Epuise": "Exhausted",
+  "Valide": "Valid",
+  "Token complet indisponible apres rechargement": "Full token unavailable after reload",
+  "Agence Paris - juin": "Paris office - June",
+  "Nom, hostname, modele, serial...": "Name, hostname, model, serial...",
+  "Commande generee.": "Command generated.",
+  "Commande copiee.": "Command copied.",
+  "Token genere.": "Token generated.",
+  "Token copie.": "Token copied.",
+  "Token revoque.": "Token revoked.",
+  "Statut mis a jour.": "Status updated.",
+  "Equipe mise a jour.": "Team updated.",
+  "Equipe creee.": "Team created.",
+  "Etablissement mis a jour.": "Location updated.",
+  "Etablissement cree.": "Location created.",
+  "Mode clair": "Light mode",
+  "Mode sombre": "Dark mode",
+};
+
+function translate(value) {
+  return state.language === "en" ? englishTranslations[value] || value : value;
+}
+
+function currentStatusLabels() {
+  return statusLabels[state.language] || statusLabels.fr;
+}
+
+function translateElement(root) {
+  const textNodes = [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walker.nextNode())) textNodes.push(node);
+  if (root.nodeType === Node.TEXT_NODE) textNodes.unshift(root);
+
+  textNodes.forEach((textNode) => {
+    if (!originalText.has(textNode)) originalText.set(textNode, textNode.nodeValue);
+    const source = originalText.get(textNode);
+    const trimmed = source.trim();
+    if (!trimmed) return;
+    const translated = translate(trimmed);
+    textNode.nodeValue = source.replace(trimmed, translated);
+  });
+
+  const elements = root.nodeType === Node.ELEMENT_NODE ? [root, ...root.querySelectorAll("*")] : [];
+  elements.forEach((element) => {
+    if (!originalAttributes.has(element)) originalAttributes.set(element, {});
+    const sources = originalAttributes.get(element);
+    ["placeholder", "title", "aria-label"].forEach((attribute) => {
+      if (!element.hasAttribute(attribute)) return;
+      if (!(attribute in sources)) sources[attribute] = element.getAttribute(attribute);
+      element.setAttribute(attribute, translate(sources[attribute]));
+    });
+  });
+}
+
+function applyLanguage(language, persist = true) {
+  state.language = language === "en" ? "en" : "fr";
+  document.documentElement.lang = state.language;
+  if (persist) localStorage.setItem("it_inventory_language", state.language);
+  $("#current-language-flag").textContent = state.language === "en"
+    ? "\u{1F1EC}\u{1F1E7}"
+    : "\u{1F1EB}\u{1F1F7}";
+  $$("[data-language]").forEach((button) => button.classList.toggle("is-active", button.dataset.language === state.language));
+  renderDevices();
+  renderMetrics();
+  renderCharts();
+  renderOrganization();
+  renderAccessTokens();
+  if (state.selectedDetail) renderDetail(state.selectedDetail, state.selectedScans);
+  translateElement(document.body);
+  setTheme(document.documentElement.dataset.theme || "light");
+}
+
+const languageObserver = new MutationObserver((records) => {
+  if (state.language !== "en") return;
+  records.forEach((record) => {
+    record.addedNodes.forEach((node) => translateElement(node));
+  });
+});
 
 function setTheme(theme) {
   document.documentElement.dataset.theme = theme;
@@ -32,14 +256,14 @@ function setTheme(theme) {
   const toggle = $("#theme-toggle");
   if (toggle) {
     const dark = theme === "dark";
-    toggle.setAttribute("aria-label", dark ? "Activer le mode clair" : "Activer le mode sombre");
-    toggle.title = dark ? "Mode clair" : "Mode sombre";
+    toggle.setAttribute("aria-label", translate(dark ? "Activer le mode clair" : "Activer le mode sombre"));
+    toggle.title = translate(dark ? "Mode clair" : "Mode sombre");
   }
 }
 
 function toast(message) {
   const node = $("#toast");
-  node.textContent = message;
+  node.textContent = translate(message);
   node.classList.add("show");
   window.setTimeout(() => node.classList.remove("show"), 3200);
 }
@@ -72,7 +296,7 @@ function escapeHtml(value) {
 
 function formatDate(value) {
   if (!value) return "-";
-  return new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  return new Intl.DateTimeFormat(state.language === "en" ? "en-GB" : "fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
 function daysSince(value) {
@@ -90,7 +314,7 @@ function ageBucket(device) {
 function money(value) {
   const number = Number(value || 0);
   if (!number) return "-";
-  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(number);
+  return new Intl.NumberFormat(state.language === "en" ? "en-GB" : "fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(number);
 }
 
 function estimatedValue(device) {
@@ -131,12 +355,12 @@ function statusClass(status) {
 }
 
 function tokenState(token) {
-  if (token.revoked_at) return { key: "revoked", label: "Revoque" };
-  if (new Date(token.expires_at).getTime() <= Date.now()) return { key: "expired", label: "Expire" };
+  if (token.revoked_at) return { key: "revoked", label: translate("Revoque") };
+  if (new Date(token.expires_at).getTime() <= Date.now()) return { key: "expired", label: translate("Expire") };
   if (token.max_uses !== null && Number(token.use_count) >= Number(token.max_uses)) {
-    return { key: "exhausted", label: "Epuise" };
+    return { key: "exhausted", label: translate("Epuise") };
   }
-  return { key: "valid", label: "Valide" };
+  return { key: "valid", label: translate("Valide") };
 }
 
 function copyIcon() {
@@ -152,7 +376,9 @@ function renderAccessTokens() {
   $("#tokens-table").innerHTML = state.accessTokens
     .map((token) => {
       const status = tokenState(token);
-      const usage = token.max_uses === null ? `${token.use_count} / illimite` : `${token.use_count} / ${token.max_uses}`;
+      const usage = token.max_uses === null
+        ? `${token.use_count} / ${state.language === "en" ? "unlimited" : "illimite"}`
+        : `${token.use_count} / ${token.max_uses}`;
       const canCopy = Boolean(state.rawAccessTokens[token.id]);
       const copyTitle = canCopy
         ? "Copier le token"
@@ -178,7 +404,7 @@ function renderAccessTokens() {
           <td>${formatDate(token.last_used_at)}</td>
           <td><span class="token-state ${status.key}">${status.label}</span></td>
           <td>
-            ${status.key === "valid" ? `<button class="secondary revoke-token" type="button" data-id="${token.id}">Revoquer</button>` : ""}
+            ${status.key === "valid" ? `<button class="secondary revoke-token" type="button" data-id="${token.id}">${translate("Revoquer")}</button>` : ""}
           </td>
         </tr>
       `;
@@ -288,7 +514,10 @@ function renderMetrics() {
 }
 
 function renderDevices() {
-  $("#result-count").textContent = `${state.filtered.length} resultat(s)`;
+  $("#result-count").textContent = state.language === "en"
+    ? `${state.filtered.length} result${state.filtered.length === 1 ? "" : "s"}`
+    : `${state.filtered.length} resultat${state.filtered.length === 1 ? "" : "s"}`;
+  const labels = currentStatusLabels();
   $("#devices-table").innerHTML = state.filtered
     .map(
       (device) => `
@@ -328,6 +557,9 @@ async function selectDevice(id) {
 }
 
 function renderDetail(device, scans) {
+  state.selectedDetail = device;
+  state.selectedScans = scans;
+  const labels = currentStatusLabels();
   const rows = [
     ["Serial", device.serial_number],
     ["MAC", device.mac_address],
@@ -582,7 +814,7 @@ function renderOrganization() {
           <span class="organization-icon" style="--item-color:${escapeHtml(team.color || "#16735f")}">${organizationIcon("team")}</span>
           <span>
             <strong>${escapeHtml(team.name)}</strong>
-            <small>${team.device_count} machine(s)${team.description ? ` - ${escapeHtml(team.description)}` : ""}</small>
+            <small>${state.language === "en" ? `${team.device_count} computer${team.device_count === 1 ? "" : "s"}` : `${team.device_count} machine${team.device_count === 1 ? "" : "s"}`}${team.description ? ` - ${escapeHtml(team.description)}` : ""}</small>
           </span>
           <span class="organization-chevron">&rsaquo;</span>
         </button>
@@ -598,7 +830,7 @@ function renderOrganization() {
           <span class="organization-icon site">${organizationIcon("site")}</span>
           <span>
             <strong>${escapeHtml(site.name)}</strong>
-            <small>${site.device_count} machine(s)${location ? ` - ${escapeHtml(location)}` : ""}</small>
+            <small>${state.language === "en" ? `${site.device_count} computer${site.device_count === 1 ? "" : "s"}` : `${site.device_count} machine${site.device_count === 1 ? "" : "s"}`}${location ? ` - ${escapeHtml(location)}` : ""}</small>
           </span>
           <span class="organization-chevron">&rsaquo;</span>
         </button>
@@ -725,6 +957,29 @@ function bindEvents() {
   setTheme(document.documentElement.dataset.theme || "light");
   $("#theme-toggle").addEventListener("click", () => {
     setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+  });
+  $("#language-toggle").addEventListener("click", (event) => {
+    event.stopPropagation();
+    const menu = $("#language-menu");
+    const open = menu.classList.toggle("is-hidden") === false;
+    $("#language-toggle").setAttribute("aria-expanded", String(open));
+  });
+  $$("[data-language]").forEach((button) => {
+    button.addEventListener("click", () => {
+      applyLanguage(button.dataset.language);
+      $("#language-menu").classList.add("is-hidden");
+      $("#language-toggle").setAttribute("aria-expanded", "false");
+    });
+  });
+  document.addEventListener("click", (event) => {
+    if (event.target.closest(".language-switcher")) return;
+    $("#language-menu").classList.add("is-hidden");
+    $("#language-toggle").setAttribute("aria-expanded", "false");
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    $("#language-menu").classList.add("is-hidden");
+    $("#language-toggle").setAttribute("aria-expanded", "false");
   });
 
   $$(".tab").forEach((tab) => {
@@ -877,16 +1132,18 @@ function bindEvents() {
   $("#enrich-admin").addEventListener("click", async () => {
     const button = $("#enrich-admin");
     button.disabled = true;
-    button.textContent = "Enrichissement...";
+    button.textContent = translate("Enrichissement...");
     try {
       const result = await api("/admin/enrich", { method: "POST", body: JSON.stringify({ limit: 50, force: false }) });
-      toast(`${result.enriched} machine(s) enrichie(s), ${result.skipped} ignoree(s).`);
+      toast(state.language === "en"
+        ? `${result.enriched} computer(s) enriched, ${result.skipped} skipped.`
+        : `${result.enriched} machine(s) enrichie(s), ${result.skipped} ignoree(s).`);
       await loadAdminData();
     } catch (error) {
       toast(error.message);
     } finally {
       button.disabled = false;
-      button.textContent = "Enrichir les donnees";
+      button.textContent = translate("Enrichir les donnees");
     }
   });
   $("#export-csv").addEventListener("click", exportCsv);
@@ -897,6 +1154,8 @@ function bindEvents() {
 
 hydrateDatalists();
 bindEvents();
+applyLanguage(state.language, false);
+languageObserver.observe(document.body, { childList: true, subtree: true });
 
 if (state.adminToken) {
   $("#admin-login").classList.add("is-hidden");
