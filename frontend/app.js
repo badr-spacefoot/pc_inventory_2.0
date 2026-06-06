@@ -17,6 +17,7 @@ const state = {
   teams: [],
   establishments: [],
   cpuBenchmarkStats: null,
+  mapProvider: "openstreetmap",
 };
 
 const statusLabels = {
@@ -114,6 +115,7 @@ const englishTranslations = {
   "Enregistrer l'etablissement": "Save location",
   "Renseignez latitude et longitude pour afficher la carte.": "Enter latitude and longitude to display the map.",
   "Ouvrir dans OpenStreetMap": "Open in OpenStreetMap",
+  "Ouvrir dans Google Maps": "Open in Google Maps",
   "Recherche": "Search",
   "Anciennete": "Age",
   "Toutes": "All",
@@ -224,6 +226,9 @@ const englishTranslations = {
   "Aucun etablissement.": "No locations.",
   "Aucun token genere.": "No tokens generated.",
   "Revoquer": "Revoke",
+  "Supprimer": "Delete",
+  "Annuler": "Cancel",
+  "Confirmer la suppression": "Confirm deletion",
   "Revoque": "Revoked",
   "Expire": "Expired",
   "Epuise": "Exhausted",
@@ -236,6 +241,9 @@ const englishTranslations = {
   "Token genere.": "Token generated.",
   "Token copie.": "Token copied.",
   "Token revoque.": "Token revoked.",
+  "Token supprime.": "Token deleted.",
+  "Equipe supprimee.": "Team deleted.",
+  "Etablissement supprime.": "Location deleted.",
   "Statut mis a jour.": "Status updated.",
   "Equipe mise a jour.": "Team updated.",
   "Equipe creee.": "Team created.",
@@ -374,6 +382,77 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function normalizeOsInfo(osString) {
+  const original = String(osString || "").trim();
+  const normalized = original.toLowerCase();
+  const buildVersion = original.match(/\b\d+\.\d+\.\d+(?:\.\d+)?\b/)?.[0] || "";
+  let osFamily = "Unknown";
+  let iconType = "unknown";
+  if (normalized.includes("windows 11")) {
+    osFamily = "Windows 11";
+    iconType = "windows-11";
+  } else if (normalized.includes("windows 10")) {
+    osFamily = "Windows 10";
+    iconType = "windows-10";
+  } else if (normalized.includes("macos") || normalized.includes("mac os")) {
+    osFamily = "macOS";
+    iconType = "macos";
+  } else if (normalized.includes("linux") || normalized.includes("ubuntu")) {
+    osFamily = "Linux";
+    iconType = "linux";
+  }
+
+  let osEdition = "Unknown";
+  if (/\b(enterprise|entreprise)\b/.test(normalized)) osEdition = "Enterprise";
+  else if (/\b(education|educational)\b/.test(normalized)) osEdition = "Education";
+  else if (/\b(professionnel|professional|pro)\b/.test(normalized)) osEdition = "Pro";
+  else if (/\b(famille|home)\b/.test(normalized)) osEdition = "Home";
+
+  return {
+    osFamily,
+    osEdition,
+    buildVersion,
+    displayLabel: [osFamily, osEdition === "Unknown" ? "" : osEdition].filter(Boolean).join(" "),
+    iconType,
+    original,
+  };
+}
+
+function osIcon(iconType) {
+  if (!iconType.startsWith("windows-")) {
+    return `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="3" y="4" width="18" height="13" rx="2"></rect>
+        <path d="M8 21h8M12 17v4"></path>
+      </svg>
+    `;
+  }
+  return `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 4.8 10.6 3.7v7.4H3V4.8Zm8.7-1.3L21 2.2v8.9h-9.3V3.5ZM3 12.2h7.6v7.4L3 18.5v-6.3Zm8.7 0H21v8.9l-9.3-1.3v-7.6Z"></path>
+    </svg>
+  `;
+}
+
+function renderOsBadge(device) {
+  const fullOs = [device.os_name, device.os_version].filter(Boolean).join(" ").trim();
+  if (!fullOs) return "-";
+  const info = normalizeOsInfo(fullOs);
+  return `<span class="os-badge ${info.iconType}" title="${escapeHtml(fullOs)}">${osIcon(info.iconType)}<span>${escapeHtml(info.displayLabel)}</span></span>`;
+}
+
+function confirmAction({ title = "Confirmer la suppression", message, confirmLabel = "Supprimer" }) {
+  const dialog = $("#confirm-dialog");
+  $("#confirm-title").textContent = translate(title);
+  $("#confirm-message").textContent = translate(message);
+  $("#confirm-action").textContent = translate(confirmLabel);
+  dialog.returnValue = "";
+  dialog.showModal();
+  return new Promise((resolve) => {
+    dialog.addEventListener("close", () => resolve(dialog.returnValue === "confirm"), { once: true });
+  });
+}
+
 function formatDate(value) {
   if (!value) return "-";
   return new Intl.DateTimeFormat(state.language === "en" ? "en-GB" : "fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
@@ -484,7 +563,10 @@ function renderAccessTokens() {
           <td>${formatDate(token.last_used_at)}</td>
           <td><span class="token-state ${status.key}">${status.label}</span></td>
           <td>
-            ${status.key === "valid" ? `<button class="secondary revoke-token" type="button" data-id="${token.id}">${translate("Revoquer")}</button>` : ""}
+            <div class="token-actions">
+              ${status.key === "valid" ? `<button class="secondary revoke-token" type="button" data-id="${token.id}">${translate("Revoquer")}</button>` : ""}
+              <button class="danger-button delete-token" type="button" data-id="${token.id}" data-label="${escapeHtml(token.label)}">${translate("Supprimer")}</button>
+            </div>
           </td>
         </tr>
       `;
@@ -511,6 +593,27 @@ function renderAccessTokens() {
         await api(`/admin/access-tokens/${button.dataset.id}/revoke`, { method: "POST", body: "{}" });
         await loadAccessTokens();
         toast("Token revoque.");
+      } catch (error) {
+        toast(error.message);
+        button.disabled = false;
+      }
+    });
+  });
+
+  $$(".delete-token").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const confirmed = await confirmAction({
+        message: state.language === "en"
+          ? `Permanently delete the token "${button.dataset.label}"? This action cannot be undone.`
+          : `Supprimer definitivement le token "${button.dataset.label}" ? Cette action est irreversible.`,
+      });
+      if (!confirmed) return;
+      button.disabled = true;
+      try {
+        await api(`/admin/access-tokens/${button.dataset.id}`, { method: "DELETE" });
+        delete state.rawAccessTokens[button.dataset.id];
+        await loadAccessTokens();
+        toast("Token supprime.");
       } catch (error) {
         toast(error.message);
         button.disabled = false;
@@ -667,7 +770,7 @@ function renderDevices() {
           <td>${device.first_name || ""} ${device.last_name || ""}<br><small>${device.email || ""}</small></td>
           <td>${device.team_name || "-"}</td>
           <td>${device.establishment_name || "-"}</td>
-          <td>${device.os_name || "-"} ${device.os_version || ""}</td>
+          <td>${renderOsBadge(device)}</td>
           <td>${device.manufacturer || ""} ${device.model || "-"}</td>
           <td>${formatDate(device.last_seen_at)}</td>
           <td><span class="${statusClass(device.status)}">${labels[device.status] || device.status || "Actif"}</span></td>
@@ -703,6 +806,7 @@ function renderDetail(device, scans) {
   const labels = currentStatusLabels();
   const priorityValue = device.replacement_priority ?? device.obsolescence_index;
   const rows = [
+    ["OS", [device.os_name, device.os_version].filter(Boolean).join(" ")],
     ["Serial", device.serial_number],
     ["MAC", device.mac_address],
     ["IP locale", device.local_ip],
@@ -1087,6 +1191,7 @@ function resetTeamForm() {
   form.elements.color.value = "#16735f";
   form.elements.active.checked = true;
   $("#team-editor-title").textContent = "Nouvelle equipe";
+  $("#delete-team").classList.add("is-hidden");
 }
 
 function editTeam(id) {
@@ -1099,6 +1204,7 @@ function editTeam(id) {
   form.elements.color.value = team.color || "#16735f";
   form.elements.active.checked = Boolean(team.active);
   $("#team-editor-title").textContent = team.name;
+  $("#delete-team").classList.remove("is-hidden");
 }
 
 function resetEstablishmentForm() {
@@ -1112,6 +1218,7 @@ function resetEstablishmentForm() {
   $("#address-search-status").textContent = "";
   hideAddressSuggestions();
   $("#establishment-editor-title").textContent = "Nouvel etablissement";
+  $("#delete-establishment").classList.add("is-hidden");
   renderEstablishmentMap();
 }
 
@@ -1130,6 +1237,7 @@ function editEstablishment(id) {
   form.elements.longitude.value = site.longitude ?? "";
   form.elements.active.checked = Boolean(site.active);
   $("#establishment-editor-title").textContent = site.name;
+  $("#delete-establishment").classList.remove("is-hidden");
   renderEstablishmentMap();
 }
 
@@ -1146,13 +1254,24 @@ function renderEstablishmentMap() {
     `;
     return;
   }
-  const delta = 0.015;
-  const bbox = [longitude - delta, latitude - delta, longitude + delta, latitude + delta].join(",");
-  const src = `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${encodeURIComponent(`${latitude},${longitude}`)}`;
-  const openUrl = `https://www.openstreetmap.org/?mlat=${encodeURIComponent(latitude)}&mlon=${encodeURIComponent(longitude)}#map=16/${encodeURIComponent(latitude)}/${encodeURIComponent(longitude)}`;
+  let src;
+  let openUrl;
+  let linkLabel;
+  if (state.mapProvider === "google") {
+    const location = encodeURIComponent(`${latitude},${longitude}`);
+    src = `https://www.google.com/maps?q=${location}&z=16&output=embed`;
+    openUrl = `https://www.google.com/maps/search/?api=1&query=${location}`;
+    linkLabel = "Ouvrir dans Google Maps";
+  } else {
+    const delta = 0.015;
+    const bbox = [longitude - delta, latitude - delta, longitude + delta, latitude + delta].join(",");
+    src = `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${encodeURIComponent(`${latitude},${longitude}`)}`;
+    openUrl = `https://www.openstreetmap.org/?mlat=${encodeURIComponent(latitude)}&mlon=${encodeURIComponent(longitude)}#map=16/${encodeURIComponent(latitude)}/${encodeURIComponent(longitude)}`;
+    linkLabel = "Ouvrir dans OpenStreetMap";
+  }
   $("#establishment-map").innerHTML = `
     <iframe title="Carte de l'etablissement" loading="lazy" src="${src}"></iframe>
-    <a href="${openUrl}" target="_blank" rel="noopener">Ouvrir dans OpenStreetMap</a>
+    <a href="${openUrl}" target="_blank" rel="noopener">${translate(linkLabel)}</a>
   `;
 }
 
@@ -1160,8 +1279,10 @@ async function loadOrganization() {
   const data = await api("/admin/organization");
   state.teams = data.teams || [];
   state.establishments = data.establishments || [];
+  state.mapProvider = data.map_provider === "google" ? "google" : "openstreetmap";
   renderOrganization();
   updateOrganizationDatalists();
+  renderEstablishmentMap();
 }
 
 async function loadCpuBenchmarkStats() {
@@ -1412,6 +1533,46 @@ function bindEvents() {
   $("#refresh-tokens").addEventListener("click", () => loadAccessTokens().catch((error) => toast(error.message)));
   $("#new-team").addEventListener("click", resetTeamForm);
   $("#new-establishment").addEventListener("click", resetEstablishmentForm);
+  $("#delete-team").addEventListener("click", async () => {
+    const form = $("#team-form");
+    const id = form.elements.id.value;
+    if (!id) return;
+    const team = state.teams.find((item) => item.id === id);
+    const confirmed = await confirmAction({
+      message: state.language === "en"
+        ? `Delete the team "${team?.name || form.elements.name.value}"? Deletion will be blocked if computers or users are still assigned.`
+        : `Supprimer l'equipe "${team?.name || form.elements.name.value}" ? La suppression sera bloquee si des machines ou utilisateurs y sont encore affectes.`,
+    });
+    if (!confirmed) return;
+    try {
+      await api(`/admin/teams/${id}`, { method: "DELETE" });
+      await loadOrganization();
+      resetTeamForm();
+      toast("Equipe supprimee.");
+    } catch (error) {
+      toast(error.message);
+    }
+  });
+  $("#delete-establishment").addEventListener("click", async () => {
+    const form = $("#establishment-form");
+    const id = form.elements.id.value;
+    if (!id) return;
+    const site = state.establishments.find((item) => item.id === id);
+    const confirmed = await confirmAction({
+      message: state.language === "en"
+        ? `Delete the location "${site?.name || form.elements.name.value}"? Deletion will be blocked if computers or users are still assigned.`
+        : `Supprimer l'etablissement "${site?.name || form.elements.name.value}" ? La suppression sera bloquee si des machines ou utilisateurs y sont encore affectes.`,
+    });
+    if (!confirmed) return;
+    try {
+      await api(`/admin/establishments/${id}`, { method: "DELETE" });
+      await loadOrganization();
+      resetEstablishmentForm();
+      toast("Etablissement supprime.");
+    } catch (error) {
+      toast(error.message);
+    }
+  });
   $("#team-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget;

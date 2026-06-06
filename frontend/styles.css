@@ -101,6 +101,31 @@ a.secondary {
   color: var(--ink);
 }
 
+.danger-button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 16px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.danger-button:hover {
+  background: var(--danger);
+  color: white;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.form-actions > button {
+  flex: 1;
+}
+
 .icon-button {
   width: 42px;
   min-width: 42px;
@@ -577,6 +602,17 @@ pre {
   color: var(--danger);
 }
 
+.token-actions {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+
+.token-actions button {
+  min-height: 36px;
+  padding: 0 11px;
+}
+
 .organization-layout {
   display: grid;
   grid-template-columns: minmax(280px, 0.8fr) minmax(340px, 1.2fr);
@@ -801,6 +837,104 @@ pre {
   font-size: 13px;
   font-weight: 700;
   text-align: right;
+}
+
+.os-badge {
+  display: inline-flex;
+  max-width: 180px;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 8px;
+  background: var(--soft);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.os-badge svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  fill: currentColor;
+}
+
+.os-badge:not(.windows-10):not(.windows-11) svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.os-badge.windows-11 {
+  background: color-mix(in srgb, #1687d9 12%, var(--surface));
+  color: color-mix(in srgb, #1687d9 82%, var(--ink));
+}
+
+.os-badge.windows-10 {
+  background: color-mix(in srgb, #0078d4 9%, var(--surface));
+  color: color-mix(in srgb, #0078d4 78%, var(--ink));
+}
+
+.confirm-dialog {
+  width: min(440px, calc(100vw - 32px));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+.confirm-dialog::backdrop {
+  background: rgba(5, 10, 7, 0.62);
+  backdrop-filter: blur(3px);
+}
+
+.confirm-dialog form {
+  display: grid;
+  gap: 14px;
+  padding: 24px;
+}
+
+.confirm-dialog h3,
+.confirm-dialog p {
+  margin: 0;
+}
+
+.confirm-dialog p {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.confirm-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.confirm-icon svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
 }
 
 .map-empty {

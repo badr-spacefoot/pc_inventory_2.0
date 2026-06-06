@@ -23,7 +23,7 @@ function corsHeaders(request: Request) {
   return {
     "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-collection-access-token",
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
     "Vary": "Origin",
   };
 }
@@ -785,6 +785,21 @@ async function handleAdminRevokeAccessToken(request: Request, id: string) {
   return json(request, { token: data });
 }
 
+async function handleAdminDeleteAccessToken(request: Request, id: string) {
+  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  const { data: token, error: findError } = await supabase
+    .from("collection_access_tokens")
+    .select("id,label")
+    .eq("id", id)
+    .maybeSingle();
+  if (findError) throw findError;
+  if (!token) return badRequest(request, "Token introuvable.", 404);
+  const { error } = await supabase.from("collection_access_tokens").delete().eq("id", id);
+  if (error) throw error;
+  await audit("collection_access_token_deleted", "collection_access_token", id, { label: token.label });
+  return json(request, { deleted: true });
+}
+
 async function handleAdminDevices(request: Request) {
   if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
   const { data, error } = await supabase.from("device_inventory_view").select("*").order("last_seen_at", { ascending: false });
@@ -822,6 +837,7 @@ async function handleAdminOrganization(request: Request) {
       ...site,
       device_count: establishmentCounts.get(site.id) ?? 0,
     })),
+    map_provider: googleMapsApiKey ? "google" : "openstreetmap",
   });
 }
 
@@ -848,6 +864,28 @@ async function handleAdminSaveTeam(request: Request, id?: string) {
   }
   await audit(id ? "team_updated" : "team_created", "team", data.id, values);
   return json(request, { team: data }, id ? 200 : 201);
+}
+
+async function handleAdminDeleteTeam(request: Request, id: string) {
+  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  const [{ count: deviceCount, error: deviceError }, { count: userCount, error: userError }] = await Promise.all([
+    supabase.from("devices").select("id", { count: "exact", head: true }).eq("team_id", id),
+    supabase.from("users").select("id", { count: "exact", head: true }).eq("team_id", id),
+  ]);
+  if (deviceError) throw deviceError;
+  if (userError) throw userError;
+  if ((deviceCount ?? 0) > 0 || (userCount ?? 0) > 0) {
+    return badRequest(
+      request,
+      `Cette equipe est utilisee par ${deviceCount ?? 0} machine(s) et ${userCount ?? 0} utilisateur(s). Reassignez-les avant la suppression.`,
+      409,
+    );
+  }
+  const { data, error } = await supabase.from("teams").delete().eq("id", id).select("id,name").maybeSingle();
+  if (error) throw error;
+  if (!data) return badRequest(request, "Equipe introuvable.", 404);
+  await audit("team_deleted", "team", id, { name: data.name });
+  return json(request, { deleted: true });
 }
 
 async function handleAdminSaveEstablishment(request: Request, id?: string) {
@@ -885,6 +923,28 @@ async function handleAdminSaveEstablishment(request: Request, id?: string) {
   }
   await audit(id ? "establishment_updated" : "establishment_created", "establishment", data.id, values);
   return json(request, { establishment: data }, id ? 200 : 201);
+}
+
+async function handleAdminDeleteEstablishment(request: Request, id: string) {
+  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  const [{ count: deviceCount, error: deviceError }, { count: userCount, error: userError }] = await Promise.all([
+    supabase.from("devices").select("id", { count: "exact", head: true }).eq("establishment_id", id),
+    supabase.from("users").select("id", { count: "exact", head: true }).eq("establishment_id", id),
+  ]);
+  if (deviceError) throw deviceError;
+  if (userError) throw userError;
+  if ((deviceCount ?? 0) > 0 || (userCount ?? 0) > 0) {
+    return badRequest(
+      request,
+      `Cet etablissement est utilise par ${deviceCount ?? 0} machine(s) et ${userCount ?? 0} utilisateur(s). Reassignez-les avant la suppression.`,
+      409,
+    );
+  }
+  const { data, error } = await supabase.from("establishments").delete().eq("id", id).select("id,name").maybeSingle();
+  if (error) throw error;
+  if (!data) return badRequest(request, "Etablissement introuvable.", 404);
+  await audit("establishment_deleted", "establishment", id, { name: data.name });
+  return json(request, { deleted: true });
 }
 
 function googleAddressComponent(components: Json[], type: string, short = false) {
@@ -1139,10 +1199,14 @@ Deno.serve(async (request) => {
     if (request.method === "POST" && path.endsWith("/admin/teams")) return await handleAdminSaveTeam(request);
     const teamMatch = path.match(/\/admin\/teams\/([0-9a-f-]+)$/i);
     if (request.method === "POST" && teamMatch) return await handleAdminSaveTeam(request, teamMatch[1]);
+    if (request.method === "DELETE" && teamMatch) return await handleAdminDeleteTeam(request, teamMatch[1]);
     if (request.method === "POST" && path.endsWith("/admin/establishments")) return await handleAdminSaveEstablishment(request);
     const establishmentMatch = path.match(/\/admin\/establishments\/([0-9a-f-]+)$/i);
     if (request.method === "POST" && establishmentMatch) {
       return await handleAdminSaveEstablishment(request, establishmentMatch[1]);
+    }
+    if (request.method === "DELETE" && establishmentMatch) {
+      return await handleAdminDeleteEstablishment(request, establishmentMatch[1]);
     }
     if (request.method === "POST" && path.endsWith("/admin/enrich")) return await handleAdminEnrich(request);
     if (request.method === "GET" && path.endsWith("/admin/cpu-benchmarks")) return await handleAdminCpuBenchmarkStats(request);
@@ -1151,6 +1215,8 @@ Deno.serve(async (request) => {
     if (request.method === "POST" && path.endsWith("/admin/access-tokens")) return await handleAdminCreateAccessToken(request);
     const revokeTokenMatch = path.match(/\/admin\/access-tokens\/([0-9a-f-]+)\/revoke/i);
     if (request.method === "POST" && revokeTokenMatch) return await handleAdminRevokeAccessToken(request, revokeTokenMatch[1]);
+    const deleteTokenMatch = path.match(/\/admin\/access-tokens\/([0-9a-f-]+)$/i);
+    if (request.method === "DELETE" && deleteTokenMatch) return await handleAdminDeleteAccessToken(request, deleteTokenMatch[1]);
     const statusMatch = path.match(/\/admin\/devices\/([0-9a-f-]+)\/status/i);
     if (request.method === "POST" && statusMatch) return await handleAdminDeviceStatus(request, statusMatch[1]);
     const detailMatch = path.match(/\/admin\/devices\/([0-9a-f-]+)/i);

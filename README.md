@@ -185,6 +185,9 @@ Routes principales:
 - `GET /admin/access-tokens` avec token admin
 - `POST /admin/access-tokens` avec token admin pour generer un token
 - `POST /admin/access-tokens/:id/revoke` avec token admin pour revoquer un token
+- `DELETE /admin/access-tokens/:id` avec token admin pour supprimer definitivement un token
+- `DELETE /admin/teams/:id` avec token admin, uniquement si l'equipe n'est plus utilisee
+- `DELETE /admin/establishments/:id` avec token admin, uniquement si l'etablissement n'est plus utilise
 
 ## Tokens temporaires de collecte
 
@@ -194,6 +197,8 @@ Le dashboard admin permet de generer des tokens valables de 1 heure a 1 an, avec
 - Seul son hash SHA-256 est stocke dans `collection_access_tokens`.
 - Chaque utilisation valide incremente atomiquement `use_count`.
 - Un token expire, revoque ou epuise est refuse.
+- Revoquer conserve le token dans l'historique admin avec l'etat `Revoque`.
+- Supprimer efface definitivement l'enregistrement. Cette action demande une confirmation dans l'interface.
 - Le secret global `COLLECTION_ACCESS_TOKEN` reste accepte comme solution de secours.
 
 Apres une mise a jour depuis une version anterieure, reexecuter `supabase/schema.sql` dans le SQL Editor Supabase pour creer `collection_access_tokens` et `consume_collection_access_token`.
@@ -277,7 +282,30 @@ Le module Organisation peut rechercher une adresse avec Google Places, puis remp
 supabase secrets set GOOGLE_MAPS_API_KEY="..."
 ```
 
-La recherche passe par l'Edge Function Supabase et exige une session admin valide. Sans cette cle, la saisie manuelle des adresses et la carte OpenStreetMap restent disponibles.
+La recherche passe par l'Edge Function Supabase et exige une session admin valide. La cle n'est jamais envoyee dans le code GitHub Pages. Lorsqu'elle est configuree, la carte de l'etablissement utilise Google Maps et propose un lien `Ouvrir dans Google Maps`. Sans cette cle, la saisie manuelle et la carte OpenStreetMap restent disponibles automatiquement.
+
+Les coordonnees enregistrees restent les memes dans les deux modes: `latitude` et `longitude`. Elles peuvent etre renseignees manuellement ou remplies par la selection d'une suggestion Google Places.
+
+## Affichage compact des systemes
+
+Les tableaux utilisent `normalizeOsInfo(osString)` pour transformer la chaine complete collectee en badge compact:
+
+- Windows 11 ou Windows 10;
+- editions Home/Famille, Pro/Professionnel/Professional, Enterprise ou Education;
+- extraction du numero de build, par exemple `10.0.26200`.
+
+La valeur originale n'est jamais modifiee en base. Elle reste disponible dans l'infobulle du badge et dans la fiche detaillee de la machine.
+
+## Suppression des donnees d'organisation
+
+Les equipes et etablissements disposent d'une action `Supprimer` dans leur formulaire d'edition. Une confirmation est toujours demandee.
+
+- Une equipe ne peut pas etre supprimee si une machine ou un utilisateur lui est affecte.
+- Un etablissement ne peut pas etre supprime si une machine ou un utilisateur lui est affecte.
+- L'API retourne le nombre de references bloquantes afin de permettre leur reaffectation.
+- La suppression d'un etablissement inutilise supprime egalement son adresse et ses coordonnees, car elles appartiennent au meme enregistrement.
+
+Aucune migration supplementaire n'est necessaire: ces controles utilisent les cles etrangeres existantes.
 
 Les prix marche sont approximatifs: le dashboard affiche donc un score de confiance. Plus il y a de signaux recents et concordants, plus la confiance augmente.
 
