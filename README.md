@@ -60,6 +60,21 @@ supabase secrets set ALLOWED_ORIGINS="https://YOUR_GITHUB_USER.github.io,http://
 supabase functions deploy inventory-api
 ```
 
+### Deploiement cloud avec GitHub Actions
+
+Le workflow `.github/workflows/supabase-deploy.yml` deploie automatiquement l'API vers Supabase Cloud lorsque les fichiers `supabase/functions/` changent.
+
+Dans GitHub, configurer:
+
+- Variable Actions `SUPABASE_PROJECT_REF`
+- Secret Actions `SUPABASE_ACCESS_TOKEN`
+- Secret Actions `ADMIN_PASSWORD`
+- Secret Actions `ADMIN_SESSION_SECRET`
+- Secret Actions `COLLECTION_ACCESS_TOKEN`
+- Secrets optionnels `EBAY_BROWSE_API_TOKEN` et `KEEPA_API_KEY`
+
+La machine locale n'heberge rien. GitHub Actions transmet le code a Supabase, puis l'Edge Function s'execute dans le cloud Supabase.
+
 URL attendue:
 
 ```text

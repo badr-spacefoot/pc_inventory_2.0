@@ -1,0 +1,58 @@
+name: Deploy Supabase API
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "supabase/functions/**"
+      - "supabase/config.toml"
+      - ".github/workflows/supabase-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link Supabase project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+
+      - name: Configure Edge Function secrets
+        run: |
+          supabase secrets set \
+            ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+            ADMIN_SESSION_SECRET="$ADMIN_SESSION_SECRET" \
+            COLLECTION_ACCESS_TOKEN="$COLLECTION_ACCESS_TOKEN" \
+            ALLOWED_ORIGINS="$ALLOWED_ORIGINS" \
+            ENRICHMENT_CACHE_DAYS="$ENRICHMENT_CACHE_DAYS" \
+            EBAY_BROWSE_API_TOKEN="$EBAY_BROWSE_API_TOKEN" \
+            KEEPA_API_KEY="$KEEPA_API_KEY"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          ADMIN_SESSION_SECRET: ${{ secrets.ADMIN_SESSION_SECRET }}
+          COLLECTION_ACCESS_TOKEN: ${{ secrets.COLLECTION_ACCESS_TOKEN }}
+          ALLOWED_ORIGINS: https://badr-spacefoot.github.io
+          ENRICHMENT_CACHE_DAYS: "30"
+          EBAY_BROWSE_API_TOKEN: ${{ secrets.EBAY_BROWSE_API_TOKEN }}
+          KEEPA_API_KEY: ${{ secrets.KEEPA_API_KEY }}
+
+      - name: Deploy inventory API
+        run: supabase functions deploy inventory-api --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
