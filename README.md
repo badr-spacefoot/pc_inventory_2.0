@@ -63,7 +63,7 @@ supabase functions deploy inventory-api
 URL attendue:
 
 ```text
-https://YOUR_PROJECT.functions.supabase.co/inventory-api
+https://YOUR_PROJECT.supabase.co/functions/v1/inventory-api
 ```
 
 ## Configuration frontend
@@ -72,8 +72,8 @@ Option simple: modifier les valeurs en haut de `frontend/app.js`:
 
 ```js
 const CONFIG = {
-  apiBaseUrl: "https://YOUR_PROJECT.functions.supabase.co/inventory-api",
-  scriptUrl: "https://YOUR_GITHUB_USER.github.io/auto_inventory/scripts/collect-windows.ps1",
+  apiBaseUrl: "https://YOUR_PROJECT.supabase.co/functions/v1/inventory-api",
+  scriptUrl: "https://badr-spacefoot.github.io/pc_inventory_2.0/scripts/collect-windows.ps1",
   staleDays: 30,
 };
 ```
@@ -82,8 +82,8 @@ Alternative: injecter ces valeurs avant `app.js` dans `frontend/index.html`:
 
 ```html
 <script>
-  window.IT_INVENTORY_API_URL = "https://YOUR_PROJECT.functions.supabase.co/inventory-api";
-  window.IT_INVENTORY_SCRIPT_URL = "https://YOUR_GITHUB_USER.github.io/auto_inventory/scripts/collect-windows.ps1";
+  window.IT_INVENTORY_API_URL = "https://YOUR_PROJECT.supabase.co/functions/v1/inventory-api";
+  window.IT_INVENTORY_SCRIPT_URL = "https://badr-spacefoot.github.io/pc_inventory_2.0/scripts/collect-windows.ps1";
   window.IT_INVENTORY_STALE_DAYS = 30;
 </script>
 ```
@@ -104,7 +104,7 @@ Depuis le dashboard utilisateur, la commande est generee automatiquement. Exempl
 
 ```powershell
 powershell -ExecutionPolicy Bypass -NoProfile -File .\scripts\collect-windows.ps1 `
-  -ApiUrl "https://YOUR_PROJECT.functions.supabase.co/inventory-api" `
+  -ApiUrl "https://YOUR_PROJECT.supabase.co/functions/v1/inventory-api" `
   -CollectionToken "TOKEN_RENVOYE_PAR_LE_FORMULAIRE"
 ```
 
@@ -123,7 +123,7 @@ Le script `scripts/import-legacy-csv.ps1` importe l'ancien export `Données` ver
 ```powershell
 powershell -ExecutionPolicy Bypass -NoProfile -File .\scripts\import-legacy-csv.ps1 `
   -CsvPath "C:\Users\roobi\Downloads\Inventaire_pc_auto_2026 - Données.csv" `
-  -ApiUrl "https://YOUR_PROJECT.functions.supabase.co/inventory-api" `
+  -ApiUrl "https://YOUR_PROJECT.supabase.co/functions/v1/inventory-api" `
   -CollectionAccessToken "TOKEN_UTILISATEUR_DE_COLLECTE" `
   -DefaultEmailDomain "spacefoot.local" `
   -DefaultService "Non renseigne"

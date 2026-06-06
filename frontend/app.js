@@ -1,6 +1,6 @@
 const CONFIG = {
-  apiBaseUrl: window.IT_INVENTORY_API_URL || "https://YOUR_PROJECT.functions.supabase.co/inventory-api",
-  scriptUrl: window.IT_INVENTORY_SCRIPT_URL || "https://badr-spacefoot.github.io/auto_inventory/scripts/collect-windows.ps1",
+  apiBaseUrl: window.IT_INVENTORY_API_URL || "https://YOUR_PROJECT.supabase.co/functions/v1/inventory-api",
+  scriptUrl: window.IT_INVENTORY_SCRIPT_URL || "https://badr-spacefoot.github.io/pc_inventory_2.0/scripts/collect-windows.ps1",
   staleDays: Number(window.IT_INVENTORY_STALE_DAYS || 30),
 };
 
