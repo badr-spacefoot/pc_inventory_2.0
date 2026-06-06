@@ -16,6 +16,7 @@ const state = {
   rawAccessTokens: {},
   teams: [],
   establishments: [],
+  cpuBenchmarkStats: null,
 };
 
 const statusLabels = {
@@ -63,6 +64,7 @@ const englishTranslations = {
   "Sections d'administration": "Administration sections",
   "Parc": "Fleet",
   "Organisation": "Organization",
+  "Valorisation": "Valuation",
   "Acces": "Access",
   "Acces collecte": "Collection access",
   "Tokens temporaires": "Temporary tokens",
@@ -139,6 +141,50 @@ const englishTranslations = {
   "Selectionnez une machine": "Select a computer",
   "Aucune machine selectionnee.": "No computer selected.",
   "Valeur estimee": "Estimated value",
+  "Valeur materielle": "Hardware value",
+  "Valorisation du parc": "Fleet valuation",
+  "Enrichir toutes les machines": "Enrich all devices",
+  "Recalculer les valeurs": "Recalculate values",
+  "Importer benchmarks CPU": "Import CPU benchmarks",
+  "Exporter inventaire enrichi": "Export enriched inventory",
+  "Les valeurs sont des estimations basees sur le modele, le CPU, la RAM, le GPU, la categorie et une depreciation par age.": "Values are estimates based on model, CPU, RAM, GPU, category, and age depreciation.",
+  "Valeur de lancement totale": "Total launch value",
+  "Valeur actuelle totale": "Total current value",
+  "Depreciation moyenne": "Average depreciation",
+  "Age moyen": "Average age",
+  "Plus de 4 ans": "Older than 4 years",
+  "Priorite elevee": "High priority",
+  "Valeur par equipe": "Value by team",
+  "Distribution des ages": "Age distribution",
+  "Distribution des performances": "Performance distribution",
+  "Priorite de remplacement": "Replacement priority",
+  "Benchmarks importes": "Imported benchmarks",
+  "Jeu integre": "Bundled dataset",
+  "Enrichir cette machine": "Enrich this device",
+  "Source enrichissement": "Enrichment source",
+  "Statut enrichissement": "Enrichment status",
+  "Priorite remplacement": "Replacement priority",
+  "Categorie materielle": "Hardware category",
+  "Valeur actuelle estimee": "Estimated current value",
+  "Confiance prix": "Price confidence",
+  "Notes enrichissement": "Enrichment notes",
+  "GPU": "GPU",
+  "Type stockage": "Storage type",
+  "Fichier CPU importe.": "CPU file imported.",
+  "Enrichissement termine.": "Enrichment completed.",
+  "Recalcul termine.": "Recalculation completed.",
+  "completed": "Completed",
+  "partial": "Partial",
+  "failed": "Failed",
+  "pending": "Pending",
+  "business-laptop": "Business laptop",
+  "workstation": "Workstation",
+  "mini-pc": "Mini PC",
+  "desktop": "Desktop",
+  "all-in-one": "All-in-one",
+  "keep": "Keep",
+  "watch": "Monitor",
+  "replace": "Replace",
   "CPU faible": "Low CPU",
   "Stockage faible": "Low storage",
   "Chargement de l'historique...": "Loading history...",
@@ -212,6 +258,24 @@ function currentStatusLabels() {
   return statusLabels[state.language] || statusLabels.fr;
 }
 
+function localizedEnrichmentValue(value) {
+  const labels = {
+    fr: {
+      completed: "Termine", partial: "Partiel", failed: "Echec", pending: "En attente",
+      "business-laptop": "Portable professionnel", workstation: "Station de travail",
+      "mini-pc": "Mini PC", desktop: "Ordinateur fixe", "all-in-one": "Tout-en-un",
+      keep: "Garder", watch: "Surveiller", replace: "Remplacer",
+    },
+    en: {
+      completed: "Completed", partial: "Partial", failed: "Failed", pending: "Pending",
+      "business-laptop": "Business laptop", workstation: "Workstation",
+      "mini-pc": "Mini PC", desktop: "Desktop", "all-in-one": "All-in-one",
+      keep: "Keep", watch: "Monitor", replace: "Replace",
+    },
+  };
+  return labels[state.language]?.[value] || value;
+}
+
 function translateElement(root) {
   const textNodes = [];
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -251,6 +315,7 @@ function applyLanguage(language, persist = true) {
   renderDevices();
   renderMetrics();
   renderCharts();
+  renderValuation();
   renderOrganization();
   renderAccessTokens();
   if (state.selectedDetail) renderDetail(state.selectedDetail, state.selectedScans);
@@ -333,7 +398,7 @@ function money(value) {
 }
 
 function estimatedValue(device) {
-  return Number(device.current_market_price_avg || device.current_new_price || device.estimated_launch_price || 0);
+  return Number(device.estimated_current_value || device.current_market_price_avg || device.current_new_price || device.estimated_launch_price || 0);
 }
 
 function cpuScoreBucket(device) {
@@ -506,6 +571,7 @@ function applyFilters() {
   renderDevices();
   renderMetrics();
   renderCharts();
+  renderValuation();
 }
 
 function renderMetrics() {
@@ -526,6 +592,66 @@ function renderMetrics() {
   ]
     .map(([label, value]) => `<article class="metric"><span>${label}</span><strong>${value}</strong></article>`)
     .join("");
+}
+
+function deviceAge(device) {
+  const releaseYear = Number(device.release_year || device.model_release_year || device.cpu_release_year || 0);
+  return releaseYear ? Math.max(0, new Date().getFullYear() - releaseYear) : null;
+}
+
+function renderValuation() {
+  const devices = state.filtered;
+  const launchValue = devices.reduce((sum, device) => sum + Number(device.estimated_launch_price || 0), 0);
+  const currentValue = devices.reduce((sum, device) => sum + estimatedValue(device), 0);
+  const depreciation = launchValue > 0 ? Math.round((1 - currentValue / launchValue) * 100) : 0;
+  const ages = devices.map(deviceAge).filter((age) => age !== null);
+  const averageAge = ages.length ? Math.round((ages.reduce((sum, age) => sum + age, 0) / ages.length) * 10) / 10 : 0;
+  const olderThanFour = ages.filter((age) => age > 4).length;
+  const lowCpu = devices.filter((device) => Number(device.cpu_benchmark_score || device.cpu_score || 0) > 0 && Number(device.cpu_benchmark_score || device.cpu_score || 0) < 8000).length;
+  const highPriority = devices.filter((device) => Number(device.replacement_priority || device.obsolescence_index || 0) >= 70).length;
+
+  $("#valuation-metrics").innerHTML = [
+    ["Valeur de lancement totale", money(launchValue)],
+    ["Valeur actuelle totale", money(currentValue)],
+    ["Depreciation moyenne", `${depreciation}%`],
+    ["Age moyen", `${averageAge} ${state.language === "en" ? "years" : "ans"}`],
+    ["Plus de 4 ans", olderThanFour],
+    ["CPU faible", lowCpu],
+    ["Priorite elevee", highPriority],
+  ].map(([label, value]) => `<article class="metric"><span>${translate(label)}</span><strong>${value}</strong></article>`).join("");
+
+  const ageDistribution = { "0-1": 0, "2-3": 0, "4-5": 0, "6+": 0 };
+  ages.forEach((age) => {
+    if (age <= 1) ageDistribution["0-1"] += 1;
+    else if (age <= 3) ageDistribution["2-3"] += 1;
+    else if (age <= 5) ageDistribution["4-5"] += 1;
+    else ageDistribution["6+"] += 1;
+  });
+  const performance = { Low: 0, Medium: 0, Good: 0 };
+  devices.forEach((device) => {
+    const score = Number(device.cpu_benchmark_score || device.cpu_score || 0);
+    if (!score) return;
+    if (score < 8000) performance.Low += 1;
+    else if (score < 14000) performance.Medium += 1;
+    else performance.Good += 1;
+  });
+  const priorities = { Low: 0, Medium: 0, High: 0 };
+  devices.forEach((device) => {
+    const priority = Number(device.replacement_priority || device.obsolescence_index || 0);
+    if (priority >= 70) priorities.High += 1;
+    else if (priority >= 45) priorities.Medium += 1;
+    else priorities.Low += 1;
+  });
+
+  renderBarChart('[data-valuation-chart="value-team"]', translate("Valeur par equipe"), sumBy(devices, (device) => device.team_name, estimatedValue), " EUR");
+  renderBarChart('[data-valuation-chart="age"]', translate("Distribution des ages"), ageDistribution);
+  renderBarChart('[data-valuation-chart="performance"]', translate("Distribution des performances"), performance);
+  renderBarChart('[data-valuation-chart="priority"]', translate("Priorite de remplacement"), priorities);
+
+  if (state.cpuBenchmarkStats) {
+    $("#cpu-benchmark-status").textContent =
+      `${translate("Benchmarks importes")}: ${state.cpuBenchmarkStats.importedCount} / ${translate("Jeu integre")}: ${state.cpuBenchmarkStats.bundledCount}`;
+  }
 }
 
 function renderDevices() {
@@ -575,24 +701,32 @@ function renderDetail(device, scans) {
   state.selectedDetail = device;
   state.selectedScans = scans;
   const labels = currentStatusLabels();
+  const priorityValue = device.replacement_priority ?? device.obsolescence_index;
   const rows = [
     ["Serial", device.serial_number],
     ["MAC", device.mac_address],
     ["IP locale", device.local_ip],
     ["CPU", device.cpu],
+    ["GPU", device.gpu],
     ["RAM", device.ram_total_gb ? `${device.ram_total_gb} Go` : ""],
     ["Stockage", `${device.storage_total_gb || "-"} Go total / ${device.storage_free_gb || "-"} Go libres`],
+    ["Type stockage", device.storage_type],
     ["Utilisateur OS", device.windows_user],
     ["Script", device.script_version],
     ["Score age", `${device.hardware_age_score || 0}/100`],
-    ["Score CPU", device.cpu_score],
+    ["Score CPU", device.cpu_benchmark_score || device.cpu_score],
     ["Generation CPU", device.cpu_generation],
     ["Annee CPU", device.cpu_release_year],
-    ["Annee modele", device.model_release_year],
+    ["Annee modele", device.release_year || device.model_release_year],
     ["Prix lancement", money(device.estimated_launch_price)],
-    ["Valeur actuelle", money(device.current_market_price_avg)],
-    ["Confiance", device.confidence_score ? `${device.confidence_score}/100` : ""],
-    ["Reco", device.recommendation],
+    ["Valeur actuelle estimee", money(device.estimated_current_value || device.current_market_price_avg)],
+    ["Confiance prix", (device.price_confidence_score ?? device.confidence_score) ? `${device.price_confidence_score ?? device.confidence_score}/100` : ""],
+    ["Categorie materielle", localizedEnrichmentValue(device.device_category)],
+    ["Priorite remplacement", priorityValue !== null && priorityValue !== undefined ? `${priorityValue}/100` : ""],
+    ["Statut enrichissement", localizedEnrichmentValue(device.enrichment_status)],
+    ["Source enrichissement", device.enrichment_source || device.market_source],
+    ["Notes enrichissement", device.enrichment_notes],
+    ["Reco", localizedEnrichmentValue(device.recommendation)],
     ["Dernier enrichissement", device.last_enriched_at ? formatDate(device.last_enriched_at) : ""],
   ];
   const priceRows = (device.priceHistory || [])
@@ -617,6 +751,7 @@ function renderDetail(device, scans) {
       </label>
       <button type="submit" class="primary">Mettre a jour</button>
     </form>
+    <button id="enrich-device" class="secondary detail-enrich-button" type="button">Enrichir cette machine</button>
     <div class="scan-history">
       <h3>Historique des scans</h3>
       <ul>${scanRows || "<li>Aucun scan detaille.</li>"}</ul>
@@ -641,6 +776,26 @@ function renderDetail(device, scans) {
       toast("Statut mis a jour.");
     } catch (error) {
       toast(error.message);
+    }
+  });
+
+  $("#enrich-device").addEventListener("click", async () => {
+    const button = $("#enrich-device");
+    button.disabled = true;
+    button.textContent = translate("Enrichissement...");
+    try {
+      const result = await api("/admin/enrich", {
+        method: "POST",
+        body: JSON.stringify({ deviceId: device.id, limit: 1, force: true, mode: "refresh", useExternal: false }),
+      });
+      toast(result.failed ? "Erreur serveur." : "Enrichissement termine.");
+      await loadAdminData();
+      await selectDevice(device.id);
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      button.disabled = false;
+      button.textContent = translate("Enrichir cette machine");
     }
   });
 }
@@ -749,7 +904,7 @@ function csvEscape(value) {
   return `"${String(value ?? "").replaceAll('"', '""')}"`;
 }
 
-function exportCsv() {
+function exportCsv(enrichedExport = false) {
   const columns = [
     "hostname",
     "first_name",
@@ -764,20 +919,31 @@ function exportCsv() {
     "model",
     "serial_number",
     "cpu",
+    "gpu",
     "ram_total_gb",
     "storage_total_gb",
     "storage_free_gb",
+    "storage_type",
     "last_seen_at",
     "status",
     "hardware_age_score",
     "cpu_score",
+    "cpu_benchmark_score",
     "cpu_generation",
     "cpu_release_year",
     "model_release_year",
+    "release_year",
     "current_market_price_avg",
+    "estimated_current_value",
+    "price_confidence_score",
     "performance_index",
     "obsolescence_index",
+    "replacement_priority",
     "recommendation",
+    "enrichment_status",
+    "enrichment_source",
+    "device_category",
+    "enrichment_notes",
     "confidence_score",
     "last_enriched_at",
   ];
@@ -785,7 +951,7 @@ function exportCsv() {
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = `inventaire-it-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.download = `${enrichedExport ? "inventaire-it-enrichi" : "inventaire-it"}-${new Date().toISOString().slice(0, 10)}.csv`;
   link.click();
   URL.revokeObjectURL(link.href);
 }
@@ -998,6 +1164,12 @@ async function loadOrganization() {
   updateOrganizationDatalists();
 }
 
+async function loadCpuBenchmarkStats() {
+  const data = await api("/admin/cpu-benchmarks");
+  state.cpuBenchmarkStats = data;
+  renderValuation();
+}
+
 let addressSearchTimer = 0;
 let addressSearchController = null;
 
@@ -1077,6 +1249,9 @@ async function loadAdminData() {
     toast(`Module tokens indisponible: ${error.message}`);
   });
   loadOrganization().catch((error) => toast(`Module organisation indisponible: ${error.message}`));
+  loadCpuBenchmarkStats().catch(() => {
+    state.cpuBenchmarkStats = null;
+  });
   state.devices = data.devices || [];
   const teams = [...new Set(state.devices.map((d) => d.team_name))];
   const establishments = [...new Set(state.devices.map((d) => d.establishment_name))];
@@ -1096,6 +1271,50 @@ function hydrateDatalists() {
   ["Lyon", "Paris", "Nantes", "Marseille", "Remote"].forEach((value) => {
     $("#establishment-list").insertAdjacentHTML("beforeend", `<option value="${value}"></option>`);
   });
+}
+
+async function runEnrichment({ mode = "refresh", deviceId = "", button = null } = {}) {
+  const originalText = button?.textContent || "";
+  if (button) {
+    button.disabled = true;
+    button.textContent = translate("Enrichissement...");
+  }
+  try {
+    const result = await api("/admin/enrich", {
+      method: "POST",
+      body: JSON.stringify({
+        deviceId: deviceId || undefined,
+        limit: deviceId ? 1 : 100,
+        force: mode === "recalculate",
+        mode,
+        useExternal: false,
+      }),
+    });
+    const message = state.language === "en"
+      ? `${result.enriched} enriched, ${result.skipped} skipped, ${result.failed || 0} failed.`
+      : `${result.enriched} enrichie(s), ${result.skipped} ignoree(s), ${result.failed || 0} en echec.`;
+    toast(message);
+    await loadAdminData();
+    return result;
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+  }
+}
+
+async function importCpuBenchmarkFile(file) {
+  if (!file) return;
+  const csv = await file.text();
+  const result = await api("/admin/cpu-benchmarks/import", {
+    method: "POST",
+    body: JSON.stringify({ csv }),
+  });
+  toast(state.language === "en"
+    ? `${result.imported} CPU benchmark(s) imported, ${result.rejected} rejected.`
+    : `${result.imported} benchmark(s) CPU importe(s), ${result.rejected} rejete(s).`);
+  await loadCpuBenchmarkStats();
 }
 
 function bindEvents() {
@@ -1287,24 +1506,25 @@ function bindEvents() {
     await navigator.clipboard.writeText($("#generated-token").textContent);
     toast("Token copie.");
   });
-  $("#enrich-admin").addEventListener("click", async () => {
-    const button = $("#enrich-admin");
-    button.disabled = true;
-    button.textContent = translate("Enrichissement...");
+  $("#enrich-admin").addEventListener("click", () =>
+    runEnrichment({ mode: "refresh", button: $("#enrich-admin") }).catch((error) => toast(error.message)));
+  $("#valuation-enrich-all").addEventListener("click", () =>
+    runEnrichment({ mode: "refresh", button: $("#valuation-enrich-all") }).catch((error) => toast(error.message)));
+  $("#valuation-recalculate").addEventListener("click", () =>
+    runEnrichment({ mode: "recalculate", button: $("#valuation-recalculate") }).catch((error) => toast(error.message)));
+  $("#import-cpu-benchmarks").addEventListener("click", () => $("#cpu-benchmark-file").click());
+  $("#cpu-benchmark-file").addEventListener("change", async (event) => {
+    const input = event.currentTarget;
     try {
-      const result = await api("/admin/enrich", { method: "POST", body: JSON.stringify({ limit: 50, force: false }) });
-      toast(state.language === "en"
-        ? `${result.enriched} computer(s) enriched, ${result.skipped} skipped.`
-        : `${result.enriched} machine(s) enrichie(s), ${result.skipped} ignoree(s).`);
-      await loadAdminData();
+      await importCpuBenchmarkFile(input.files?.[0]);
     } catch (error) {
       toast(error.message);
     } finally {
-      button.disabled = false;
-      button.textContent = translate("Enrichir les donnees");
+      input.value = "";
     }
   });
-  $("#export-csv").addEventListener("click", exportCsv);
+  $("#export-enriched-csv").addEventListener("click", () => exportCsv(true));
+  $("#export-csv").addEventListener("click", () => exportCsv(false));
   ["global-search", "filter-team", "filter-establishment", "filter-os", "filter-age", "filter-model", "filter-status", "filter-cpu-score", "filter-value"].forEach((id) => {
     $(`#${id}`).addEventListener("input", applyFilters);
   });

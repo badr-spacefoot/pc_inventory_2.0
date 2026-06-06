@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import cpuBenchmarkSeed from "./cpu_benchmarks.json" with { type: "json" };
 
 type Json = Record<string, unknown>;
 
@@ -9,9 +10,8 @@ const adminSessionSecret = Deno.env.get("ADMIN_SESSION_SECRET") ?? "";
 const collectionAccessToken = Deno.env.get("COLLECTION_ACCESS_TOKEN") ?? "";
 const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ?? "*").split(",").map((origin) => origin.trim());
 const ebayBrowseApiToken = Deno.env.get("EBAY_BROWSE_API_TOKEN") ?? "";
-const keepaApiKey = Deno.env.get("KEEPA_API_KEY") ?? "";
 const googleMapsApiKey = Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
-const enrichmentCacheDays = Number(Deno.env.get("ENRICHMENT_CACHE_DAYS") ?? 30);
+const enrichmentCacheDays = Number(Deno.env.get("ENRICHMENT_CACHE_DAYS") ?? 90);
 
 const supabase = createClient(supabaseUrl, serviceRoleKey, {
   auth: { persistSession: false },
@@ -99,9 +99,11 @@ function normalizeScanPayload(body: Json): Json {
     model: firstPresent(body, "model"),
     serialNumber: firstPresent(body, "serialNumber", "serial"),
     cpu: firstPresent(body, "cpu"),
+    gpu: firstPresent(body, "gpu"),
     ramTotalGb: safeNumber(body.ramTotalGb) ?? parseGigabytes(body.ram),
     storageTotalGb: safeNumber(body.storageTotalGb),
     storageFreeGb: safeNumber(body.storageFreeGb),
+    storageType: firstPresent(body, "storageType"),
     macAddress: normalizeMac(body.macAddress ?? body.mac),
     localIp: firstPresent(body, "localIp", "ip"),
     windowsUser: firstPresent(body, "windowsUser", "user"),
@@ -248,17 +250,39 @@ function hardwareAgeScore(body: Json) {
   return Math.min(score, 100);
 }
 
+type CpuBenchmark = {
+  cpu_name: string;
+  cpu_mark_score: number;
+  release_year: number | null;
+  generation: string;
+  category: string;
+  source?: string;
+};
+
+function normalizeCpuName(cpuName: unknown) {
+  return safeString(cpuName, 260)
+    .toLowerCase()
+    .replace(/\(r\)|\(tm\)|\u00ae|\u2122/g, " ")
+    .replace(/\b(cpu|processor|with radeon graphics|@.*|series)\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
 function inferCpuGeneration(cpuName: string) {
   const cpu = cpuName.toLowerCase();
   const intel = cpu.match(/i[3579]-?(\d{4,5})/i);
   if (intel) {
     const digits = intel[1];
     const generation = digits.length === 5 ? Number(digits.slice(0, 2)) : Number(digits.slice(0, 1));
-    return `${generation}e gen Intel`;
+    return `${generation}th Gen Intel`;
   }
   const amd = cpu.match(/ryzen\s+[3579]\s+(\d{4})/i);
   if (amd) return `Ryzen ${amd[1][0]}000`;
+  const apple = cpu.match(/\bapple\s+(m[1-4](?:\s+(?:pro|max|ultra))?)/i);
+  if (apple) return `Apple ${apple[1].toUpperCase()}`;
   if (cpu.includes("core ultra")) return "Intel Core Ultra";
+  if (cpu.includes("xeon")) return "Intel Xeon";
   return "";
 }
 
@@ -269,73 +293,163 @@ function inferCpuReleaseYear(cpuName: string) {
     const digits = intel[1];
     const generation = digits.length === 5 ? Number(digits.slice(0, 2)) : Number(digits.slice(0, 1));
     const byGeneration: Record<number, number> = {
-      2: 2011,
-      3: 2012,
-      4: 2013,
-      5: 2015,
-      6: 2015,
-      7: 2016,
-      8: 2017,
-      9: 2018,
-      10: 2019,
-      11: 2020,
-      12: 2021,
-      13: 2022,
-      14: 2023,
+      2: 2011, 3: 2012, 4: 2013, 5: 2015, 6: 2015, 7: 2016, 8: 2017,
+      9: 2018, 10: 2019, 11: 2020, 12: 2021, 13: 2022, 14: 2023, 15: 2024,
     };
     return byGeneration[generation] ?? null;
   }
   const amd = cpu.match(/ryzen\s+[3579]\s+(\d{4})/i);
   if (amd) {
     const family = Number(amd[1][0]);
-    const byFamily: Record<number, number> = { 1: 2017, 2: 2018, 3: 2019, 4: 2020, 5: 2021, 6: 2022, 7: 2023, 8: 2024 };
-    return byFamily[family] ?? null;
+    return ({ 1: 2017, 2: 2018, 3: 2019, 4: 2020, 5: 2021, 6: 2022, 7: 2023, 8: 2024 } as Record<number, number>)[family] ?? null;
   }
+  const apple = cpu.match(/\bapple\s+m([1-4])/i);
+  if (apple) return ({ 1: 2020, 2: 2022, 3: 2023, 4: 2024 } as Record<number, number>)[Number(apple[1])] ?? null;
   if (cpu.includes("core ultra")) return 2023;
   return null;
 }
 
 function estimateCpuScore(cpuName: string) {
   const cpu = cpuName.toLowerCase();
-  const year = inferCpuReleaseYear(cpuName) ?? 2018;
-  let score = 3500 + Math.max(0, year - 2016) * 1350;
-  if (cpu.includes("celeron") || cpu.includes("pentium")) score *= 0.45;
+  const year = inferCpuReleaseYear(cpuName) ?? 2017;
+  let score = 2800 + Math.max(0, year - 2015) * 1450;
+  if (cpu.includes("celeron") || cpu.includes("pentium") || cpu.includes("athlon")) score *= 0.42;
   if (cpu.includes("i3") || cpu.includes("ryzen 3")) score *= 0.68;
   if (cpu.includes("i7") || cpu.includes("ryzen 7")) score *= 1.25;
-  if (cpu.includes("i9") || cpu.includes("ryzen 9")) score *= 1.55;
-  if (cpu.includes("u")) score *= 0.82;
-  if (cpu.includes("h")) score *= 1.12;
-  if (cpu.includes("ultra")) score *= 1.25;
-  return Math.round(Math.max(1000, Math.min(score, 36000)));
+  if (cpu.includes("i9") || cpu.includes("ryzen 9") || cpu.includes("xeon")) score *= 1.55;
+  if (/\b\d{4,5}u\b/.test(cpu)) score *= 0.82;
+  if (/\b\d{4,5}h[x]?\b/.test(cpu)) score *= 1.15;
+  if (cpu.includes("ultra")) score *= 1.28;
+  return Math.round(Math.max(800, Math.min(score, 50000)));
+}
+
+async function lookupCpuBenchmark(cpuName: string) {
+  const normalized = normalizeCpuName(cpuName);
+  if (!normalized) return { benchmark: null, match: "none" };
+
+  const { data: imported } = await supabase
+    .from("cpu_benchmarks")
+    .select("cpu_name,cpu_mark_score,release_year,generation,category,source")
+    .eq("normalized_name", normalized)
+    .maybeSingle();
+  if (imported) return { benchmark: imported as CpuBenchmark, match: "imported-exact" };
+
+  const seed = (cpuBenchmarkSeed as CpuBenchmark[]).find((item) => normalizeCpuName(item.cpu_name) === normalized);
+  if (seed) return { benchmark: { ...seed, source: "bundled-cpu-seed" }, match: "seed-exact" };
+
+  const modelToken = normalized.match(/(?:i[3579]\s*\d{4,5}[a-z]*|ryzen\s*[3579]\s*\d{4}[a-z]*|apple\s*m[1-4](?:\s*(?:pro|max|ultra))?)/)?.[0];
+  if (modelToken) {
+    const candidate = (cpuBenchmarkSeed as CpuBenchmark[]).find((item) => normalizeCpuName(item.cpu_name).includes(modelToken));
+    if (candidate) return { benchmark: { ...candidate, source: "bundled-cpu-seed" }, match: "seed-model" };
+  }
+  return { benchmark: null, match: "estimated" };
 }
 
 function inferModelReleaseYear(model: string, cpuYear: number | null) {
   const text = model.toLowerCase();
-  const explicitYear = text.match(/\b(20[1-2][0-9])\b/);
-  if (explicitYear) return Number(explicitYear[1]);
-  if (text.includes("5645") || text.includes("5640")) return 2024;
-  if (text.includes("5435")) return 2023;
-  if (text.includes("5515")) return 2021;
-  if (text.includes("x1504") || text.includes("e1404")) return 2023;
-  if (text.includes("x415")) return 2021;
-  return cpuYear;
+  const explicitYear = text.match(/\b(20(?:0[8-9]|1[0-9]|2[0-6]))\b/);
+  if (explicitYear) return { year: Number(explicitYear[1]), match: "model-year" };
+  const knownHints: Array<[RegExp, number]> = [
+    [/\b(?:latitude|precision)\s+564[05]\b/, 2024],
+    [/\blatitude\s+5435\b/, 2023],
+    [/\blatitude\s+5515\b/, 2021],
+    [/\b(?:x1504|e1404)\b/, 2023],
+    [/\bx415\b/, 2021],
+  ];
+  const knownModel = knownHints.find(([pattern]) => pattern.test(text));
+  if (knownModel) return { year: knownModel[1], match: "known-model" };
+  return { year: cpuYear, match: cpuYear ? "cpu-year-fallback" : "unknown" };
 }
 
-function estimateLaunchPrice(model: string, ramGb: number | null) {
-  const text = model.toLowerCase();
+function detectDeviceCategory(device: Json, cpuCategory = "") {
+  const text = [device.manufacturer, device.model, device.gpu, device.cpu].map((value) => safeString(value).toLowerCase()).join(" ");
+  if (/\b(workstation|precision|zbook|thinkstation|xeon|quadro|rtx a\d|firepro)\b/.test(text) || cpuCategory === "workstation") return "workstation";
+  if (/\b(all[- ]?in[- ]?one|aio|imac)\b/.test(text)) return "all-in-one";
+  if (/\b(mini|micro|tiny|nuc|deskmini)\b/.test(text)) return "mini-pc";
+  if (/\b(desktop|tower|optiplex|prodesk|elitedesk)\b/.test(text) || cpuCategory === "desktop") return "desktop";
+  return "business-laptop";
+}
+
+function cpuTier(cpuName: string) {
+  const cpu = cpuName.toLowerCase();
+  if (/\b(i9|ryzen 9|xeon)\b/.test(cpu)) return "workstation";
+  if (/\b(i7|ryzen 7|apple m[2-4] (?:pro|max|ultra))\b/.test(cpu)) return "high";
+  if (/\b(i5|ryzen 5|apple m[1-4])\b/.test(cpu)) return "mid";
+  if (/\b(i3|ryzen 3)\b/.test(cpu)) return "entry";
+  return "unknown";
+}
+
+function hasDedicatedGpu(gpuName: string) {
+  const gpu = gpuName.toLowerCase();
+  if (!gpu) return false;
+  return !/\b(intel (?:uhd|hd|iris)|radeon graphics|microsoft basic|apple m[1-4])\b/.test(gpu);
+}
+
+function estimateLaunchPrice(device: Json, category: string) {
+  const tier = cpuTier(safeString(device.cpu));
   let price = 750;
-  if (text.includes("inspiron 16")) price = 900;
-  if (text.includes("vivobook")) price = 650;
-  if (text.includes("aspire")) price = 700;
-  if (text.includes("thinkpad") || text.includes("latitude")) price = 1100;
-  if ((ramGb ?? 0) >= 16) price += 120;
-  if ((ramGb ?? 0) >= 32) price += 260;
-  return price;
+  if (category === "business-laptop") {
+    price = tier === "entry" ? 550 : tier === "mid" ? 950 : tier === "high" ? 1400 : tier === "workstation" ? 2300 : 800;
+  } else if (category === "workstation") {
+    price = tier === "workstation" ? 3000 : 2200;
+  } else if (category === "mini-pc") {
+    price = tier === "high" || tier === "workstation" ? 900 : tier === "mid" ? 700 : 500;
+  } else if (category === "all-in-one") {
+    price = tier === "high" ? 1400 : tier === "mid" ? 1000 : 750;
+  } else if (category === "desktop") {
+    price = tier === "workstation" ? 2100 : tier === "high" ? 1250 : tier === "mid" ? 850 : 600;
+  }
+  const ram = safeNumber(device.ram_total_gb) ?? 0;
+  if (ram >= 16) price += 120;
+  if (ram >= 32) price += 280;
+  if (ram >= 64) price += 450;
+  if (hasDedicatedGpu(safeString(device.gpu))) price += category === "workstation" ? 700 : 400;
+  return Math.round(price / 10) * 10;
 }
 
-function recommendationFor(cpuScore: number, obsolescenceIndex: number, marketAvg: number | null) {
-  if (cpuScore < 6500 || obsolescenceIndex >= 75 || (marketAvg !== null && marketAvg < 180)) return "replace";
-  if (cpuScore < 10000 || obsolescenceIndex >= 50 || (marketAvg !== null && marketAvg < 300)) return "watch";
+function depreciationFactor(age: number) {
+  if (age <= 0) return 0.85;
+  if (age === 1) return 0.70;
+  if (age === 2) return 0.55;
+  if (age === 3) return 0.40;
+  if (age === 4) return 0.30;
+  if (age === 5) return 0.20;
+  if (age === 6) return 0.15;
+  return 0.10;
+}
+
+function replacementPriority(device: Json, age: number, cpuScore: number, currentValue: number, category: string) {
+  let score = 0;
+  const reasons: string[] = [];
+  if (age >= 6) { score += 40; reasons.push("6+ years old"); }
+  else if (age >= 5) { score += 34; reasons.push("5 years old"); }
+  else if (age >= 4) { score += 26; reasons.push("4 years old"); }
+  else if (age >= 3) score += 15;
+
+  if (cpuScore < 5000) { score += 30; reasons.push("very low CPU score"); }
+  else if (cpuScore < 8000) { score += 20; reasons.push("low CPU score"); }
+  else if (cpuScore < 12000) score += 8;
+
+  const ram = safeNumber(device.ram_total_gb) ?? 0;
+  if (ram > 0 && ram < 8) { score += 22; reasons.push("less than 8 GB RAM"); }
+  else if (ram > 0 && ram < 16) score += 8;
+
+  const storageType = safeString(device.storage_type).toLowerCase();
+  if (storageType.includes("hdd") || storageType.includes("hard disk")) { score += 15; reasons.push("HDD storage"); }
+
+  const os = `${safeString(device.os_name)} ${safeString(device.os_version)}`.toLowerCase();
+  if (os.includes("windows 10") && Date.now() > Date.parse("2025-10-14T00:00:00Z")) {
+    score += 15;
+    reasons.push("Windows 10 support ended");
+  }
+  if (currentValue > 0 && currentValue < 150) score += 5;
+  if (category === "workstation" && cpuScore >= 12000) score -= 5;
+  return { score: Math.max(0, Math.min(100, Math.round(score))), reasons };
+}
+
+function recommendationForPriority(priority: number) {
+  if (priority >= 70) return "replace";
+  if (priority >= 45) return "watch";
   return "keep";
 }
 
@@ -357,11 +471,10 @@ async function fetchEbayPrices(query: string) {
   url.searchParams.set("limit", "10");
   url.searchParams.set("filter", "buyingOptions:{FIXED_PRICE}");
   const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${ebayBrowseApiToken}`,
-      "X-EBAY-C-MARKETPLACE-ID": "EBAY_FR",
-    },
-  });
+    signal: AbortSignal.timeout(5000),
+    headers: { Authorization: `Bearer ${ebayBrowseApiToken}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_FR" },
+  }).catch(() => null);
+  if (!response) return [];
   if (!response.ok) return [];
   const data = await response.json();
   return (data.itemSummaries ?? []).map((item: Json) => ({
@@ -374,13 +487,8 @@ async function fetchEbayPrices(query: string) {
   })).filter((item: Json) => item.price);
 }
 
-async function fetchKeepaPricePlaceholder(_query: string) {
-  if (!keepaApiKey) return [];
-  return [];
-}
-
-async function enrichOneDevice(device: Json, force: boolean) {
-  if (!force && device.last_enriched_at) {
+async function enrichOneDevice(device: Json, options: { force: boolean; useExternal: boolean }) {
+  if (!options.force && device.last_enriched_at) {
     const ageMs = Date.now() - new Date(safeString(device.last_enriched_at)).getTime();
     if (ageMs < enrichmentCacheDays * 86400000) return { skipped: true, deviceId: device.id };
   }
@@ -388,12 +496,28 @@ async function enrichOneDevice(device: Json, force: boolean) {
   const cpuName = safeString(device.cpu || device.enrichment_cpu_name, 260);
   const model = safeString(device.model, 160);
   const manufacturer = safeString(device.manufacturer, 160);
-  const cpuReleaseYear = inferCpuReleaseYear(cpuName);
-  const cpuScore = estimateCpuScore(cpuName);
-  const modelReleaseYear = inferModelReleaseYear(model, cpuReleaseYear);
-  const launchPrice = estimateLaunchPrice(model, safeNumber(device.ram_total_gb));
+  if (!cpuName && !model && !manufacturer) {
+    const failed = {
+      device_id: safeString(device.id),
+      enrichment_status: "failed",
+      enrichment_source: "insufficient-data",
+      notes: "Manufacturer, model and CPU are missing.",
+      last_enriched_at: new Date().toISOString(),
+    };
+    await supabase.from("hardware_enrichment").upsert(failed, { onConflict: "device_id" });
+    return { skipped: false, failed: true, deviceId: device.id };
+  }
+
+  const cpuLookup = await lookupCpuBenchmark(cpuName);
+  const benchmark = cpuLookup.benchmark;
+  const cpuReleaseYear = benchmark?.release_year ?? inferCpuReleaseYear(cpuName);
+  const cpuScore = benchmark?.cpu_mark_score ?? estimateCpuScore(cpuName);
+  const modelRelease = inferModelReleaseYear(model, cpuReleaseYear);
+  const modelReleaseYear = modelRelease.year;
+  const category = detectDeviceCategory(device, benchmark?.category);
+  const launchPrice = estimateLaunchPrice(device, category);
   const query = [manufacturer, model, cpuName.split("@")[0]].filter(Boolean).join(" ");
-  const marketRows = [...await fetchEbayPrices(query), ...await fetchKeepaPricePlaceholder(query)];
+  const marketRows = options.useExternal ? await fetchEbayPrices(query) : [];
   const prices = marketRows.map((row: Json) => safeNumber(row.price)).filter((price): price is number => price !== null && price > 0);
   const newPrices = marketRows
     .filter((row: Json) => safeString(row.condition).toLowerCase().includes("new") || safeString(row.condition).toLowerCase().includes("neuf"))
@@ -403,35 +527,69 @@ async function enrichOneDevice(device: Json, force: boolean) {
   const newStats = priceStats(newPrices);
   const currentYear = new Date().getFullYear();
   const age = modelReleaseYear ? Math.max(0, currentYear - modelReleaseYear) : 4;
+  const depreciationValue = Math.round(launchPrice * depreciationFactor(age));
+  const currentValue = stats.avg === null ? depreciationValue : Math.round(stats.avg * 0.7 + depreciationValue * 0.3);
   const performanceIndex = Math.max(0, Math.min(100, Math.round((cpuScore / 18000) * 100)));
-  const obsolescenceIndex = Math.max(0, Math.min(100, Math.round(age * 12 + (100 - performanceIndex) * 0.45)));
-  const recommendation = recommendationFor(cpuScore, obsolescenceIndex, stats.avg);
-  const confidenceScore = Math.min(100, 35 + (cpuReleaseYear ? 15 : 0) + (modelReleaseYear ? 10 : 0) + Math.min(prices.length * 8, 40));
-  const marketSource = marketRows.length ? [...new Set(marketRows.map((row: Json) => safeString(row.source)))].join(",") : "local-heuristic";
+  const priority = replacementPriority(device, age, cpuScore, currentValue, category);
+  const recommendation = recommendationForPriority(priority.score);
+  const confidenceScore = prices.length >= 3
+    ? Math.min(100, 90 + Math.min(prices.length - 3, 10))
+    : benchmark && ["model-year", "known-model"].includes(modelRelease.match)
+    ? 78
+    : cpuReleaseYear && category
+    ? 62
+    : manufacturer || category
+    ? 42
+    : 25;
+  const sources = [
+    benchmark?.source || (cpuName ? "cpu-generation-estimate" : ""),
+    "category-price-rules",
+    "age-depreciation",
+    marketRows.length ? "ebay-optional" : "",
+  ].filter(Boolean);
+  const hasModelEvidence = ["model-year", "known-model"].includes(modelRelease.match);
+  const enrichmentStatus = benchmark && launchPrice && (hasModelEvidence || prices.length >= 3) ? "completed" : "partial";
+  const noteParts = [
+    `Launch price estimated from ${category} and ${cpuTier(cpuName)} CPU rules.`,
+    `Current value uses ${age}-year depreciation${stats.avg !== null ? " blended with optional market listings" : ""}.`,
+    ...priority.reasons,
+  ];
 
   const enrichment = {
     device_id: safeString(device.id),
     cpu_name: cpuName,
     cpu_score: cpuScore,
-    cpu_generation: inferCpuGeneration(cpuName),
+    cpu_benchmark_score: cpuScore,
+    cpu_generation: benchmark?.generation || inferCpuGeneration(cpuName),
     cpu_release_year: cpuReleaseYear,
     model_release_year: modelReleaseYear,
+    release_year: modelReleaseYear,
     estimated_launch_price: launchPrice,
     current_new_price: newStats.avg,
     current_market_price_min: stats.min,
-    current_market_price_avg: stats.avg,
+    current_market_price_avg: currentValue,
     current_market_price_max: stats.max,
-    market_source: marketSource,
+    estimated_current_value: currentValue,
+    market_source: sources.join(","),
+    enrichment_source: sources.join(","),
     performance_index: performanceIndex,
-    obsolescence_index: obsolescenceIndex,
+    obsolescence_index: priority.score,
+    replacement_priority: priority.score,
     recommendation,
     confidence_score: confidenceScore,
+    price_confidence_score: confidenceScore,
+    enrichment_status: enrichmentStatus,
+    device_category: category,
+    notes: noteParts.join(" "),
     last_enriched_at: new Date().toISOString(),
     raw_data: {
       query,
+      age,
+      depreciation_factor: depreciationFactor(age),
+      cpu_match: cpuLookup.match,
+      model_match: modelRelease.match,
       provider_counts: {
         ebay: marketRows.filter((row: Json) => row.source === "ebay").length,
-        keepa: marketRows.filter((row: Json) => row.source === "keepa").length,
       },
     },
   };
@@ -446,7 +604,7 @@ async function enrichOneDevice(device: Json, force: boolean) {
     if (historyError) throw historyError;
   }
 
-  return { skipped: false, deviceId: device.id, recommendation };
+  return { skipped: false, deviceId: device.id, recommendation, priority: priority.score, status: enrichmentStatus };
 }
 
 async function persistScan(request: Request, user: { id: string; team_id: string; establishment_id: string }, rawBody: Json, tokenId?: string) {
@@ -468,9 +626,11 @@ async function persistScan(request: Request, user: { id: string; team_id: string
     model: safeString(body.model, 160),
     serial_number: safeString(body.serialNumber, 160) || null,
     cpu: safeString(body.cpu, 260),
+    gpu: safeString(body.gpu, 260) || null,
     ram_total_gb: safeNumber(body.ramTotalGb),
     storage_total_gb: safeNumber(body.storageTotalGb),
     storage_free_gb: safeNumber(body.storageFreeGb),
+    storage_type: safeString(body.storageType, 40) || null,
     mac_address: normalizeMac(body.macAddress),
     local_ip: safeString(body.localIp, 80),
     windows_user: safeString(body.windowsUser, 160),
@@ -499,9 +659,11 @@ async function persistScan(request: Request, user: { id: string; team_id: string
     model: deviceValues.model,
     serial_number: deviceValues.serial_number,
     cpu: deviceValues.cpu,
+    gpu: deviceValues.gpu,
     ram_total_gb: deviceValues.ram_total_gb,
     storage_total_gb: deviceValues.storage_total_gb,
     storage_free_gb: deviceValues.storage_free_gb,
+    storage_type: deviceValues.storage_type,
     mac_address: deviceValues.mac_address,
     local_ip: deviceValues.local_ip,
     windows_user: deviceValues.windows_user,
@@ -836,10 +998,85 @@ async function handleAdminDeviceDetail(request: Request, id: string) {
   return json(request, { device, scans, priceHistory });
 }
 
+function parseCsvLine(line: string) {
+  const values: string[] = [];
+  let value = "";
+  let quoted = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    if (char === '"') {
+      if (quoted && line[index + 1] === '"') {
+        value += '"';
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (char === "," && !quoted) {
+      values.push(value.trim());
+      value = "";
+    } else {
+      value += char;
+    }
+  }
+  values.push(value.trim());
+  return values;
+}
+
+async function handleAdminImportCpuBenchmarks(request: Request) {
+  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  const body = await request.json().catch(() => ({}));
+  const csv = typeof body.csv === "string" ? body.csv.slice(0, 2_000_000) : "";
+  if (!csv.trim()) return badRequest(request, "Fichier CSV requis.");
+  const lines = csv.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line: string) => line.trim());
+  if (lines.length < 2) return badRequest(request, "Le CSV ne contient aucune donnee.");
+  const headers = parseCsvLine(lines[0]).map((header) => header.toLowerCase().replace(/\s+/g, "_"));
+  const required = ["cpu_name", "cpu_mark_score"];
+  if (required.some((header) => !headers.includes(header))) {
+    return badRequest(request, "Colonnes requises: cpu_name,cpu_mark_score.");
+  }
+
+  const rows = [];
+  const rejected: Array<{ line: number; reason: string }> = [];
+  for (let index = 1; index < lines.length; index += 1) {
+    const values = parseCsvLine(lines[index]);
+    const row = Object.fromEntries(headers.map((header, column) => [header, values[column] ?? ""]));
+    const cpuName = safeString(row.cpu_name, 260);
+    const score = Number(row.cpu_mark_score);
+    if (!cpuName || !Number.isFinite(score) || score <= 0) {
+      rejected.push({ line: index + 1, reason: "CPU ou score invalide" });
+      continue;
+    }
+    rows.push({
+      cpu_name: cpuName,
+      normalized_name: normalizeCpuName(cpuName),
+      cpu_mark_score: Math.round(score),
+      release_year: safeNumber(row.release_year),
+      generation: safeString(row.generation, 120) || null,
+      category: safeString(row.category, 80) || null,
+      source: "admin-csv-import",
+      updated_at: new Date().toISOString(),
+    });
+  }
+  if (rows.length === 0) return badRequest(request, "Aucune ligne CPU valide.");
+  const { error } = await supabase.from("cpu_benchmarks").upsert(rows, { onConflict: "normalized_name" });
+  if (error) throw error;
+  await audit("cpu_benchmarks_imported", "cpu_benchmark", null, { imported: rows.length, rejected: rejected.length });
+  return json(request, { imported: rows.length, rejected: rejected.length, errors: rejected.slice(0, 20) });
+}
+
+async function handleAdminCpuBenchmarkStats(request: Request) {
+  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  const { count, error } = await supabase.from("cpu_benchmarks").select("id", { count: "exact", head: true });
+  if (error) throw error;
+  return json(request, { importedCount: count ?? 0, bundledCount: (cpuBenchmarkSeed as CpuBenchmark[]).length });
+}
+
 async function handleAdminEnrich(request: Request) {
   if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
   const body = await request.json().catch(() => ({}));
-  const force = Boolean(body.force);
+  const mode = safeString(body.mode, 40) || "refresh";
+  const force = Boolean(body.force) || mode === "recalculate";
+  const useExternal = Boolean(body.useExternal) && mode !== "recalculate";
   const limit = Math.max(1, Math.min(Number(body.limit || 25), 100));
   const deviceId = safeString(body.deviceId);
   let query = supabase.from("device_inventory_view").select("*").order("last_enriched_at", { ascending: true, nullsFirst: true }).limit(limit);
@@ -847,14 +1084,27 @@ async function handleAdminEnrich(request: Request) {
   const { data: devices, error } = await query;
   if (error) throw error;
 
-  const results = [];
+  const results: Json[] = [];
   for (const device of devices ?? []) {
-    results.push(await enrichOneDevice(device, force));
+    try {
+      results.push(await enrichOneDevice(device, { force, useExternal }));
+    } catch (error) {
+      console.error("Device enrichment failed", device.id, error);
+      await supabase.from("hardware_enrichment").upsert({
+        device_id: safeString(device.id),
+        enrichment_status: "failed",
+        enrichment_source: "enrichment-service",
+        notes: safeString(error instanceof Error ? error.message : "Unknown enrichment error", 1000),
+        last_enriched_at: new Date().toISOString(),
+      }, { onConflict: "device_id" });
+      results.push({ skipped: false, failed: true, deviceId: device.id });
+    }
   }
-  const enriched = results.filter((result) => !result.skipped).length;
-  const skipped = results.length - enriched;
-  await audit("hardware_enrichment_run", "device", deviceId || null, { enriched, skipped, force, limit });
-  return json(request, { ok: true, enriched, skipped, results });
+  const enriched = results.filter((result) => !result.skipped && !result.failed).length;
+  const failed = results.filter((result) => result.failed).length;
+  const skipped = results.filter((result) => result.skipped).length;
+  await audit("hardware_enrichment_run", "device", deviceId || null, { enriched, failed, skipped, force, useExternal, mode, limit });
+  return json(request, { ok: failed === 0, enriched, failed, skipped, results });
 }
 
 async function handleAdminDeviceStatus(request: Request, id: string) {
@@ -895,6 +1145,8 @@ Deno.serve(async (request) => {
       return await handleAdminSaveEstablishment(request, establishmentMatch[1]);
     }
     if (request.method === "POST" && path.endsWith("/admin/enrich")) return await handleAdminEnrich(request);
+    if (request.method === "GET" && path.endsWith("/admin/cpu-benchmarks")) return await handleAdminCpuBenchmarkStats(request);
+    if (request.method === "POST" && path.endsWith("/admin/cpu-benchmarks/import")) return await handleAdminImportCpuBenchmarks(request);
     if (request.method === "GET" && path.endsWith("/admin/access-tokens")) return await handleAdminListAccessTokens(request);
     if (request.method === "POST" && path.endsWith("/admin/access-tokens")) return await handleAdminCreateAccessToken(request);
     const revokeTokenMatch = path.match(/\/admin\/access-tokens\/([0-9a-f-]+)\/revoke/i);

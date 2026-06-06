@@ -62,9 +62,11 @@ create table if not exists public.devices (
   model text,
   serial_number text,
   cpu text,
+  gpu text,
   ram_total_gb numeric,
   storage_total_gb numeric,
   storage_free_gb numeric,
+  storage_type text,
   mac_address text,
   local_ip text,
   windows_user text,
@@ -88,9 +90,11 @@ create table if not exists public.device_scans (
   model text,
   serial_number text,
   cpu text,
+  gpu text,
   ram_total_gb numeric,
   storage_total_gb numeric,
   storage_free_gb numeric,
+  storage_type text,
   mac_address text,
   local_ip text,
   windows_user text,
@@ -153,6 +157,32 @@ create table if not exists public.hardware_enrichment (
   raw_data jsonb not null default '{}'::jsonb
 );
 
+alter table public.devices add column if not exists gpu text;
+alter table public.devices add column if not exists storage_type text;
+alter table public.device_scans add column if not exists gpu text;
+alter table public.device_scans add column if not exists storage_type text;
+alter table public.hardware_enrichment add column if not exists release_year integer;
+alter table public.hardware_enrichment add column if not exists estimated_current_value numeric;
+alter table public.hardware_enrichment add column if not exists price_confidence_score integer not null default 0;
+alter table public.hardware_enrichment add column if not exists cpu_benchmark_score integer;
+alter table public.hardware_enrichment add column if not exists enrichment_status text not null default 'pending';
+alter table public.hardware_enrichment add column if not exists enrichment_source text;
+alter table public.hardware_enrichment add column if not exists replacement_priority integer not null default 0;
+alter table public.hardware_enrichment add column if not exists device_category text;
+alter table public.hardware_enrichment add column if not exists notes text;
+
+create table if not exists public.cpu_benchmarks (
+  id uuid primary key default gen_random_uuid(),
+  cpu_name text not null,
+  normalized_name text not null unique,
+  cpu_mark_score integer not null check (cpu_mark_score > 0),
+  release_year integer,
+  generation text,
+  category text,
+  source text not null default 'manual-import',
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.market_price_history (
   id uuid primary key default gen_random_uuid(),
   device_id uuid not null references public.devices(id) on delete cascade,
@@ -175,6 +205,8 @@ create index if not exists idx_collection_access_tokens_hash on public.collectio
 create index if not exists idx_collection_access_tokens_expiry on public.collection_access_tokens(expires_at desc);
 create index if not exists idx_hardware_enrichment_recommendation on public.hardware_enrichment(recommendation);
 create index if not exists idx_hardware_enrichment_cpu_score on public.hardware_enrichment(cpu_score);
+create index if not exists idx_hardware_enrichment_priority on public.hardware_enrichment(replacement_priority desc);
+create index if not exists idx_cpu_benchmarks_normalized_name on public.cpu_benchmarks(normalized_name);
 create index if not exists idx_market_price_history_device_collected on public.market_price_history(device_id, collected_at desc);
 
 create or replace function public.set_updated_at()
@@ -265,7 +297,18 @@ select
   u.service,
   u.comment,
   t.name as team_name,
-  e.name as establishment_name
+  e.name as establishment_name,
+  d.gpu,
+  d.storage_type,
+  he.release_year,
+  he.estimated_current_value,
+  he.price_confidence_score,
+  he.cpu_benchmark_score,
+  he.enrichment_status,
+  he.enrichment_source,
+  he.replacement_priority,
+  he.device_category,
+  he.notes as enrichment_notes
 from public.devices d
 left join public.users u on u.id = d.assigned_user_id
 left join public.teams t on t.id = d.team_id
@@ -282,6 +325,7 @@ alter table public.collection_access_tokens enable row level security;
 alter table public.audit_logs enable row level security;
 alter table public.hardware_enrichment enable row level security;
 alter table public.market_price_history enable row level security;
+alter table public.cpu_benchmarks enable row level security;
 
 -- Les lectures/ecritures applicatives passent par la Edge Function avec la service role key.
 -- Aucune policy publique n'est creee afin d'eviter l'exposition depuis GitHub Pages.

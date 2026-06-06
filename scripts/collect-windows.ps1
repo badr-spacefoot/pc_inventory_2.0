@@ -9,7 +9,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$ScriptVersion = "1.0.0"
+$ScriptVersion = "1.1.0"
 
 function Get-FirstValue {
   param($Value, [string]$Fallback = "")
@@ -33,13 +33,32 @@ $computer = Get-CimInstance Win32_ComputerSystem
 $bios = Get-CimInstance Win32_BIOS
 $os = Get-CimInstance Win32_OperatingSystem
 $processor = Get-CimInstance Win32_Processor | Select-Object -First 1
+$gpu = Get-CimInstance Win32_VideoController |
+  Where-Object { $_.Name -and $_.Name -notmatch "Microsoft Basic" } |
+  Select-Object -First 1
 $drives = Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3"
+$diskDrives = Get-CimInstance Win32_DiskDrive
 $network = Get-CimInstance Win32_NetworkAdapterConfiguration -Filter "IPEnabled=True" | Select-Object -First 1
 
 $storageTotal = ($drives | Measure-Object -Property Size -Sum).Sum
 $storageFree = ($drives | Measure-Object -Property FreeSpace -Sum).Sum
 $localIp = Get-FirstValue $network.IPAddress
 $mac = if ($IncludeMacAddress) { $network.MACAddress } else { $null }
+$physicalDisks = if (Get-Command Get-PhysicalDisk -ErrorAction SilentlyContinue) {
+  Get-PhysicalDisk -ErrorAction SilentlyContinue
+} else {
+  @()
+}
+$mediaTypes = @($physicalDisks | ForEach-Object { $_.MediaType } | Where-Object { $_ -and $_ -ne "Unspecified" } | Select-Object -Unique)
+$storageType = if ($mediaTypes.Count -gt 0) {
+  $mediaTypes -join " + "
+} elseif (($diskDrives.Model -join " ") -match "SSD|NVMe") {
+  "SSD"
+} elseif ($diskDrives.Count -gt 0) {
+  "HDD"
+} else {
+  ""
+}
 
 $payload = @{
   hostname = $env:COMPUTERNAME
@@ -49,9 +68,11 @@ $payload = @{
   model = $computer.Model
   serialNumber = $bios.SerialNumber
   cpu = $processor.Name
+  gpu = $gpu.Name
   ramTotalGb = To-Gigabytes $computer.TotalPhysicalMemory
   storageTotalGb = To-Gigabytes $storageTotal
   storageFreeGb = To-Gigabytes $storageFree
+  storageType = $storageType
   macAddress = $mac
   localIp = $localIp
   windowsUser = "$env:USERDOMAIN\$env:USERNAME"

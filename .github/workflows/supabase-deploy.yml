@@ -41,8 +41,7 @@ jobs:
             COLLECTION_ACCESS_TOKEN="$COLLECTION_ACCESS_TOKEN" \
             ALLOWED_ORIGINS="$ALLOWED_ORIGINS" \
             ENRICHMENT_CACHE_DAYS="$ENRICHMENT_CACHE_DAYS" \
-            EBAY_BROWSE_API_TOKEN="$EBAY_BROWSE_API_TOKEN" \
-            KEEPA_API_KEY="$KEEPA_API_KEY"
+            EBAY_BROWSE_API_TOKEN="$EBAY_BROWSE_API_TOKEN"
           if [ -n "$GOOGLE_MAPS_API_KEY" ]; then
             supabase secrets set GOOGLE_MAPS_API_KEY="$GOOGLE_MAPS_API_KEY"
           fi
@@ -52,20 +51,22 @@ jobs:
           ADMIN_SESSION_SECRET: ${{ secrets.ADMIN_SESSION_SECRET }}
           COLLECTION_ACCESS_TOKEN: ${{ secrets.COLLECTION_ACCESS_TOKEN }}
           ALLOWED_ORIGINS: https://badr-spacefoot.github.io
-          ENRICHMENT_CACHE_DAYS: "30"
+          ENRICHMENT_CACHE_DAYS: "90"
           EBAY_BROWSE_API_TOKEN: ${{ secrets.EBAY_BROWSE_API_TOKEN }}
-          KEEPA_API_KEY: ${{ secrets.KEEPA_API_KEY }}
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
 
-      - name: Apply organization schema
+      - name: Apply database migrations
         run: |
-          jq -Rs '{ query: . }' supabase/migrations/20260606190000_organization_management.sql > migration.json
-          curl --fail-with-body \
-            --request POST \
-            "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/database/query" \
-            --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
-            --header "Content-Type: application/json" \
-            --data @migration.json
+          for migration in supabase/migrations/*.sql; do
+            echo "Applying $migration"
+            jq -Rs '{ query: . }' "$migration" > migration.json
+            curl --fail-with-body \
+              --request POST \
+              "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/database/query" \
+              --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              --header "Content-Type: application/json" \
+              --data @migration.json
+          done
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}

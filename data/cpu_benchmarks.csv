@@ -1,0 +1,39 @@
+cpu_name,cpu_mark_score,release_year,generation,category
+Intel Core i3-6100U,2600,2015,6th Gen Intel,mobile
+Intel Core i5-6200U,3000,2015,6th Gen Intel,mobile
+Intel Core i5-7200U,3400,2016,7th Gen Intel,mobile
+Intel Core i5-8250U,5900,2017,8th Gen Intel,mobile
+Intel Core i5-8265U,6200,2018,8th Gen Intel,mobile
+Intel Core i5-10210U,6500,2019,10th Gen Intel,mobile
+Intel Core i5-1035G1,7500,2019,10th Gen Intel,mobile
+Intel Core i5-1135G7,9900,2020,11th Gen Intel,mobile
+Intel Core i5-1235U,13500,2022,12th Gen Intel,mobile
+Intel Core i5-1335U,16500,2023,13th Gen Intel,mobile
+Intel Core i7-7500U,3700,2016,7th Gen Intel,mobile
+Intel Core i7-8550U,6000,2017,8th Gen Intel,mobile
+Intel Core i7-10510U,6900,2019,10th Gen Intel,mobile
+Intel Core i7-1165G7,10500,2020,11th Gen Intel,mobile
+Intel Core i7-1255U,13800,2022,12th Gen Intel,mobile
+Intel Core i7-1355U,15800,2023,13th Gen Intel,mobile
+Intel Core i5-8500,9500,2018,8th Gen Intel,desktop
+Intel Core i5-10400,12300,2020,10th Gen Intel,desktop
+Intel Core i5-12400,19500,2022,12th Gen Intel,desktop
+Intel Core i7-8700,13000,2017,8th Gen Intel,desktop
+Intel Core i7-10700,16600,2020,10th Gen Intel,desktop
+Intel Core i7-12700,31000,2021,12th Gen Intel,desktop
+Intel Core i9-12900K,41000,2021,12th Gen Intel,workstation
+Intel Xeon E-2176M,10500,2018,Intel Xeon,workstation
+AMD Ryzen 3 4300U,7500,2020,Ryzen 4000,mobile
+AMD Ryzen 5 3500U,7000,2019,Ryzen 3000,mobile
+AMD Ryzen 5 4500U,11000,2020,Ryzen 4000,mobile
+AMD Ryzen 5 5500U,13000,2021,Ryzen 5000,mobile
+AMD Ryzen 5 5600G,19900,2021,Ryzen 5000,desktop
+AMD Ryzen 5 7530U,16000,2023,Ryzen 7000,mobile
+AMD Ryzen 7 3700U,7300,2019,Ryzen 3000,mobile
+AMD Ryzen 7 5700U,15800,2021,Ryzen 5000,mobile
+AMD Ryzen 7 5800H,21500,2021,Ryzen 5000,mobile
+AMD Ryzen 7 7730U,18800,2023,Ryzen 7000,mobile
+AMD Ryzen 9 5900HX,23500,2021,Ryzen 5000,workstation
+Apple M1,14200,2020,Apple M1,mobile
+Apple M2,15600,2022,Apple M2,mobile
+Apple M3,19500,2023,Apple M3,mobile

@@ -72,7 +72,7 @@ Dans GitHub, configurer:
 - Secret Actions `ADMIN_PASSWORD`
 - Secret Actions `ADMIN_SESSION_SECRET`
 - Secret Actions `COLLECTION_ACCESS_TOKEN`
-- Secrets optionnels `EBAY_BROWSE_API_TOKEN` et `KEEPA_API_KEY`
+- Secret optionnel `EBAY_BROWSE_API_TOKEN`
 
 La machine locale n'heberge rien. GitHub Actions transmet le code a Supabase, puis l'Edge Function s'execute dans le cloud Supabase.
 
@@ -166,7 +166,6 @@ Secrets backend:
 - `COLLECTION_ACCESS_TOKEN`
 - `ALLOWED_ORIGINS`
 - `EBAY_BROWSE_API_TOKEN` optionnel
-- `KEEPA_API_KEY` optionnel
 - `GOOGLE_MAPS_API_KEY` optionnel, pour la recherche et l'autocompletion des adresses
 - `ENRICHMENT_CACHE_DAYS` optionnel
 
@@ -199,32 +198,71 @@ Le dashboard admin permet de generer des tokens valables de 1 heure a 1 an, avec
 
 Apres une mise a jour depuis une version anterieure, reexecuter `supabase/schema.sql` dans le SQL Editor Supabase pour creer `collection_access_tokens` et `consume_collection_access_token`.
 
-## Enrichissement externe
+## Enrichissement et valorisation materielle
 
-Le dashboard contient un bouton admin `Enrichir les donnees`. Cette action appelle `/admin/enrich`, traite un lot de machines et met en cache le resultat dans `hardware_enrichment`.
+Le module fonctionne gratuitement par defaut. Il ne requiert ni Keepa ni API payante. Les montants sont des estimations de gestion de parc et ne garantissent pas le MSRP historique exact.
 
-Tables ajoutees:
+La section Admin > Valorisation affiche la valeur de lancement et la valeur actuelle estimees, la depreciation moyenne, l'age du parc, les CPU faibles, les priorites de remplacement, la valeur par equipe et les distributions d'age et de performance.
 
-- `hardware_enrichment`: CPU, score benchmark, generation, annees de sortie, prix estimes, indices performance/obsolescence, recommandation, confiance.
-- `market_price_history`: annonces/prix collectes par source avec URL, condition, devise et date.
+Pour chaque machine, le service calcule:
 
-Sources prevues:
+- annee de sortie approximative;
+- prix de lancement selon la categorie et le niveau CPU;
+- valeur actuelle selon une courbe de depreciation;
+- score benchmark CPU;
+- categorie materielle;
+- score de priorite de remplacement de 0 a 100;
+- recommandation garder, surveiller ou remplacer;
+- statut `partial`, `completed` ou `failed`;
+- sources, notes et score de confiance.
 
-- eBay Browse API via `EBAY_BROWSE_API_TOKEN`.
-- Keepa via `KEEPA_API_KEY`, emplacement prepare mais collecte a adapter selon le plan Keepa choisi.
-- Benchmark CPU local heuristique par defaut, remplacable ensuite par un dataset PassMark/CPUBenchmark importe.
-- Intel ARK / AMD specs: a brancher via dataset local ou endpoint fournisseur, selon contraintes de licences/API.
+### Sources gratuites et ordre de repli
+
+1. Table CPU importee manuellement dans Supabase.
+2. Jeu CPU integre dans `data/cpu_benchmarks.csv`.
+3. Detection de generation CPU et estimation locale.
+4. Regles de prix par categorie: portable professionnel, workstation, mini PC, desktop ou all-in-one.
+5. Depreciation: 70% a un an, 55% a deux ans, 40% a trois ans, 30% a quatre ans, 20% a cinq ans, puis 10 a 15%.
+6. eBay Browse API peut etre activee en option. Keepa n'est pas requis.
+
+Le scraping de pages constructeur et de sites editoriaux n'est pas active automatiquement. Ces sources peuvent servir a verifier et mettre a jour manuellement les jeux locaux, sans rendre le dashboard dependant de pages externes.
+
+### Score de confiance
+
+- 90-100: plusieurs prix marche trouves;
+- 70-89: CPU exact trouve et annee de modele determinee;
+- 50-69: generation CPU et categorie detectees;
+- 30-49: estimation faible basee sur la marque ou la categorie;
+- moins de 30: donnees insuffisantes.
+
+La meilleure precision est obtenue avec fabricant, modele exact, CPU, RAM, GPU, type de stockage et annee de sortie.
+
+### Importer les benchmarks CPU
+
+Le fichier exemple est `data/cpu_benchmarks.csv`:
+
+```text
+cpu_name,cpu_mark_score,release_year,generation,category
+```
+
+Dans Admin > Valorisation, cliquer sur `Importer benchmarks CPU`, choisir le CSV, puis lancer `Recalculer les valeurs`. Les lignes importees remplacent le jeu integre lorsqu'un nom CPU normalise correspond exactement.
+
+### Cache et actions admin
+
+- `Enrichir cette machine`: force le recalcul d'une fiche.
+- `Enrichir toutes les machines`: traite les enrichissements absents ou vieux de plus de 90 jours.
+- `Recalculer les valeurs`: recalcule hors ligne, sans appel externe.
+- `Exporter inventaire enrichi`: exporte valeurs, scores, sources et priorites.
 
 Variables optionnelles:
 
 ```powershell
 supabase secrets set EBAY_BROWSE_API_TOKEN="..."
-supabase secrets set KEEPA_API_KEY="..."
 supabase secrets set GOOGLE_MAPS_API_KEY="..."
-supabase secrets set ENRICHMENT_CACHE_DAYS="30"
+supabase secrets set ENRICHMENT_CACHE_DAYS="90"
 ```
 
-L'enrichissement n'est pas lance a chaque affichage. Par defaut, un resultat de moins de `ENRICHMENT_CACHE_DAYS` jours est ignore. Pour automatiser, creer un schedule Supabase qui appelle regulierement l'Edge Function sur `/admin/enrich` avec un token admin serveur, ou declencher manuellement depuis le dashboard.
+Les erreurs externes sont isolees par machine, journalisees et marquees avec `enrichment_status = failed`; elles ne bloquent pas le reste du parc.
 
 ## Autocompletion des adresses
 
@@ -241,7 +279,7 @@ supabase secrets set GOOGLE_MAPS_API_KEY="..."
 
 La recherche passe par l'Edge Function Supabase et exige une session admin valide. Sans cette cle, la saisie manuelle des adresses et la carte OpenStreetMap restent disponibles.
 
-Les prix marche sont approximatifs: le dashboard affiche donc un `confidence_score`. Plus il y a de signaux recents et concordants, plus la confiance augmente.
+Les prix marche sont approximatifs: le dashboard affiche donc un score de confiance. Plus il y a de signaux recents et concordants, plus la confiance augmente.
 
 ## Securite minimale
 

@@ -154,6 +154,10 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M9 9h1M14 9h1M9 13h1M14 13h1M9 17h1M14 17h1"></path></svg>
               Organisation
             </button>
+            <button class="admin-nav-button" type="button" data-admin-view="valuation">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18M7 16l4-5 3 3 5-7"></path><path d="M19 7h-4M19 7v4"></path></svg>
+              Valorisation
+            </button>
             <button class="admin-nav-button" type="button" data-admin-view="access">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"></circle><path d="m21 2-9.6 9.6M15 7l2 2M18 4l2 2"></path></svg>
               Acces
@@ -161,6 +165,37 @@
           </nav>
 
           <section class="metric-grid admin-section-view section-fleet" id="metrics"></section>
+
+          <section class="admin-section-view section-valuation is-hidden">
+            <section class="panel valuation-toolbar">
+              <div class="panel-head inline">
+                <div>
+                  <p class="eyebrow">Valeur materielle</p>
+                  <h3>Valorisation du parc</h3>
+                </div>
+                <span id="cpu-benchmark-status" class="helper"></span>
+              </div>
+              <div class="actions">
+                <button id="valuation-enrich-all" class="primary" type="button">Enrichir toutes les machines</button>
+                <button id="valuation-recalculate" class="secondary" type="button">Recalculer les valeurs</button>
+                <button id="import-cpu-benchmarks" class="secondary" type="button">Importer benchmarks CPU</button>
+                <button id="export-enriched-csv" class="secondary" type="button">Exporter inventaire enrichi</button>
+                <input id="cpu-benchmark-file" class="is-hidden" type="file" accept=".csv,text/csv" />
+              </div>
+              <p class="helper valuation-note">
+                Les valeurs sont des estimations basees sur le modele, le CPU, la RAM, le GPU, la categorie et une depreciation par age.
+              </p>
+            </section>
+
+            <section class="metric-grid valuation-metrics" id="valuation-metrics"></section>
+
+            <section class="charts-grid valuation-charts">
+              <div class="panel chart" data-valuation-chart="value-team"></div>
+              <div class="panel chart" data-valuation-chart="age"></div>
+              <div class="panel chart" data-valuation-chart="performance"></div>
+              <div class="panel chart" data-valuation-chart="priority"></div>
+            </section>
+          </section>
 
           <section class="panel token-manager admin-section-view section-access is-hidden">
             <div class="panel-head inline">
