@@ -36,6 +36,7 @@ Flux:
 - Deduplication: serial number, puis hostname + MAC, puis utilisateur + modele + etablissement.
 - Compatibilite ancien script Google Sheets via `/collect/legacy-scan` avec les champs `pcName`, `mac`, `site`, `serial`, `os`, `ram`, `ip`.
 - Enrichissement materiel cacheable: score CPU, generation CPU, age modele, prix estime, valeur marche, confiance et recommandation.
+- Generation admin de tokens de collecte temporaires avec expiration, limite d'utilisations et revocation.
 
 ## Installation Supabase
 
@@ -181,6 +182,21 @@ Routes principales:
 - `GET /admin/devices` avec token admin
 - `GET /admin/devices/:id` avec token admin
 - `POST /admin/enrich` avec token admin pour lancer l'enrichissement en cache
+- `GET /admin/access-tokens` avec token admin
+- `POST /admin/access-tokens` avec token admin pour generer un token
+- `POST /admin/access-tokens/:id/revoke` avec token admin pour revoquer un token
+
+## Tokens temporaires de collecte
+
+Le dashboard admin permet de generer des tokens valables de 1 heure a 1 an, avec un nombre maximal d'utilisations optionnel.
+
+- Le token complet n'est retourne et affiche qu'une seule fois.
+- Seul son hash SHA-256 est stocke dans `collection_access_tokens`.
+- Chaque utilisation valide incremente atomiquement `use_count`.
+- Un token expire, revoque ou epuise est refuse.
+- Le secret global `COLLECTION_ACCESS_TOKEN` reste accepte comme solution de secours.
+
+Apres une mise a jour depuis une version anterieure, reexecuter `supabase/schema.sql` dans le SQL Editor Supabase pour creer `collection_access_tokens` et `consume_collection_access_token`.
 
 ## Enrichissement externe
 

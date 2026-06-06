@@ -85,6 +85,19 @@ create table if not exists public.collection_tokens (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.collection_access_tokens (
+  id uuid primary key default gen_random_uuid(),
+  label text not null,
+  token_hash text not null unique,
+  token_prefix text not null,
+  expires_at timestamptz not null,
+  max_uses integer check (max_uses is null or max_uses > 0),
+  use_count integer not null default 0 check (use_count >= 0),
+  last_used_at timestamptz,
+  revoked_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.audit_logs (
   id uuid primary key default gen_random_uuid(),
   actor_user_id uuid references public.users(id),
@@ -134,6 +147,8 @@ create index if not exists idx_devices_serial_number on public.devices(serial_nu
 create index if not exists idx_devices_hostname_mac on public.devices(hostname, mac_address);
 create index if not exists idx_device_scans_device_collected on public.device_scans(device_id, collected_at desc);
 create index if not exists idx_collection_tokens_hash on public.collection_tokens(token_hash);
+create index if not exists idx_collection_access_tokens_hash on public.collection_access_tokens(token_hash);
+create index if not exists idx_collection_access_tokens_expiry on public.collection_access_tokens(expires_at desc);
 create index if not exists idx_hardware_enrichment_recommendation on public.hardware_enrichment(recommendation);
 create index if not exists idx_hardware_enrichment_cpu_score on public.hardware_enrichment(cpu_score);
 create index if not exists idx_market_price_history_device_collected on public.market_price_history(device_id, collected_at desc);
@@ -145,6 +160,29 @@ as $$
 begin
   new.updated_at = now();
   return new;
+end;
+$$;
+
+create or replace function public.consume_collection_access_token(p_token_hash text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  consumed_id uuid;
+begin
+  update public.collection_access_tokens
+  set
+    use_count = use_count + 1,
+    last_used_at = now()
+  where token_hash = p_token_hash
+    and revoked_at is null
+    and expires_at > now()
+    and (max_uses is null or use_count < max_uses)
+  returning id into consumed_id;
+
+  return consumed_id;
 end;
 $$;
 
@@ -216,6 +254,7 @@ alter table public.users enable row level security;
 alter table public.devices enable row level security;
 alter table public.device_scans enable row level security;
 alter table public.collection_tokens enable row level security;
+alter table public.collection_access_tokens enable row level security;
 alter table public.audit_logs enable row level security;
 alter table public.hardware_enrichment enable row level security;
 alter table public.market_price_history enable row level security;

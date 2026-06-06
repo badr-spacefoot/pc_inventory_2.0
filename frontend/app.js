@@ -9,6 +9,7 @@ const state = {
   devices: [],
   filtered: [],
   selectedDeviceId: "",
+  accessTokens: [],
 };
 
 const labels = {
@@ -44,6 +45,15 @@ async function api(path, options = {}) {
 
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function formatDate(value) {
@@ -104,6 +114,61 @@ function setOptions(select, values, label) {
 
 function statusClass(status) {
   return `status ${status || "active"}`;
+}
+
+function tokenState(token) {
+  if (token.revoked_at) return { key: "revoked", label: "Revoque" };
+  if (new Date(token.expires_at).getTime() <= Date.now()) return { key: "expired", label: "Expire" };
+  if (token.max_uses !== null && Number(token.use_count) >= Number(token.max_uses)) {
+    return { key: "exhausted", label: "Epuise" };
+  }
+  return { key: "valid", label: "Valide" };
+}
+
+function renderAccessTokens() {
+  $("#tokens-table").innerHTML = state.accessTokens
+    .map((token) => {
+      const status = tokenState(token);
+      const usage = token.max_uses === null ? `${token.use_count} / illimite` : `${token.use_count} / ${token.max_uses}`;
+      return `
+        <tr>
+          <td>${escapeHtml(token.label)}</td>
+          <td><code>${escapeHtml(token.token_prefix)}...</code></td>
+          <td>${formatDate(token.expires_at)}</td>
+          <td>${usage}</td>
+          <td>${formatDate(token.last_used_at)}</td>
+          <td><span class="token-state ${status.key}">${status.label}</span></td>
+          <td>
+            ${status.key === "valid" ? `<button class="secondary revoke-token" type="button" data-id="${token.id}">Revoquer</button>` : ""}
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  if (state.accessTokens.length === 0) {
+    $("#tokens-table").innerHTML = `<tr><td colspan="7" class="helper">Aucun token genere.</td></tr>`;
+  }
+
+  $$(".revoke-token").forEach((button) => {
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
+        await api(`/admin/access-tokens/${button.dataset.id}/revoke`, { method: "POST", body: "{}" });
+        await loadAccessTokens();
+        toast("Token revoque.");
+      } catch (error) {
+        toast(error.message);
+        button.disabled = false;
+      }
+    });
+  });
+}
+
+async function loadAccessTokens() {
+  const data = await api("/admin/access-tokens");
+  state.accessTokens = data.tokens || [];
+  renderAccessTokens();
 }
 
 function getSearchBlob(device) {
@@ -437,7 +502,7 @@ function buildCommand(collectionToken) {
 }
 
 async function loadAdminData() {
-  const data = await api("/admin/devices");
+  const [data] = await Promise.all([api("/admin/devices"), loadAccessTokens()]);
   state.devices = data.devices || [];
   const teams = [...new Set(state.devices.map((d) => d.team_name))];
   const establishments = [...new Set(state.devices.map((d) => d.establishment_name))];
@@ -515,6 +580,30 @@ function bindEvents() {
   });
 
   $("#refresh-admin").addEventListener("click", () => loadAdminData().catch((error) => toast(error.message)));
+  $("#refresh-tokens").addEventListener("click", () => loadAccessTokens().catch((error) => toast(error.message)));
+  $("#token-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    const payload = {
+      label: values.label,
+      durationHours: Number(values.durationHours),
+      maxUses: values.maxUses ? Number(values.maxUses) : null,
+    };
+    try {
+      const result = await api("/admin/access-tokens", { method: "POST", body: JSON.stringify(payload) });
+      $("#generated-token").textContent = result.token;
+      $("#token-result").classList.remove("is-hidden");
+      event.currentTarget.reset();
+      await loadAccessTokens();
+      toast("Token genere.");
+    } catch (error) {
+      toast(error.message);
+    }
+  });
+  $("#copy-token").addEventListener("click", async () => {
+    await navigator.clipboard.writeText($("#generated-token").textContent);
+    toast("Token copie.");
+  });
   $("#enrich-admin").addEventListener("click", async () => {
     const button = $("#enrich-admin");
     button.disabled = true;

@@ -121,6 +121,61 @@
 
           <section class="metric-grid" id="metrics"></section>
 
+          <section class="panel token-manager">
+            <div class="panel-head inline">
+              <div>
+                <p class="eyebrow">Acces collecte</p>
+                <h3>Tokens temporaires</h3>
+              </div>
+              <button id="refresh-tokens" class="secondary" type="button">Actualiser</button>
+            </div>
+            <div class="token-manager-grid">
+              <form id="token-form" class="form-grid">
+                <label>
+                  Libelle
+                  <input name="label" placeholder="Agence Paris - juin" required maxlength="120" />
+                </label>
+                <label>
+                  Duree
+                  <select name="durationHours">
+                    <option value="1">1 heure</option>
+                    <option value="24" selected>24 heures</option>
+                    <option value="168">7 jours</option>
+                    <option value="720">30 jours</option>
+                    <option value="2160">90 jours</option>
+                    <option value="8760">1 an</option>
+                  </select>
+                </label>
+                <label>
+                  Utilisations maximum
+                  <input name="maxUses" type="number" min="1" max="10000" placeholder="Illimite" />
+                </label>
+                <button class="primary" type="submit">Generer un token</button>
+              </form>
+              <div id="token-result" class="token-result is-hidden">
+                <p class="helper">Ce token ne sera affiche qu'une fois. Conservez-le dans un endroit securise.</p>
+                <pre><code id="generated-token"></code></pre>
+                <button id="copy-token" class="secondary" type="button">Copier le token</button>
+              </div>
+            </div>
+            <div class="table-wrap token-table-wrap">
+              <table class="token-table">
+                <thead>
+                  <tr>
+                    <th>Libelle</th>
+                    <th>Prefixe</th>
+                    <th>Expiration</th>
+                    <th>Utilisations</th>
+                    <th>Derniere utilisation</th>
+                    <th>Etat</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="tokens-table"></tbody>
+              </table>
+            </div>
+          </section>
+
           <section class="panel">
             <div class="filters">
               <label>

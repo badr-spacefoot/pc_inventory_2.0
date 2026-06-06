@@ -158,6 +158,15 @@ async function audit(action: string, entityType: string, entityId: string | null
   await supabase.from("audit_logs").insert({ action, entity_type: entityType, entity_id: entityId, details });
 }
 
+async function consumeCollectionAccessToken(token: string) {
+  if (!token) return null;
+  if (token === collectionAccessToken) return "legacy-static-token";
+  const tokenHash = await sha256(token);
+  const { data, error } = await supabase.rpc("consume_collection_access_token", { p_token_hash: tokenHash });
+  if (error) throw error;
+  return safeString(data);
+}
+
 async function upsertUserProfile(body: Json) {
   const teamId = await getOrCreateByName("teams", firstPresent(body, "team"));
   const establishmentId = await getOrCreateByName("establishments", firstPresent(body, "establishment", "site"));
@@ -192,13 +201,13 @@ async function handleAdminLogin(request: Request) {
 
 async function handleProfile(request: Request) {
   const accessToken = request.headers.get("x-collection-access-token") ?? "";
-  if (accessToken !== collectionAccessToken) return badRequest(request, "Token de collecte invalide.", 401);
-
   const body = await request.json().catch(() => ({}));
   const required = ["firstName", "lastName", "email", "team", "establishment", "service"];
   for (const field of required) {
     if (!safeString(body[field])) return badRequest(request, `Champ requis: ${field}`);
   }
+  const accessTokenId = await consumeCollectionAccessToken(accessToken);
+  if (!accessTokenId) return badRequest(request, "Token de collecte invalide, expire, revoque ou epuise.", 401);
 
   const email = safeString(body.email, 255).toLowerCase();
   const user = await upsertUserProfile(body);
@@ -210,7 +219,7 @@ async function handleProfile(request: Request) {
     token_hash: tokenHash,
     expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
   });
-  await audit("collection_profile_created", "user", user.id, { email });
+  await audit("collection_profile_created", "user", user.id, { email, access_token_id: accessTokenId });
   return json(request, { collectionToken: token });
 }
 
@@ -541,18 +550,76 @@ async function handleScan(request: Request) {
 
 async function handleLegacyScan(request: Request) {
   const accessToken = request.headers.get("x-collection-access-token") ?? "";
-  if (accessToken !== collectionAccessToken) return badRequest(request, "Token de collecte invalide.", 401);
-
   const body = await request.json().catch(() => ({}));
   const required = ["firstName", "lastName", "team", "site"];
   for (const field of required) {
     if (!safeString(body[field])) return badRequest(request, `Champ requis: ${field}`);
   }
+  const accessTokenId = await consumeCollectionAccessToken(accessToken);
+  if (!accessTokenId) return badRequest(request, "Token de collecte invalide, expire, revoque ou epuise.", 401);
   if (!safeString(body.email)) {
     body.email = `${safeString(body.firstName).toLowerCase()}.${safeString(body.lastName).toLowerCase()}@legacy.local`;
   }
   const user = await upsertUserProfile(body);
   return await persistScan(request, user, body);
+}
+
+async function handleAdminListAccessTokens(request: Request) {
+  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  const { data, error } = await supabase
+    .from("collection_access_tokens")
+    .select("id,label,token_prefix,expires_at,max_uses,use_count,last_used_at,revoked_at,created_at")
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (error) throw error;
+  return json(request, { tokens: data ?? [] });
+}
+
+async function handleAdminCreateAccessToken(request: Request) {
+  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  const body = await request.json().catch(() => ({}));
+  const label = safeString(body.label, 120);
+  const durationHours = Math.max(1, Math.min(Number(body.durationHours || 24), 8760));
+  const requestedMaxUses = body.maxUses === null || body.maxUses === "" ? null : Number(body.maxUses);
+  const maxUses = requestedMaxUses === null ? null : Math.max(1, Math.min(requestedMaxUses, 10000));
+  if (!label) return badRequest(request, "Libelle requis.");
+  if (!Number.isFinite(durationHours)) return badRequest(request, "Duree invalide.");
+  if (requestedMaxUses !== null && !Number.isFinite(requestedMaxUses)) return badRequest(request, "Nombre d'utilisations invalide.");
+
+  const rawToken = `sfit_${crypto.randomUUID().replaceAll("-", "")}${crypto.randomUUID().replaceAll("-", "")}`;
+  const tokenHash = await sha256(rawToken);
+  const expiresAt = new Date(Date.now() + durationHours * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from("collection_access_tokens")
+    .insert({
+      label,
+      token_hash: tokenHash,
+      token_prefix: rawToken.slice(0, 13),
+      expires_at: expiresAt,
+      max_uses: maxUses,
+    })
+    .select("id,label,token_prefix,expires_at,max_uses,use_count,created_at")
+    .single();
+  if (error) throw error;
+  await audit("collection_access_token_created", "collection_access_token", data.id, {
+    label,
+    expires_at: expiresAt,
+    max_uses: maxUses,
+  });
+  return json(request, { token: rawToken, record: data }, 201);
+}
+
+async function handleAdminRevokeAccessToken(request: Request, id: string) {
+  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  const { data, error } = await supabase
+    .from("collection_access_tokens")
+    .update({ revoked_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("id,label,revoked_at")
+    .single();
+  if (error) throw error;
+  await audit("collection_access_token_revoked", "collection_access_token", id, { label: data.label });
+  return json(request, { token: data });
 }
 
 async function handleAdminDevices(request: Request) {
@@ -631,6 +698,10 @@ Deno.serve(async (request) => {
     if (request.method === "POST" && path.endsWith("/collect/legacy-scan")) return await handleLegacyScan(request);
     if (request.method === "GET" && path.endsWith("/admin/devices")) return await handleAdminDevices(request);
     if (request.method === "POST" && path.endsWith("/admin/enrich")) return await handleAdminEnrich(request);
+    if (request.method === "GET" && path.endsWith("/admin/access-tokens")) return await handleAdminListAccessTokens(request);
+    if (request.method === "POST" && path.endsWith("/admin/access-tokens")) return await handleAdminCreateAccessToken(request);
+    const revokeTokenMatch = path.match(/\/admin\/access-tokens\/([0-9a-f-]+)\/revoke/i);
+    if (request.method === "POST" && revokeTokenMatch) return await handleAdminRevokeAccessToken(request, revokeTokenMatch[1]);
     const statusMatch = path.match(/\/admin\/devices\/([0-9a-f-]+)\/status/i);
     if (request.method === "POST" && statusMatch) return await handleAdminDeviceStatus(request, statusMatch[1]);
     const detailMatch = path.match(/\/admin\/devices\/([0-9a-f-]+)/i);
