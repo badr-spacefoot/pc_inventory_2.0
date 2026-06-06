@@ -10,6 +10,7 @@ const state = {
   filtered: [],
   selectedDeviceId: "",
   accessTokens: [],
+  rawAccessTokens: {},
 };
 
 const labels = {
@@ -125,15 +126,40 @@ function tokenState(token) {
   return { key: "valid", label: "Valide" };
 }
 
+function copyIcon() {
+  return `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect width="14" height="14" x="8" y="8" rx="2"></rect>
+      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
+    </svg>
+  `;
+}
+
 function renderAccessTokens() {
   $("#tokens-table").innerHTML = state.accessTokens
     .map((token) => {
       const status = tokenState(token);
       const usage = token.max_uses === null ? `${token.use_count} / illimite` : `${token.use_count} / ${token.max_uses}`;
+      const canCopy = Boolean(state.rawAccessTokens[token.id]);
+      const copyTitle = canCopy
+        ? "Copier le token"
+        : "Token complet indisponible apres rechargement";
       return `
         <tr>
           <td>${escapeHtml(token.label)}</td>
-          <td><code>${escapeHtml(token.token_prefix)}...</code></td>
+          <td>
+            <div class="token-prefix">
+              <code>${escapeHtml(token.token_prefix)}...</code>
+              <button
+                class="secondary icon-button copy-access-token"
+                type="button"
+                data-id="${token.id}"
+                aria-label="${copyTitle}"
+                title="${copyTitle}"
+                ${canCopy ? "" : "disabled"}
+              >${copyIcon()}</button>
+            </div>
+          </td>
           <td>${formatDate(token.expires_at)}</td>
           <td>${usage}</td>
           <td>${formatDate(token.last_used_at)}</td>
@@ -149,6 +175,15 @@ function renderAccessTokens() {
   if (state.accessTokens.length === 0) {
     $("#tokens-table").innerHTML = `<tr><td colspan="7" class="helper">Aucun token genere.</td></tr>`;
   }
+
+  $$(".copy-access-token").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const token = state.rawAccessTokens[button.dataset.id];
+      if (!token) return;
+      await navigator.clipboard.writeText(token);
+      toast("Token copie.");
+    });
+  });
 
   $$(".revoke-token").forEach((button) => {
     button.addEventListener("click", async () => {
@@ -596,6 +631,7 @@ function bindEvents() {
     };
     try {
       const result = await api("/admin/access-tokens", { method: "POST", body: JSON.stringify(payload) });
+      state.rawAccessTokens[result.record.id] = result.token;
       $("#generated-token").textContent = result.token;
       $("#token-result").classList.remove("is-hidden");
       event.currentTarget.reset();

@@ -62,6 +62,29 @@ a.secondary {
   color: var(--ink);
 }
 
+.icon-button {
+  width: 42px;
+  min-width: 42px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+}
+
+.icon-button svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+
 .topbar {
   display: flex;
   align-items: center;
@@ -279,6 +302,31 @@ pre {
 
 .token-result pre {
   margin: 10px 0;
+}
+
+.generated-token-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.generated-token-row pre {
+  min-width: 0;
+  margin: 0;
+}
+
+.token-prefix {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.token-prefix .icon-button {
+  width: 34px;
+  min-width: 34px;
+  min-height: 34px;
 }
 
 .token-table-wrap {
