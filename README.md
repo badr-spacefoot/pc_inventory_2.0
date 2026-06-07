@@ -156,8 +156,8 @@ Les scripts `.cmd`, `.ps1`, `.command` et `.sh` restent des modes avances IT. Il
 Un workflow GitHub Actions `Build collector apps` produit des applications natives via PyInstaller:
 
 1. Pour un test interne, ouvrir l'onglet GitHub `Actions`, lancer `Build collector apps`, puis recuperer les artefacts.
-2. Pour une release partageable, creer et pousser un tag `collector-vX.Y.Z`.
-3. Le workflow cree une draft release avec les builds Windows, macOS et Linux.
+2. Pour une release visible depuis le bouton `Telecharger l'application`, creer et pousser un tag `collector-vX.Y.Z`.
+3. Le workflow cree une pre-release avec les builds Windows, macOS et Linux.
 
 Ces builds embarquent le collecteur Python cross-platform. Avant une diffusion large, signer le `.exe` Windows et notariser l'application macOS pour limiter les alertes systeme/antivirus. Aucun packaging ne peut garantir zero alerte si l'application est non signee ou sans reputation SmartScreen.
 
