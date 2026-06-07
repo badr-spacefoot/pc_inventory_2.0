@@ -139,6 +139,7 @@ jobs:
           name: ${{ matrix.artifact }}
           path: |
             dist/${{ matrix.artifact }}*
+            dist/*.cer
 
   release:
     name: Publish collector release
