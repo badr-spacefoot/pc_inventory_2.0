@@ -2133,6 +2133,67 @@ function sourceLabel(source) {
   return translate(normalized);
 }
 
+function legacyAssignmentUser(data) {
+  return [data?.firstName, data?.lastName].map(cleanImportedText).filter(Boolean).join(" ");
+}
+
+function sameLegacyAssignment(left, right) {
+  return ["user_name", "team_name", "establishment_name"].every((field) =>
+    cleanImportedText(left?.[field]).toLowerCase() === cleanImportedText(right?.[field]).toLowerCase());
+}
+
+function assignmentPeriodsFromLegacyHistory(history = [], fallbackPeriods = []) {
+  const legacyEvents = history
+    .filter((event) => event.field_name === "legacy_google_sheets_history" && event.new_value && event.changed_at)
+    .map((event) => ({ event, data: parseHistoryJson(event.new_value) }))
+    .filter(({ data }) => legacyAssignmentUser(data))
+    .sort((left, right) => new Date(left.event.changed_at).getTime() - new Date(right.event.changed_at).getTime());
+
+  if (legacyEvents.length === 0) return fallbackPeriods;
+
+  const periods = [];
+  legacyEvents.forEach(({ event, data }) => {
+    const period = {
+      user_name: legacyAssignmentUser(data),
+      user_email: "",
+      team_name: cleanImportedText(data.team),
+      establishment_name: cleanImportedText(data.establishment),
+      started_at: event.changed_at,
+      ended_at: null,
+      assigned_by: event.changed_by || "import",
+      unassigned_by: "",
+      source: "IMPORT",
+      reason: state.language === "en"
+        ? "Usage period reconstructed from the imported Google Sheets history."
+        : "Periode d'utilisation reconstruite depuis l'historique Google Sheets importe.",
+    };
+    const previous = periods[periods.length - 1];
+    if (sameLegacyAssignment(previous, period)) return;
+    if (previous) {
+      previous.ended_at = event.changed_at;
+      previous.unassigned_by = event.changed_by || "import";
+    }
+    periods.push(period);
+  });
+
+  const lastLegacyDate = new Date(periods[periods.length - 1]?.started_at || 0).getTime();
+  const laterManualPeriods = fallbackPeriods.filter((period) => {
+    const startedAt = new Date(period.started_at).getTime();
+    const source = String(period.source || "").toUpperCase();
+    return startedAt > lastLegacyDate && source !== "SYSTEM";
+  }).sort((left, right) => new Date(right.started_at).getTime() - new Date(left.started_at).getTime());
+
+  if (laterManualPeriods.length > 0) {
+    const firstManual = laterManualPeriods
+      .slice()
+      .sort((left, right) => new Date(left.started_at).getTime() - new Date(right.started_at).getTime())[0];
+    periods[periods.length - 1].ended_at = firstManual.started_at;
+    periods[periods.length - 1].unassigned_by = firstManual.assigned_by || "admin";
+  }
+
+  return [...laterManualPeriods, ...periods.slice().reverse()];
+}
+
 function renderAssignmentPeriods(periods = []) {
   return periods.map((period) => {
     const user = period.user_name || period.user_email || translate("Aucun utilisateur actuel");
@@ -2261,7 +2322,7 @@ function renderDetail(device, scans, history = []) {
         <button class="secondary" type="submit">${translate("Ajouter la note")}</button>
       </form>
       <div class="history-timeline">${renderHistoryTimeline(history)}</div>
-      <div class="scan-history"><h3>${translate("Chronologie utilisateurs")}</h3>${renderAssignmentPeriods(device.assignmentPeriods || [])}</div>
+      <div class="scan-history"><h3>${translate("Chronologie utilisateurs")}</h3>${renderAssignmentPeriods(assignmentPeriodsFromLegacyHistory(history, device.assignmentPeriods || []))}</div>
       <div class="scan-history"><h3>${translate("Scans")}</h3><ul>${scanRows || `<li>${translate("Aucun scan detaille.")}</li>`}</ul></div>
       <div class="scan-history"><h3>${translate("Prix marche")}</h3><ul>${priceRows || `<li>${translate("Aucun prix externe collecte.")}</li>`}</ul></div>
     </section>
