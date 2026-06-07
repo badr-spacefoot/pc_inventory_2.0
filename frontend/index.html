@@ -32,6 +32,14 @@
             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"></path>
           </svg>
         </button>
+        <button id="time-format-toggle" class="time-format-toggle" type="button" aria-label="Format horaire" title="Format horaire">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"></circle>
+            <path d="M12 7v5l3 2"></path>
+          </svg>
+          <span id="time-format-label">Auto</span>
+        </button>
+        <time id="current-time" class="current-time" aria-label="Heure actuelle">--:--</time>
         <div class="language-switcher">
           <button id="language-toggle" class="language-toggle" type="button" aria-label="Changer de langue" title="Changer de langue" aria-expanded="false">
             <span id="current-language-flag" aria-hidden="true">&#x1F1EB;&#x1F1F7;</span>
@@ -199,14 +207,6 @@
                 <span id="notification-count" class="notification-count is-hidden">0</span>
               </button>
               <span id="admin-session-label" class="session-label"></span>
-              <label class="time-format-control" title="Format horaire">
-                <span>Heure</span>
-                <select id="time-format-preference" aria-label="Format horaire">
-                  <option value="auto">Auto</option>
-                  <option value="24h">24h</option>
-                  <option value="12h">AM/PM</option>
-                </select>
-              </label>
               <button id="refresh-admin" class="secondary action-button" type="button" aria-label="Actualiser" title="Actualiser">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.3 6.4"></path><path d="M3 12a9 9 0 0 1 15.3-6.4"></path><path d="M18 2v4h-4"></path><path d="M6 22v-4h4"></path></svg>
                 <span>Actualiser</span>

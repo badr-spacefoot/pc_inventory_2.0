@@ -129,6 +129,7 @@ const englishTranslations = {
   "Proposition traitee.": "Proposal processed.",
   "Format horaire": "Time format",
   "Heure": "Time",
+  "Heure actuelle": "Current time",
   "Auto": "Auto",
   "Sortir la machine du parc": "Retire device",
   "Ajoutez une note avant de confirmer la sortie du parc.": "Please add a retirement note before confirming.",
@@ -218,6 +219,7 @@ const englishTranslations = {
   "Dashboard": "Dashboard",
   "Vue du parc informatique": "IT fleet overview",
   "Actualiser": "Refresh",
+  "Enrichir": "Enrich",
   "Enrichir les donnees": "Enrich data",
   "Deconnexion": "Sign out",
   "Sections d'administration": "Administration sections",
@@ -610,6 +612,7 @@ function applyLanguage(language, persist = true) {
   syncAdminUserActiveLabel();
   if (state.selectedDetail) renderDetail(state.selectedDetail, state.selectedScans, state.selectedHistory);
   translateElement(document.body);
+  updateTimeFormatButton();
   setTheme(document.documentElement.dataset.theme || "light");
 }
 
@@ -1146,14 +1149,49 @@ function openReassignment(entityType, sourceId, references) {
 function formatDate(value) {
   if (!value) return "-";
   const locale = state.language === "en" ? "en-US" : "fr-FR";
-  const preference = state.timeFormatPreference === "auto"
-    ? (state.language === "en" ? "12h" : "24h")
-    : state.timeFormatPreference;
+  const preference = effectiveTimePreference();
   return new Intl.DateTimeFormat(locale, {
     dateStyle: "medium",
     timeStyle: "short",
     hour12: preference === "12h",
   }).format(new Date(value));
+}
+
+function effectiveTimePreference() {
+  return state.timeFormatPreference === "auto"
+    ? (state.language === "en" ? "12h" : "24h")
+    : state.timeFormatPreference;
+}
+
+function formatTime(value = new Date()) {
+  const locale = state.language === "en" ? "en-US" : "fr-FR";
+  return new Intl.DateTimeFormat(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: effectiveTimePreference() === "12h",
+  }).format(value instanceof Date ? value : new Date(value));
+}
+
+function updateClock() {
+  const clock = $("#current-time");
+  if (!clock) return;
+  const now = new Date();
+  clock.textContent = formatTime(now);
+  clock.dateTime = now.toISOString();
+  clock.setAttribute("aria-label", `${translate("Heure actuelle")}: ${clock.textContent}`);
+}
+
+function updateTimeFormatButton() {
+  const button = $("#time-format-toggle");
+  const label = $("#time-format-label");
+  if (!button || !label) return;
+  const display = state.timeFormatPreference === "auto"
+    ? "Auto"
+    : (state.timeFormatPreference === "24h" ? "24h" : "AM/PM");
+  label.textContent = display;
+  button.title = `${translate("Format horaire")}: ${display}`;
+  button.setAttribute("aria-label", `${translate("Format horaire")}: ${display}`);
+  updateClock();
 }
 
 function formatRelativeDate(value) {
@@ -1895,8 +1933,66 @@ function historyFieldLabel(fieldName) {
     assigned_user_id: "Proprietaire",
     owner_email: "Email proprietaire",
     status: "Statut",
+    legacy_google_sheets_history: "Historique Google Sheets",
   };
   return translate(labels[fieldName] || fieldName);
+}
+
+function cleanImportedText(value) {
+  let text = String(value ?? "").trim();
+  if (!text) return "";
+  const replacements = {
+    "�": "è",
+    "ï¿½": "è",
+    "Â·": "·",
+    "Â ": " ",
+    "Ã©": "é",
+    "Ã¨": "è",
+    "Ãª": "ê",
+    "Ã«": "ë",
+    "Ã ": "à",
+    "Ã¢": "â",
+    "Ã§": "ç",
+    "Ã®": "î",
+    "Ã¯": "ï",
+    "Ã´": "ô",
+    "Ã¹": "ù",
+    "Ã»": "û",
+    "Ã‰": "É",
+  };
+  Object.entries(replacements).forEach(([bad, good]) => {
+    text = text.replaceAll(bad, good);
+  });
+  return text;
+}
+
+function parseHistoryJson(value) {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function legacyHistorySummary(value) {
+  const data = parseHistoryJson(value);
+  if (!data) return cleanImportedText(value || "-");
+  const fullName = [data.firstName, data.lastName].map(cleanImportedText).filter(Boolean).join(" ");
+  const parts = [
+    fullName,
+    cleanImportedText(data.team),
+    cleanImportedText(data.establishment),
+    cleanImportedText(data.osUser) ? `${translate("Utilisateur OS")}: ${cleanImportedText(data.osUser)}` : "",
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : "-";
+}
+
+function historyValueDisplay(event, side) {
+  const value = side === "old" ? event.old_value : event.new_value;
+  if (event.field_name === "legacy_google_sheets_history") return legacyHistorySummary(value);
+  return cleanImportedText(value || "-");
 }
 
 function renderHistoryTimeline(history) {
@@ -1908,9 +2004,12 @@ function renderHistoryTimeline(history) {
         <strong>${escapeHtml(translate(historyLabel(event)))}</strong>
         ${event.field_name ? `<small>${escapeHtml(historyFieldLabel(event.field_name))}</small>` : ""}
         ${event.old_value !== null || event.new_value !== null ? `
-          <p><span>${translate("De")}: ${escapeHtml(event.old_value || "-")}</span><span>${translate("Vers")}: ${escapeHtml(event.new_value || "-")}</span></p>
+          <p class="${event.field_name === "legacy_google_sheets_history" ? "history-change legacy-history-change" : "history-change"}">
+            <span>${translate("De")}: ${escapeHtml(historyValueDisplay(event, "old"))}</span>
+            <span>${translate("Vers")}: ${escapeHtml(historyValueDisplay(event, "new"))}</span>
+          </p>
         ` : ""}
-        ${event.notes ? `<p>${escapeHtml(event.notes)}</p>` : ""}
+        ${event.notes ? `<p>${escapeHtml(cleanImportedText(event.notes))}</p>` : ""}
         <dl class="history-meta">
           <div><dt>${translate("Qui")}</dt><dd>${escapeHtml(event.changed_by || "system")}</dd></div>
           <div><dt>${translate("Comment")}</dt><dd>${escapeHtml(sourceLabel(event.source))}</dd></div>
@@ -3013,10 +3112,12 @@ function bindEvents() {
     $("#admin-dashboard").classList.add("is-hidden");
   });
 
-  $("#time-format-preference").value = state.timeFormatPreference;
-  $("#time-format-preference").addEventListener("change", (event) => {
-    state.timeFormatPreference = event.currentTarget.value;
+  $("#time-format-toggle").addEventListener("click", () => {
+    const formats = ["auto", "24h", "12h"];
+    const currentIndex = formats.indexOf(state.timeFormatPreference);
+    state.timeFormatPreference = formats[(currentIndex + 1) % formats.length];
     localStorage.setItem("it_inventory_time_format", state.timeFormatPreference);
+    updateTimeFormatButton();
     renderNotifications();
     if (state.selectedDetail) renderDetail(state.selectedDetail, state.selectedScans, state.selectedHistory);
     applyFilters();
@@ -3338,6 +3439,8 @@ function bindEvents() {
 bindEvents();
 applyLanguage(state.language, false);
 languageObserver.observe(document.body, { childList: true, subtree: true });
+updateTimeFormatButton();
+setInterval(updateClock, 30000);
 restoreCollectionDraft();
 loadPublicOrganization().catch((error) => {
   updateOrganizationDatalists();
