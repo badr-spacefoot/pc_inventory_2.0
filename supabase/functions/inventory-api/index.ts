@@ -151,7 +151,7 @@ function normalizeScanPayload(body: Json): Json {
     storageType: firstPresent(body, "storageType"),
     macAddress: normalizeMac(body.macAddress ?? body.mac),
     localIp: firstPresent(body, "localIp", "ip"),
-    windowsUser: firstPresent(body, "windowsUser", "user"),
+    windowsUser: firstPresent(body, "windowsUser", "osUser", "user"),
     collectedAt: firstPresent(body, "collectedAt", "timestamp") || new Date().toISOString(),
     scriptVersion: firstPresent(body, "scriptVersion"),
   };

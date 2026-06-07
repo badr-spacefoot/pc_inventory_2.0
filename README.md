@@ -152,9 +152,9 @@ Le prototype actuel est dans `collectors/desktop_collector/`:
 python collectors/desktop_collector/collector_app.py
 ```
 
-Il utilise `scripts/collect-cross-platform.py` pour collecter avec la bibliotheque standard Python:
+Il utilise `scripts/collect-cross-platform.py` pour collecter avec la bibliotheque standard Python. Ce collecteur detecte automatiquement l'OS avec `platform.system()` et adapte les commandes:
 
-- Windows: PowerShell/CIM/WMI lorsque disponible.
+- Windows: PowerShell/CIM/WMI lorsque disponible (`pwsh`, `powershell` ou fallback generique).
 - Ubuntu/Linux: `/etc/os-release`, `/proc`, `/sys/class/dmi/id`, `lsblk`, `dmidecode` seulement si accessible.
 - macOS: `sw_vers`, `system_profiler`, `sysctl`, stockage local.
 
@@ -559,7 +559,7 @@ Un message `0 machine(s), 1 utilisateur(s)` indique generalement qu'un ancien pr
 
 ## Collecte Windows, Linux et macOS
 
-Le script historique `scripts/collect-windows.ps1` reste recommande pour Windows. Le script standard Python `scripts/collect-cross-platform.py` fonctionne sous Windows, Ubuntu/Linux et macOS sans paquet Python externe:
+Le script historique `scripts/collect-windows.ps1` reste disponible comme fallback Windows. Le script standard Python `scripts/collect-cross-platform.py` fonctionne sous Windows, Ubuntu/Linux et macOS sans paquet Python externe et choisit automatiquement la strategie de collecte selon l'OS:
 
 ```bash
 python3 scripts/collect-cross-platform.py \

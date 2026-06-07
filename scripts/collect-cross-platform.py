@@ -14,7 +14,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-SCRIPT_VERSION = "1.0.0"
+SCRIPT_VERSION = "1.1.0"
 
 
 def run(command):
@@ -115,7 +115,27 @@ def macos_info():
     }
 
 
+def windows_shell():
+    return shutil.which("pwsh") or shutil.which("powershell") or shutil.which("powershell.exe")
+
+
 def windows_info():
+    shell = windows_shell()
+    if not shell:
+        disk = shutil.disk_usage(Path.home().anchor)
+        return {
+            "osName": "Windows",
+            "osVersion": platform.platform(),
+            "manufacturer": "",
+            "model": platform.machine(),
+            "serialNumber": "",
+            "cpu": platform.processor(),
+            "gpu": "",
+            "ramTotalGb": None,
+            "storageTotalGb": bytes_to_gb(disk.total),
+            "storageFreeGb": bytes_to_gb(disk.free),
+            "storageType": "",
+        }
     script = r"""
     $c=Get-CimInstance Win32_ComputerSystem
     $b=Get-CimInstance Win32_BIOS
@@ -130,7 +150,7 @@ def windows_info():
       storageFreeGb=[math]::Round(($d|Measure-Object FreeSpace -Sum).Sum/1GB,2)
     }|ConvertTo-Json -Compress
     """
-    raw = run(["powershell", "-NoProfile", "-Command", script])
+    raw = run([shell, "-NoProfile", "-Command", script])
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
@@ -153,16 +173,19 @@ def windows_info():
 def collect(include_mac):
     system = platform.system()
     details = windows_info() if system == "Windows" else macos_info() if system == "Darwin" else linux_info()
+    os_user = getpass.getuser()
     mac = ""
     if include_mac:
         node = hex(__import__("uuid").getnode())[2:].zfill(12)
         mac = ":".join(node[index:index + 2] for index in range(0, 12, 2))
     return {
         **details,
+        "osType": "macOS" if system == "Darwin" else system or "Unknown",
         "hostname": socket.gethostname(),
         "macAddress": mac,
         "localIp": local_ip(),
-        "windowsUser": getpass.getuser(),
+        "osUser": os_user,
+        "windowsUser": os_user,
         "collectedAt": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
         "scriptVersion": SCRIPT_VERSION,
     }
