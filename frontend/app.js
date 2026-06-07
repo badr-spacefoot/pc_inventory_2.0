@@ -23,6 +23,9 @@ const state = {
   adminUsers: [],
   notifications: [],
   unreadNotifications: 0,
+  pendingChanges: [],
+  collectionDraft: JSON.parse(localStorage.getItem("it_inventory_collection_draft") || "{}"),
+  scriptPreviewText: "",
   mapProvider: "openstreetmap",
 };
 
@@ -53,13 +56,29 @@ const englishTranslations = {
   "Prenom": "First name",
   "Equipe": "Team",
   "Etablissement": "Location",
+  "Proposer une nouvelle equipe": "Propose a new team",
+  "Proposer un nouvel etablissement": "Propose a new location",
+  "Selectionnez une equipe": "Select a team",
+  "Selectionnez un etablissement": "Select a location",
+  "Collecte transparente": "Transparent collection",
+  "Ce collecteur recupere uniquement les informations d'inventaire utiles a l'equipe IT.": "This collector only gathers inventory information needed by the IT team.",
+  "hostname, OS, fabricant, modele et numero de serie": "hostname, OS, manufacturer, model, and serial number",
+  "CPU, RAM, stockage, GPU si disponible": "CPU, RAM, storage, GPU if available",
+  "IP locale, MAC si autorisee, utilisateur OS connecte": "Local IP, MAC if allowed, logged-in OS user",
+  "Aucun fichier personnel, historique navigateur, mot de passe ou outil de controle distant n'est lu ou installe.": "No personal files, browser history, passwords, or remote-control tool are read or installed.",
   "Commentaire optionnel": "Optional comment",
   "Generer la commande": "Generate command",
-  "Script local": "Local script",
-  "Commande PowerShell": "PowerShell command",
-  "Remplissez le formulaire pour obtenir une commande personnalisee.": "Complete the form to get a personalized command.",
-  "Lancez cette commande dans PowerShell. Elle telecharge le script, collecte les informations du poste et les envoie a l'API.": "Run this command in PowerShell. It downloads the script, collects the computer information, and sends it to the API.",
-  "Copier": "Copy",
+  "Remplissez le formulaire pour obtenir un token de collecteur et les options de lancement.": "Complete the form to get a collector token and launch options.",
+  "Methode recommandee: ouvrez l'application collecteur, collez le token, relisez les donnees collectees puis envoyez. Le fallback script reste disponible pour les admins et utilisateurs avances.": "Recommended method: open the collector app, paste the token, review collected data, then submit. Script fallback remains available for admins and advanced users.",
+  "Token du collecteur": "Collector token",
+  "Copier le token collecteur": "Copy collector token",
+  "Application collecteur": "Collector app",
+  "Version transparente Python/Tkinter pour Windows, Ubuntu/Linux et macOS. Elle affiche les donnees avant envoi.": "Transparent Python/Tkinter version for Windows, Ubuntu/Linux, and macOS. It shows data before sending.",
+  "Fallback PowerShell": "PowerShell fallback",
+  "Script lisible, non obfusque, a copier ou telecharger si l'application collecteur n'est pas disponible.": "Readable, non-obfuscated script to copy or download if the collector app is unavailable.",
+  "Copier la commande": "Copy command",
+  "Copier le script": "Copy script",
+  "Apercu du script PowerShell": "PowerShell script preview",
   "Telecharger le script": "Download script",
   "Connexion": "Sign in",
   "Mot de passe admin": "Admin password",
@@ -73,6 +92,17 @@ const englishTranslations = {
   "Desactive": "Disabled",
   "Derniere connexion": "Last login",
   "Centre de notifications": "Notification center",
+  "Validation": "Validation",
+  "Pending changes": "Pending changes",
+  "Les propositions utilisateur ne creent pas d'equipe ou d'etablissement avant validation admin.": "User proposals do not create teams or locations before admin approval.",
+  "Approuver": "Approve",
+  "Rejeter": "Reject",
+  "Lier a l'existant": "Link existing",
+  "Modifier et approuver": "Modify and approve",
+  "Proposition traitee.": "Proposal processed.",
+  "Commande generee. Proposition envoyee a l'admin.": "Command generated. Proposal sent to admin.",
+  "Commande copiee.": "Command copied.",
+  "Script copie.": "Script copied.",
   "Tout marquer comme lu": "Mark all as read",
   "Marquer lu": "Mark read",
   "Non lues": "Unread",
@@ -476,6 +506,43 @@ function applyPermissions() {
   $("#admin-session-label").textContent = state.currentAdmin
     ? `${state.currentAdmin.displayName || state.currentAdmin.username} - ${state.currentAdmin.role}`
     : "";
+}
+
+function collectionForm() {
+  return $("#collect-form");
+}
+
+function saveCollectionDraft() {
+  const form = collectionForm();
+  if (!form) return;
+  const draft = Object.fromEntries(new FormData(form));
+  state.collectionDraft = draft;
+  localStorage.setItem("it_inventory_collection_draft", JSON.stringify(draft));
+}
+
+function restoreCollectionDraft() {
+  const form = collectionForm();
+  if (!form) return;
+  Object.entries(state.collectionDraft || {}).forEach(([key, value]) => {
+    if (form.elements[key]) form.elements[key].value = value;
+  });
+  toggleProposalFields();
+}
+
+function clearCollectionDraft() {
+  state.collectionDraft = {};
+  localStorage.removeItem("it_inventory_collection_draft");
+}
+
+function toggleProposalFields() {
+  const form = collectionForm();
+  if (!form) return;
+  const teamOther = form.elements.team.value === "__other__";
+  const establishmentOther = form.elements.establishment.value === "__other__";
+  $("#proposed-team-field")?.classList.toggle("is-hidden", !teamOther);
+  $("#proposed-establishment-field")?.classList.toggle("is-hidden", !establishmentOther);
+  if (form.elements.proposedTeam) form.elements.proposedTeam.required = teamOther;
+  if (form.elements.proposedEstablishment) form.elements.proposedEstablishment.required = establishmentOther;
 }
 
 function normalize(value) {
@@ -995,6 +1062,70 @@ async function loadNotifications() {
   state.notifications = data.notifications || [];
   state.unreadNotifications = data.unread || 0;
   renderNotifications();
+}
+
+function renderPendingChanges() {
+  const existingTeamOptions = state.teams.map((team) => `<option value="${escapeHtml(team.id)}">${escapeHtml(team.name)}</option>`).join("");
+  const existingSiteOptions = state.establishments.map((site) => `<option value="${escapeHtml(site.id)}">${escapeHtml(site.name)}</option>`).join("");
+  $("#pending-changes-list").innerHTML = state.pendingChanges.map((item) => {
+    const isTeam = item.type === "TEAM";
+    const options = isTeam ? existingTeamOptions : existingSiteOptions;
+    const disabled = item.status !== "PENDING";
+    return `
+      <article class="pending-change-item status-${escapeHtml(String(item.status || "").toLowerCase())}">
+        <div>
+          <span class="notification-severity">${escapeHtml(item.type)}</span>
+          <strong>${escapeHtml(item.proposed_value)}</strong>
+          <p>${escapeHtml(item.proposed_by_user || item.proposed_by_email || "Utilisateur collecte")} - ${formatDate(item.created_at)}</p>
+          <small>${escapeHtml(item.status)}${item.admin_notes ? ` - ${escapeHtml(item.admin_notes)}` : ""}</small>
+        </div>
+        <form class="pending-change-form" data-id="${escapeHtml(item.id)}">
+          <label>
+            Valeur finale
+            <input name="proposedValue" value="${escapeHtml(item.proposed_value)}" ${disabled ? "disabled" : ""} />
+          </label>
+          <label>
+            Lier a l'existant
+            <select name="linkedEntityId" ${disabled ? "disabled" : ""}>
+              <option value="">Creer une nouvelle valeur</option>
+              ${options}
+            </select>
+          </label>
+          <label>
+            Notes admin
+            <input name="adminNotes" ${disabled ? "disabled" : ""} />
+          </label>
+          <div class="actions">
+            <button class="primary pending-approve" type="button" ${disabled ? "disabled" : ""}>${translate("Approuver")}</button>
+            <button class="secondary pending-modify" type="button" ${disabled ? "disabled" : ""}>${translate("Modifier et approuver")}</button>
+            <button class="danger-button pending-reject" type="button" ${disabled ? "disabled" : ""}>${translate("Rejeter")}</button>
+          </div>
+        </form>
+      </article>
+    `;
+  }).join("") || `<p class="helper">${translate("Aucune donnee.")}</p>`;
+
+  $$(".pending-change-form").forEach((form) => {
+    const submitDecision = async (decision) => {
+      const values = Object.fromEntries(new FormData(form));
+      await api(`/admin/pending-changes/${form.dataset.id}/decision`, {
+        method: "POST",
+        body: JSON.stringify({ ...values, decision }),
+      });
+      toast("Proposition traitee.", "success");
+      await Promise.all([loadPendingChanges(), loadOrganization(), loadNotifications()]);
+    };
+    form.querySelector(".pending-approve")?.addEventListener("click", () => submitDecision("APPROVE").catch((error) => toast(error.message, "error")));
+    form.querySelector(".pending-modify")?.addEventListener("click", () => submitDecision("MODIFY").catch((error) => toast(error.message, "error")));
+    form.querySelector(".pending-reject")?.addEventListener("click", () => submitDecision("REJECT").catch((error) => toast(error.message, "error")));
+  });
+}
+
+async function loadPendingChanges() {
+  if (!canPerformAction("PENDING_CHANGE_APPROVE")) return;
+  const data = await api("/admin/pending-changes");
+  state.pendingChanges = data.pendingChanges || [];
+  renderPendingChanges();
 }
 
 function getSearchBlob(device) {
@@ -1554,7 +1685,6 @@ function exportCsv(enrichedExport = false) {
     "email",
     "team_name",
     "establishment_name",
-    "service",
     "os_name",
     "os_version",
     "manufacturer",
@@ -1602,6 +1732,18 @@ function buildCommand(collectionToken) {
   const apiUrl = CONFIG.apiBaseUrl.replace(/"/g, "");
   const scriptUrl = CONFIG.scriptUrl.replace(/"/g, "");
   return `powershell -ExecutionPolicy Bypass -NoProfile -Command "iwr '${scriptUrl}' -OutFile $env:TEMP\\collect-windows.ps1; & $env:TEMP\\collect-windows.ps1 -ApiUrl '${apiUrl}' -CollectionToken '${collectionToken}'"`;
+}
+
+async function loadScriptPreview() {
+  try {
+    const response = await fetch(CONFIG.scriptUrl, { cache: "no-store" });
+    if (!response.ok) throw new Error("Script indisponible.");
+    state.scriptPreviewText = await response.text();
+    $("#script-preview").textContent = state.scriptPreviewText;
+  } catch (error) {
+    state.scriptPreviewText = "# Apercu indisponible. Utilisez le lien de telechargement ou le fichier scripts/collect-windows.ps1 du depot.";
+    $("#script-preview").textContent = state.scriptPreviewText;
+  }
 }
 
 function organizationIcon(type) {
@@ -1676,14 +1818,31 @@ function setAdminView(view) {
 }
 
 function updateOrganizationDatalists() {
-  $("#team-list").innerHTML = state.teams
-    .filter((team) => team.active)
-    .map((team) => `<option value="${escapeHtml(team.name)}"></option>`)
-    .join("");
-  $("#establishment-list").innerHTML = state.establishments
-    .filter((site) => site.active)
-    .map((site) => `<option value="${escapeHtml(site.name)}"></option>`)
-    .join("");
+  const teamSelect = collectionForm()?.elements.team;
+  const establishmentSelect = collectionForm()?.elements.establishment;
+  if (teamSelect) {
+    const selected = teamSelect.value || state.collectionDraft.team || "";
+    teamSelect.innerHTML = [
+      `<option value="">${translate("Selectionnez une equipe")}</option>`,
+      ...state.teams
+        .filter((team) => team.active !== false)
+        .map((team) => `<option value="${escapeHtml(team.name)}">${escapeHtml(team.name)}</option>`),
+      `<option value="__other__">${translate("Autre")}</option>`,
+    ].join("");
+    teamSelect.value = [...teamSelect.options].some((option) => option.value === selected) ? selected : "";
+  }
+  if (establishmentSelect) {
+    const selected = establishmentSelect.value || state.collectionDraft.establishment || "";
+    establishmentSelect.innerHTML = [
+      `<option value="">${translate("Selectionnez un etablissement")}</option>`,
+      ...state.establishments
+        .filter((site) => site.active !== false)
+        .map((site) => `<option value="${escapeHtml(site.name)}">${escapeHtml(site.name)}</option>`),
+      `<option value="__other__">${translate("Autre")}</option>`,
+    ].join("");
+    establishmentSelect.value = [...establishmentSelect.options].some((option) => option.value === selected) ? selected : "";
+  }
+  toggleProposalFields();
 }
 
 function renderOrganization() {
@@ -1898,6 +2057,14 @@ async function loadOrganization() {
   renderEstablishmentMap();
 }
 
+async function loadPublicOrganization() {
+  const data = await api("/organization");
+  state.teams = data.teams || [];
+  state.establishments = data.establishments || [];
+  updateOrganizationDatalists();
+  restoreCollectionDraft();
+}
+
 async function loadCpuBenchmarkStats() {
   const data = await api("/admin/cpu-benchmarks");
   state.cpuBenchmarkStats = data;
@@ -1985,6 +2152,7 @@ async function loadAdminData() {
   });
   loadAdminUsers().catch((error) => toast(`Module utilisateurs indisponible: ${error.message}`, "error"));
   loadNotifications().catch((error) => toast(`Module notifications indisponible: ${error.message}`, "error"));
+  loadPendingChanges().catch((error) => toast(`Module validations indisponible: ${error.message}`, "error"));
   const organizationPromise = loadOrganization().catch((error) => toast(`Module organisation indisponible: ${error.message}`, "error"));
   loadCpuBenchmarkStats().catch(() => {
     state.cpuBenchmarkStats = null;
@@ -2006,15 +2174,6 @@ async function loadAdminData() {
   setOptions($("#filter-team"), state.teams.map((team) => team.name), "Toutes", true);
   setOptions($("#filter-establishment"), state.establishments.map((site) => site.name), "Tous", true);
   applyFilters();
-}
-
-function hydrateDatalists() {
-  ["IT", "Retail", "Marketing", "Finance", "Logistique", "RH"].forEach((value) => {
-    $("#team-list").insertAdjacentHTML("beforeend", `<option value="${value}"></option>`);
-  });
-  ["Lyon", "Paris", "Nantes", "Marseille", "Remote"].forEach((value) => {
-    $("#establishment-list").insertAdjacentHTML("beforeend", `<option value="${value}"></option>`);
-  });
 }
 
 async function runEnrichment({ mode = "refresh", deviceId = "", button = null } = {}) {
@@ -2104,30 +2263,60 @@ function bindEvents() {
       if (button.dataset.adminView === "organization") {
         loadOrganization().catch((error) => toast(error.message));
       }
+      if (button.dataset.adminView === "pending") {
+        Promise.all([loadOrganization(), loadPendingChanges()]).catch((error) => toast(error.message));
+      }
     });
+  });
+
+  $("#collect-form").addEventListener("input", () => {
+    toggleProposalFields();
+    saveCollectionDraft();
+  });
+  $("#collect-form").addEventListener("change", () => {
+    toggleProposalFields();
+    saveCollectionDraft();
   });
 
   $("#collect-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = Object.fromEntries(new FormData(event.currentTarget));
+    const payload = { ...form };
+    if (payload.team === "__other__") payload.team = "";
+    if (payload.establishment === "__other__") payload.establishment = "";
     try {
       const result = await api("/collect/profile", {
         method: "POST",
         headers: { "X-Collection-Access-Token": form.accessToken },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
       $("#command-empty").classList.add("is-hidden");
       $("#command-result").classList.remove("is-hidden");
+      $("#collector-token").textContent = result.collectionToken;
       $("#powershell-command").textContent = buildCommand(result.collectionToken);
-      toast("Commande generee.");
+      if (result.pendingChanges?.length) {
+        toast("Commande generee. Proposition envoyee a l'admin.", "success");
+      } else {
+        toast("Commande generee.", "success");
+      }
     } catch (error) {
-      toast(error.message);
+      saveCollectionDraft();
+      toast(error.message, "error");
     }
   });
 
   $("#copy-command").addEventListener("click", async () => {
     await navigator.clipboard.writeText($("#powershell-command").textContent);
     toast("Commande copiee.");
+  });
+  $("#copy-collector-token").addEventListener("click", async () => {
+    await navigator.clipboard.writeText($("#collector-token").textContent);
+    toast("Token copie.");
+  });
+  $("#copy-script").addEventListener("click", async () => {
+    if (!state.scriptPreviewText) await loadScriptPreview();
+    await navigator.clipboard.writeText(state.scriptPreviewText);
+    toast("Script copie.");
   });
 
   $("#admin-login-form").addEventListener("submit", async (event) => {
@@ -2159,6 +2348,7 @@ function bindEvents() {
 
   $("#refresh-admin").addEventListener("click", () => loadAdminData().catch((error) => toast(error.message)));
   $("#refresh-tokens").addEventListener("click", () => loadAccessTokens().catch((error) => toast(error.message)));
+  $("#refresh-pending-changes").addEventListener("click", () => loadPendingChanges().catch((error) => toast(error.message)));
   $("#new-team").addEventListener("click", resetTeamForm);
   $("#new-establishment").addEventListener("click", resetEstablishmentForm);
   $("#delete-team").addEventListener("click", async () => {
@@ -2412,10 +2602,15 @@ function bindEvents() {
   });
 }
 
-hydrateDatalists();
 bindEvents();
 applyLanguage(state.language, false);
 languageObserver.observe(document.body, { childList: true, subtree: true });
+restoreCollectionDraft();
+loadPublicOrganization().catch((error) => {
+  updateOrganizationDatalists();
+  toast(`Organisation indisponible: ${error.message}`, "error");
+});
+loadScriptPreview().catch(() => {});
 
 if (state.adminToken) {
   $("#admin-login").classList.add("is-hidden");

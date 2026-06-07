@@ -248,6 +248,19 @@ async function getOrCreateByName(table: "teams" | "establishments", name: string
   return data.id;
 }
 
+async function findActiveByName(table: "teams" | "establishments", name: string) {
+  const cleanName = safeString(name, 120);
+  if (!cleanName || cleanName === "__other__") return null;
+  const { data, error } = await supabase
+    .from(table)
+    .select("id,name,active")
+    .ilike("name", cleanName)
+    .eq("active", true)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.id ?? null;
+}
+
 async function audit(action: string, entityType: string, entityId: string | null, details: Json = {}) {
   await supabase.from("audit_logs").insert({ action, entity_type: entityType, entity_id: entityId, details });
 }
@@ -357,8 +370,8 @@ async function consumeCollectionAccessToken(token: string) {
 }
 
 async function upsertUserProfile(body: Json) {
-  const teamId = await getOrCreateByName("teams", firstPresent(body, "team"));
-  const establishmentId = await getOrCreateByName("establishments", firstPresent(body, "establishment", "site"));
+  const teamId = await findActiveByName("teams", firstPresent(body, "team"));
+  const establishmentId = await findActiveByName("establishments", firstPresent(body, "establishment", "site"));
   const email = firstPresent(body, "email").toLowerCase();
 
   const { data: user, error: userError } = await supabase
@@ -370,7 +383,7 @@ async function upsertUserProfile(body: Json) {
         email,
         team_id: teamId,
         establishment_id: establishmentId,
-        service: firstPresent(body, "service") || "Non renseigne",
+        service: firstPresent(body, "service") || "Deprecated",
         comment: firstPresent(body, "comment", "notes", "Notes").slice(0, 1000),
       },
       { onConflict: "email" },
@@ -380,6 +393,36 @@ async function upsertUserProfile(body: Json) {
 
   if (userError) throw userError;
   return user;
+}
+
+async function createPendingChange(type: "TEAM" | "ESTABLISHMENT", proposedValue: string, body: Json, userId: string) {
+  const cleanValue = safeString(proposedValue, 180);
+  if (!cleanValue) return null;
+  const proposedByUser = [titleCase(firstPresent(body, "firstName")), firstPresent(body, "lastName").toUpperCase()]
+    .filter(Boolean)
+    .join(" ");
+  const proposedByEmail = firstPresent(body, "email").toLowerCase();
+  const { data, error } = await supabase
+    .from("pending_changes")
+    .insert({
+      type,
+      proposed_value: cleanValue,
+      proposed_by_user: proposedByUser || null,
+      proposed_by_email: proposedByEmail || null,
+      status: "PENDING",
+      admin_notes: `Profil collecte: ${userId}`,
+    })
+    .select("id,type,proposed_value")
+    .single();
+  if (error) throw error;
+  await notify(
+    type === "TEAM" ? "PENDING_TEAM_PROPOSAL" : "PENDING_LOCATION_PROPOSAL",
+    type === "TEAM" ? "Nouvelle proposition equipe" : "Nouvelle proposition etablissement",
+    `${proposedByUser || proposedByEmail || "Un utilisateur"} propose "${cleanValue}".`,
+    { severity: "INFO", targetRole: "ADMIN", relatedEntityType: "pending_change", relatedEntityId: data.id },
+  );
+  await audit("pending_change_created", "pending_change", data.id, { type, proposed_value: cleanValue, user_id: userId });
+  return data;
 }
 
 async function handleAdminLogin(request: Request) {
@@ -450,15 +493,24 @@ async function handleAdminLogin(request: Request) {
 async function handleProfile(request: Request) {
   const accessToken = request.headers.get("x-collection-access-token") ?? "";
   const body = await request.json().catch(() => ({}));
-  const required = ["firstName", "lastName", "email", "team", "establishment", "service"];
+  const required = ["firstName", "lastName", "email"];
   for (const field of required) {
     if (!safeString(body[field])) return badRequest(request, `Champ requis: ${field}`);
   }
+  const team = firstPresent(body, "team");
+  const establishment = firstPresent(body, "establishment", "site");
+  const proposedTeam = firstPresent(body, "proposedTeam", "proposed_team");
+  const proposedEstablishment = firstPresent(body, "proposedEstablishment", "proposed_establishment", "proposedLocation");
+  if (!team && !proposedTeam) return badRequest(request, "Equipe requise ou proposition d'equipe requise.");
+  if (!establishment && !proposedEstablishment) return badRequest(request, "Etablissement requis ou proposition d'etablissement requise.");
   const accessTokenId = await consumeCollectionAccessToken(accessToken);
   if (!accessTokenId) return badRequest(request, "Token de collecte invalide, expire, revoque ou epuise.", 401);
 
   const email = safeString(body.email, 255).toLowerCase();
   const user = await upsertUserProfile(body);
+  const pendingChanges = [];
+  if (proposedTeam) pendingChanges.push(await createPendingChange("TEAM", proposedTeam, body, safeString(user.id)));
+  if (proposedEstablishment) pendingChanges.push(await createPendingChange("ESTABLISHMENT", proposedEstablishment, body, safeString(user.id)));
 
   const token = crypto.randomUUID().replaceAll("-", "") + crypto.randomUUID().replaceAll("-", "");
   const tokenHash = await sha256(token);
@@ -467,8 +519,12 @@ async function handleProfile(request: Request) {
     token_hash: tokenHash,
     expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
   });
-  await audit("collection_profile_created", "user", user.id, { email, access_token_id: accessTokenId });
-  return json(request, { collectionToken: token });
+  await audit("collection_profile_created", "user", user.id, {
+    email,
+    access_token_id: accessTokenId,
+    pending_changes: pendingChanges.filter(Boolean).map((item) => (item as Json).id),
+  });
+  return json(request, { collectionToken: token, pendingChanges: pendingChanges.filter(Boolean) });
 }
 
 function dedupePayload(body: Json, userId: string) {
@@ -1201,6 +1257,26 @@ async function handleAdminDevices(request: Request) {
   return json(request, { devices: data });
 }
 
+async function handlePublicOrganization(request: Request) {
+  const [{ data: teams, error: teamsError }, { data: establishments, error: establishmentsError }] = await Promise.all([
+    supabase
+      .from("teams")
+      .select("id,name,description,color,sort_index")
+      .eq("active", true)
+      .order("sort_index", { nullsFirst: false })
+      .order("name"),
+    supabase
+      .from("establishments")
+      .select("id,name,establishment_type,city,country,sort_index")
+      .eq("active", true)
+      .order("sort_index", { nullsFirst: false })
+      .order("name"),
+  ]);
+  if (teamsError) throw teamsError;
+  if (establishmentsError) throw establishmentsError;
+  return json(request, { teams: teams ?? [], establishments: establishments ?? [] });
+}
+
 async function handleAdminOrganization(request: Request) {
   if (!(await isAdmin(request, "VIEW_DASHBOARD"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
   const [
@@ -1255,6 +1331,83 @@ async function handleAdminOrganization(request: Request) {
     users: users ?? [],
     map_provider: googleMapsApiKey ? "google" : "openstreetmap",
   });
+}
+
+async function handleAdminPendingChanges(request: Request) {
+  if (!(await isAdmin(request, "PENDING_CHANGE_APPROVE"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
+  const { data, error } = await supabase
+    .from("pending_changes")
+    .select("id,type,proposed_value,proposed_by_user,proposed_by_email,related_device_id,status,admin_decision_by,admin_decision_at,admin_notes,linked_entity_id,created_at")
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error) throw error;
+  return json(request, { pendingChanges: data ?? [] });
+}
+
+async function handleAdminDecidePendingChange(request: Request, id: string) {
+  const auth = await requireAction(request, "PENDING_CHANGE_APPROVE");
+  if (auth.response) return auth.response;
+  const body = await request.json().catch(() => ({}));
+  const decision = safeString(body.decision, 40).toUpperCase();
+  const proposedValue = safeString(body.proposedValue, 180);
+  const linkedEntityId = safeString(body.linkedEntityId) || null;
+  const adminNotes = safeString(body.adminNotes, 1000) || null;
+  if (!["APPROVE", "REJECT", "MODIFY"].includes(decision)) return badRequest(request, "Decision invalide.");
+
+  const { data: pending, error: pendingError } = await supabase
+    .from("pending_changes")
+    .select("id,type,proposed_value,status")
+    .eq("id", id)
+    .maybeSingle();
+  if (pendingError) throw pendingError;
+  if (!pending) return badRequest(request, "Proposition introuvable.", 404);
+  if (pending.status !== "PENDING") return badRequest(request, "Cette proposition a deja ete traitee.", 409);
+
+  let newStatus = "REJECTED";
+  let entityId = linkedEntityId;
+  const type = safeString(pending.type);
+  const finalValue = proposedValue || safeString(pending.proposed_value, 180);
+  if (decision === "APPROVE" || decision === "MODIFY") {
+    if (!entityId) {
+      if (!finalValue) return badRequest(request, "Valeur a approuver requise.");
+      if (type === "TEAM") {
+        entityId = await getOrCreateByName("teams", finalValue);
+      } else if (type === "ESTABLISHMENT" || type === "LOCATION") {
+        entityId = await getOrCreateByName("establishments", finalValue);
+      } else {
+        return badRequest(request, "Type de proposition non pris en charge.");
+      }
+    }
+    newStatus = decision === "MODIFY" ? "MODIFIED" : "APPROVED";
+  }
+
+  const { data, error } = await supabase
+    .from("pending_changes")
+    .update({
+      proposed_value: finalValue,
+      status: newStatus,
+      admin_decision_by: auth.session?.legacy ? null : auth.session?.id,
+      admin_decision_at: new Date().toISOString(),
+      admin_notes: adminNotes,
+      linked_entity_id: entityId,
+    })
+    .eq("id", id)
+    .select("id,type,proposed_value,status,linked_entity_id,admin_decision_at")
+    .single();
+  if (error) throw error;
+  await audit("pending_change_decided", "pending_change", id, {
+    decision,
+    status: newStatus,
+    linked_entity_id: entityId,
+    proposed_value: finalValue,
+  });
+  await notify("ADMIN_ACTION_COMPLETED", "Proposition traitee", `La proposition "${finalValue}" est maintenant ${newStatus}.`, {
+    severity: newStatus === "REJECTED" ? "WARNING" : "SUCCESS",
+    targetRole: "ADMIN",
+    relatedEntityType: "pending_change",
+    relatedEntityId: id,
+  });
+  return json(request, { pendingChange: data });
 }
 
 async function handleAdminReorderOrganization(request: Request) {
@@ -1796,6 +1949,9 @@ Deno.serve(async (request) => {
 
   try {
     if (request.method === "POST" && path.endsWith("/auth/admin")) return await handleAdminLogin(request);
+    if (request.method === "GET" && path.endsWith("/organization") && !path.includes("/admin/")) {
+      return await handlePublicOrganization(request);
+    }
     if (request.method === "POST" && path.endsWith("/collect/profile")) return await handleProfile(request);
     if (request.method === "POST" && path.endsWith("/collect/scan")) return await handleScan(request);
     if (request.method === "POST" && path.endsWith("/collect/legacy-scan")) return await handleLegacyScan(request);
@@ -1810,6 +1966,11 @@ Deno.serve(async (request) => {
     if (request.method === "POST" && path.endsWith("/admin/notifications/read-all")) return await handleAdminMarkNotification(request);
     const notificationReadMatch = path.match(/\/admin\/notifications\/([0-9a-f-]+)\/read$/i);
     if (request.method === "POST" && notificationReadMatch) return await handleAdminMarkNotification(request, notificationReadMatch[1]);
+    if (request.method === "GET" && path.endsWith("/admin/pending-changes")) return await handleAdminPendingChanges(request);
+    const pendingChangeMatch = path.match(/\/admin\/pending-changes\/([0-9a-f-]+)\/decision$/i);
+    if (request.method === "POST" && pendingChangeMatch) {
+      return await handleAdminDecidePendingChange(request, pendingChangeMatch[1]);
+    }
     if (request.method === "POST" && path.endsWith("/admin/organization/reassign")) return await handleAdminBulkReassign(request);
     if (request.method === "POST" && path.endsWith("/admin/organization/reorder")) return await handleAdminReorderOrganization(request);
     if (request.method === "GET" && path.endsWith("/admin/address/autocomplete")) return await handleAdminAddressAutocomplete(request);

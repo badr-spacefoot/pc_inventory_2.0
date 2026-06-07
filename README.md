@@ -9,24 +9,30 @@ Le front est statique et peut etre heberge sur GitHub Pages. La collecte complet
 - `frontend/` : application responsive HTML/CSS/JS hebergeable sur GitHub Pages.
 - `supabase/schema.sql` : tables `users`, `devices`, `device_scans`, `teams`, `establishments`, `audit_logs` et tokens de collecte.
 - `supabase/functions/inventory-api/` : API Supabase Edge Function.
-- `scripts/collect-windows.ps1` : script PowerShell de collecte Windows.
+- `collectors/desktop_collector/` : prototype d'application collecteur transparente avec revue avant envoi.
+- `scripts/collect-windows.ps1` : fallback PowerShell de collecte Windows.
+- `scripts/collect-cross-platform.py` : collecteur standard-library Windows, Ubuntu/Linux et macOS.
 - Backend recommande : Supabase pour Postgres, Edge Functions, secrets serveur et CORS.
 
 Flux:
 
 1. L'utilisateur ouvre la page de collecte avec un token d'acces.
-2. Il saisit nom, prenom, email, equipe, etablissement, service et commentaire.
-3. L'API cree ou met a jour l'utilisateur et renvoie un token de script temporaire.
-4. L'utilisateur lance la commande PowerShell generee.
-5. Le script collecte les informations locales et poste le scan vers `/collect/scan`.
-6. L'API deduplique la machine, met a jour `devices`, ajoute une ligne dans `device_scans` et journalise dans `audit_logs`.
-7. L'admin consulte le dashboard, les filtres, le detail, l'historique et l'export CSV.
+2. Il saisit nom, prenom, email, equipe, etablissement et commentaire.
+3. Les listes equipe/etablissement viennent des valeurs admin actives, dans l'ordre configure.
+4. Si la valeur manque, l'utilisateur choisit `Autre` et propose une valeur qui reste en attente de validation admin.
+5. L'API cree ou met a jour l'utilisateur et renvoie un token de collecteur temporaire.
+6. L'utilisateur lance le collecteur recommande ou le fallback PowerShell.
+7. Le collecteur affiche les donnees locales, puis poste le scan vers `/collect/scan` apres confirmation.
+8. L'API deduplique la machine, met a jour `devices`, ajoute une ligne dans `device_scans` et journalise dans `audit_logs`.
+9. L'admin consulte le dashboard, les filtres, le detail, l'historique et l'export CSV.
 
 ## Fonctionnalites
 
 - Acces utilisateur par token de collecte.
-- Formulaire utilisateur: nom, prenom, email, equipe, etablissement, service, commentaire.
-- Commande PowerShell personnalisee et telechargement du script.
+- Formulaire utilisateur: nom, prenom, email, equipe, etablissement, commentaire.
+- Brouillon local du formulaire de collecte conserve jusqu'a generation reussie.
+- Listes equipe/etablissement synchronisees avec l'admin, avec option `Autre` et validation admin.
+- Collecteur desktop transparent scaffold, commande PowerShell, copie du script et telechargement fallback.
 - Dashboard admin protege par mot de passe cote backend.
 - Liste des machines, recherche globale et filtres equipe, etablissement, OS, anciennete, modele, statut.
 - Badges locaux pour les systemes et fabricants, avec normalisation des valeurs OEM et detection des familles professionnelles.
@@ -38,6 +44,7 @@ Flux:
 - Compatibilite ancien script Google Sheets via `/collect/legacy-scan` avec les champs `pcName`, `mac`, `site`, `serial`, `os`, `ram`, `ip`.
 - Enrichissement materiel cacheable: score CPU, generation CPU, age modele, prix estime, valeur marche, confiance et recommandation.
 - Generation admin de tokens de collecte temporaires avec expiration, limite d'utilisations et revocation.
+- Centre admin `Pending changes` pour approuver, modifier, rejeter ou lier les propositions utilisateur.
 
 ## Installation Supabase
 
@@ -113,7 +120,43 @@ Alternative: injecter ces valeurs avant `app.js` dans `frontend/index.html`:
 4. Activer GitHub Actions comme source Pages.
 5. Verifier que `ALLOWED_ORIGINS` contient l'URL GitHub Pages.
 
-Le workflow `.github/workflows/pages.yml` publie `frontend/` a la racine du site et copie aussi `scripts/`, afin que `collect-windows.ps1` soit disponible depuis GitHub Pages.
+Le workflow `.github/workflows/pages.yml` publie `frontend/` a la racine du site et copie aussi `scripts/` et `collectors/`, afin que le fallback PowerShell et la documentation du collecteur soient disponibles depuis GitHub Pages.
+
+## Collecteur recommande et fallback script
+
+Les navigateurs, extensions et antivirus peuvent bloquer les fichiers `.ps1` ou les flux `download script`, meme quand le script est legitime. Le projet ne cherche pas a contourner Malwarebytes, les antivirus ou les controles navigateur.
+
+La strategie recommandee est:
+
+1. Generer un token de collecteur depuis la page de collecte.
+2. Ouvrir l'application collecteur officielle.
+3. Coller le token.
+4. Collecter les donnees.
+5. Relire le JSON affiche.
+6. Envoyer seulement apres verification.
+
+Le prototype actuel est dans `collectors/desktop_collector/`:
+
+```powershell
+python collectors/desktop_collector/collector_app.py
+```
+
+Il utilise `scripts/collect-cross-platform.py` pour collecter avec la bibliotheque standard Python:
+
+- Windows: PowerShell/CIM/WMI lorsque disponible.
+- Ubuntu/Linux: `/etc/os-release`, `/proc`, `/sys/class/dmi/id`, `lsblk`, `dmidecode` seulement si accessible.
+- macOS: `sw_vers`, `system_profiler`, `sysctl`, stockage local.
+
+Les champs impossibles a lire sans droit suffisant restent vides. Le collecteur echoue proprement et n'installe aucun controle distant.
+
+Le script PowerShell reste disponible comme fallback avance:
+
+- bouton `Copier le script`;
+- bouton `Telecharger le script`;
+- apercu lisible du script;
+- commande PowerShell personnalisee.
+
+Ne pas obfusquer le script, ne pas utiliser de commande encodee et ne pas auto-executer un telechargement. Pour reduire les alertes en production, prevoir plus tard des binaires signes/notarises et un editeur clairement identifie.
 
 ## Lancement du script Windows
 
@@ -177,6 +220,7 @@ Ne jamais mettre `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_PASSWORD` ou `ADMIN_SESSION
 Routes principales:
 
 - `POST /auth/admin` avec `{ "username": "...", "password": "..." }` ou fallback `{ "password": "..." }`
+- `GET /organization` pour exposer les equipes/etablissements actifs au formulaire public
 - `POST /collect/profile` avec header `X-Collection-Access-Token`
 - `POST /collect/scan` avec header `Authorization: Bearer <collectionToken>`
 - `POST /collect/legacy-scan` avec header `X-Collection-Access-Token` pour accepter l'ancien payload du script Google Sheets
@@ -193,6 +237,27 @@ Routes principales:
 - `POST /admin/organization/reassign` pour reaffecter en masse les machines et utilisateurs
 - `GET /admin/users`, `POST /admin/users`, `POST /admin/users/:id`, `DELETE /admin/users/:id` pour la gestion des comptes et roles
 - `GET /admin/notifications`, `POST /admin/notifications/:id/read`, `POST /admin/notifications/read-all` pour le centre de notifications
+- `GET /admin/pending-changes`, `POST /admin/pending-changes/:id/decision` pour traiter les propositions equipe/etablissement
+
+## Propositions equipe/etablissement
+
+La page collecte n'a plus de listes hardcodees. Elle charge `GET /organization`, qui renvoie uniquement les equipes et etablissements actifs, dans l'ordre admin `sort_index`.
+
+Si l'utilisateur selectionne `Autre`, il doit saisir une proposition:
+
+- `proposedTeam` pour une nouvelle equipe;
+- `proposedEstablishment` pour une nouvelle implantation.
+
+L'API cree une ligne `pending_changes` avec le statut `PENDING` et notifie les admins. Aucune equipe/implantation officielle n'est creee tant qu'un admin n'a pas approuve.
+
+Dans `Pending changes`, un admin peut:
+
+- approuver et creer la nouvelle valeur;
+- modifier la valeur avant approbation;
+- lier a une valeur existante pour eviter les doublons;
+- rejeter en conservant l'historique.
+
+Le champ `service` est deprecie. Il reste en base pour compatibilite avec les anciennes donnees et imports, mais il n'est plus demande dans le formulaire de collecte ni exporte dans le CSV standard.
 
 ## Tokens temporaires de collecte
 

@@ -647,6 +647,121 @@ pre {
   padding: 0 11px;
 }
 
+.collector-privacy {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface), var(--brand) 4%);
+}
+
+.collector-privacy h3,
+.collector-options h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.collector-privacy p,
+.collector-privacy ul {
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+
+.collector-privacy ul {
+  padding-left: 18px;
+}
+
+.collector-token-box {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  margin: 14px 0;
+  padding: 16px 62px 16px 16px;
+  border-radius: 8px;
+  background: #17211d;
+  color: #f2f7f2;
+}
+
+.collector-token-box span {
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.collector-token-box code {
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.collector-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.collector-options article {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background: var(--surface);
+}
+
+.collector-options p {
+  margin: 0 0 10px;
+  color: var(--muted);
+}
+
+.script-preview {
+  margin-top: 14px;
+}
+
+.script-preview summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.pending-changes-list {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.pending-change-item {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.7fr) minmax(0, 1fr);
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.pending-change-item.status-approved,
+.pending-change-item.status-modified {
+  border-left-color: var(--brand);
+}
+
+.pending-change-item.status-rejected {
+  border-left-color: var(--danger);
+}
+
+.pending-change-item p,
+.pending-change-item small {
+  color: var(--muted);
+}
+
+.pending-change-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.pending-change-form .actions {
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+}
+
 .organization-layout {
   display: grid;
   grid-template-columns: minmax(280px, 0.8fr) minmax(340px, 1.2fr);
@@ -1607,6 +1722,8 @@ tbody tr.is-selected {
   .split,
   .dashboard-grid,
   .token-manager-grid,
+  .collector-options,
+  .pending-change-item,
   .organization-layout {
     grid-template-columns: 1fr;
   }
@@ -1642,6 +1759,7 @@ tbody tr.is-selected {
 
   .form-grid,
   .filters,
+  .pending-change-form,
   .metric-grid,
   .charts-grid {
     grid-template-columns: 1fr;

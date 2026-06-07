@@ -75,15 +75,23 @@
               </label>
               <label>
                 Equipe
-                <input name="team" list="team-list" required />
+                <select name="team" required>
+                  <option value="">Chargement...</option>
+                </select>
+              </label>
+              <label id="proposed-team-field" class="is-hidden">
+                Proposer une nouvelle equipe
+                <input name="proposedTeam" maxlength="180" />
               </label>
               <label>
                 Etablissement
-                <input name="establishment" list="establishment-list" required />
+                <select name="establishment" required>
+                  <option value="">Chargement...</option>
+                </select>
               </label>
-              <label>
-                Service
-                <input name="service" required />
+              <label id="proposed-establishment-field" class="is-hidden">
+                Proposer un nouvel etablissement
+                <input name="proposedEstablishment" maxlength="180" />
               </label>
               <label class="wide">
                 Commentaire optionnel
@@ -91,26 +99,62 @@
               </label>
               <button type="submit" class="primary">Generer la commande</button>
             </form>
+            <div class="collector-privacy">
+              <h3>Collecte transparente</h3>
+              <p>Ce collecteur recupere uniquement les informations d'inventaire utiles a l'equipe IT.</p>
+              <ul>
+                <li>hostname, OS, fabricant, modele et numero de serie</li>
+                <li>CPU, RAM, stockage, GPU si disponible</li>
+                <li>IP locale, MAC si autorisee, utilisateur OS connecte</li>
+              </ul>
+              <p>Aucun fichier personnel, historique navigateur, mot de passe ou outil de controle distant n'est lu ou installe.</p>
+            </div>
           </section>
 
           <section class="panel command-panel">
             <div class="panel-head">
-              <p class="eyebrow">Script local</p>
-              <h2>Commande PowerShell</h2>
+              <p class="eyebrow">Collector</p>
+              <h2>Collecte locale</h2>
             </div>
             <div id="command-empty" class="empty-state">
-              Remplissez le formulaire pour obtenir une commande personnalisee.
+              Remplissez le formulaire pour obtenir un token de collecteur et les options de lancement.
             </div>
             <div id="command-result" class="is-hidden">
               <p class="helper">
-                Lancez cette commande dans PowerShell. Elle telecharge le script, collecte les informations du poste
-                et les envoie a l'API.
+                Methode recommandee: ouvrez l'application collecteur, collez le token, relisez les donnees collectees puis envoyez.
+                Le fallback script reste disponible pour les admins et utilisateurs avances.
               </p>
+              <div class="collector-token-box">
+                <span>Token du collecteur</span>
+                <code id="collector-token"></code>
+                <button id="copy-collector-token" class="token-copy-button" type="button" aria-label="Copier le token collecteur" title="Copier le token collecteur">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <rect width="14" height="14" x="8" y="8" rx="2"></rect>
+                    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
+                  </svg>
+                </button>
+              </div>
+              <div class="collector-options">
+                <article>
+                  <h3>Application collecteur</h3>
+                  <p>Version transparente Python/Tkinter pour Windows, Ubuntu/Linux et macOS. Elle affiche les donnees avant envoi.</p>
+                  <code>python collectors/desktop_collector/collector_app.py</code>
+                </article>
+                <article>
+                  <h3>Fallback PowerShell</h3>
+                  <p>Script lisible, non obfusque, a copier ou telecharger si l'application collecteur n'est pas disponible.</p>
+                </article>
+              </div>
               <pre><code id="powershell-command"></code></pre>
               <div class="actions">
-                <button id="copy-command" class="secondary" type="button">Copier</button>
+                <button id="copy-command" class="secondary" type="button">Copier la commande</button>
+                <button id="copy-script" class="secondary" type="button">Copier le script</button>
                 <a id="download-script" class="secondary" href="../scripts/collect-windows.ps1" download>Telecharger le script</a>
               </div>
+              <details class="script-preview">
+                <summary>Apercu du script PowerShell</summary>
+                <pre><code id="script-preview"></code></pre>
+              </details>
             </div>
           </section>
         </div>
@@ -174,6 +218,10 @@
             <button class="admin-nav-button" type="button" data-admin-view="users" data-permission="USER_MANAGE">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M19 8v6M22 11h-6"></path></svg>
               Users
+            </button>
+            <button class="admin-nav-button" type="button" data-admin-view="pending" data-permission="PENDING_CHANGE_APPROVE">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"></path><path d="m8 11 4 4 4-4"></path><path d="M4 21h16"></path></svg>
+              Pending changes
             </button>
             <button class="admin-nav-button" type="button" data-admin-view="notifications">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M10 21h4"></path></svg>
@@ -324,6 +372,18 @@
               <label>Etat<select id="notification-read-filter"><option value="">Tous</option><option value="unread">Non lues</option><option value="read">Lues</option></select></label>
             </div>
             <div id="notifications-list" class="notifications-list"></div>
+          </section>
+
+          <section class="panel admin-section-view section-pending is-hidden" data-permission="PENDING_CHANGE_APPROVE">
+            <div class="panel-head inline">
+              <div>
+                <p class="eyebrow">Validation</p>
+                <h3>Pending changes</h3>
+              </div>
+              <button id="refresh-pending-changes" class="secondary" type="button">Actualiser</button>
+            </div>
+            <p class="helper">Les propositions utilisateur ne creent pas d'equipe ou d'etablissement avant validation admin.</p>
+            <div id="pending-changes-list" class="pending-changes-list"></div>
           </section>
 
           <section class="admin-section-view section-organization is-hidden">
@@ -601,8 +661,6 @@
       </section>
     </main>
 
-    <datalist id="team-list"></datalist>
-    <datalist id="establishment-list"></datalist>
     <dialog id="confirm-dialog" class="confirm-dialog">
       <form method="dialog">
         <div class="confirm-icon" aria-hidden="true">

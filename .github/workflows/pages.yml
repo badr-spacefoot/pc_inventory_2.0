@@ -33,6 +33,7 @@ jobs:
           mkdir -p _site
           cp -R frontend/. _site/
           cp -R scripts _site/scripts
+          cp -R collectors _site/collectors
 
       - name: Upload static site
         uses: actions/upload-pages-artifact@v3
