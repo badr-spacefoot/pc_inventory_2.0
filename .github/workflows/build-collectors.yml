@@ -49,6 +49,18 @@ jobs:
           --windowed
           --name "${{ matrix.artifact }}"
           --add-data "scripts/collect-cross-platform.py${{ matrix.separator }}scripts"
+          --hidden-import argparse
+          --hidden-import datetime
+          --hidden-import getpass
+          --hidden-import os
+          --hidden-import platform
+          --hidden-import re
+          --hidden-import shutil
+          --hidden-import socket
+          --hidden-import subprocess
+          --hidden-import urllib.error
+          --hidden-import urllib.request
+          --hidden-import uuid
           collectors/desktop_collector/collector_app.py
 
       - name: Sign Windows collector when certificate is configured

@@ -7,13 +7,23 @@ collected payload before sending it and does not hide or obfuscate behavior.
 
 from __future__ import annotations
 
+import argparse
+import datetime
+import getpass
 import json
+import os
+import platform
+import re
+import shutil
+import socket
+import subprocess
 import sys
 import threading
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, ttk
 import urllib.error
 import urllib.request
+import uuid
 
 try:
     from pathlib import Path
