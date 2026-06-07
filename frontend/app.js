@@ -6,6 +6,7 @@ const CONFIG = {
 
 const state = {
   adminToken: localStorage.getItem("it_inventory_admin_token") || "",
+  currentAdmin: JSON.parse(localStorage.getItem("it_inventory_admin_user") || "null"),
   language: localStorage.getItem("it_inventory_language") || "fr",
   devices: [],
   filtered: [],
@@ -19,6 +20,9 @@ const state = {
   establishments: [],
   users: [],
   cpuBenchmarkStats: null,
+  adminUsers: [],
+  notifications: [],
+  unreadNotifications: 0,
   mapProvider: "openstreetmap",
 };
 
@@ -59,6 +63,25 @@ const englishTranslations = {
   "Telecharger le script": "Download script",
   "Connexion": "Sign in",
   "Mot de passe admin": "Admin password",
+  "Mot de passe": "Password",
+  "Identifiant": "Username",
+  "Nom affiche": "Display name",
+  "Utilisateurs & roles": "Users & roles",
+  "Nouveau compte": "New account",
+  "Enregistrer le compte": "Save account",
+  "Compte actif": "Active account",
+  "Desactive": "Disabled",
+  "Derniere connexion": "Last login",
+  "Centre de notifications": "Notification center",
+  "Tout marquer comme lu": "Mark all as read",
+  "Marquer lu": "Mark read",
+  "Non lues": "Unread",
+  "Lues": "Read",
+  "Severite": "Severity",
+  "Compte cree.": "Account created.",
+  "Compte mis a jour.": "Account updated.",
+  "Compte supprime.": "Account deleted.",
+  "Notifications mises a jour.": "Notifications updated.",
   "Se connecter": "Sign in",
   "Dashboard": "Dashboard",
   "Vue du parc informatique": "IT fleet overview",
@@ -425,6 +448,34 @@ async function api(path, options = {}) {
     throw error;
   }
   return body;
+}
+
+const rolePermissions = {
+  ADMIN: ["DEVICE_VIEW", "DEVICE_EDIT", "DEVICE_DELETE", "TEAM_MANAGE", "LOCATION_MANAGE", "TOKEN_MANAGE", "USER_MANAGE", "PENDING_CHANGE_APPROVE", "EXPORT_DATA", "VIEW_HISTORY", "VIEW_DASHBOARD", "NOTIFICATION_VIEW", "NOTIFICATION_MANAGE"],
+  MANAGER: ["DEVICE_VIEW", "DEVICE_EDIT", "TEAM_MANAGE", "LOCATION_MANAGE", "EXPORT_DATA", "VIEW_HISTORY", "VIEW_DASHBOARD", "NOTIFICATION_VIEW", "PENDING_CHANGE_APPROVE"],
+  VIEWER: ["DEVICE_VIEW", "VIEW_HISTORY", "VIEW_DASHBOARD", "NOTIFICATION_VIEW"],
+  READ_ONLY: ["DEVICE_VIEW", "VIEW_HISTORY", "VIEW_DASHBOARD", "NOTIFICATION_VIEW"],
+  COLLECTOR_USER: [],
+};
+
+function canPerformAction(action) {
+  const role = state.currentAdmin?.role || "VIEWER";
+  return rolePermissions[role]?.includes(action) || false;
+}
+
+function applyPermissions() {
+  $$("[data-permission]").forEach((node) => {
+    node.classList.toggle("is-hidden", !canPerformAction(node.dataset.permission));
+  });
+  const editable = canPerformAction("DEVICE_EDIT");
+  ["#enrich-admin", "#valuation-enrich-all", "#valuation-recalculate", "#import-cpu-benchmarks"].forEach((selector) => {
+    const node = $(selector);
+    if (node) node.classList.toggle("is-hidden", !editable);
+  });
+  $("#export-csv")?.classList.toggle("is-hidden", !canPerformAction("EXPORT_DATA"));
+  $("#admin-session-label").textContent = state.currentAdmin
+    ? `${state.currentAdmin.displayName || state.currentAdmin.username} - ${state.currentAdmin.role}`
+    : "";
 }
 
 function normalize(value) {
@@ -859,9 +910,91 @@ function renderAccessTokens() {
 }
 
 async function loadAccessTokens() {
+  if (!canPerformAction("TOKEN_MANAGE")) return;
   const data = await api("/admin/access-tokens");
   state.accessTokens = data.tokens || [];
   renderAccessTokens();
+}
+
+function renderAdminUsers() {
+  $("#admin-users-table").innerHTML = state.adminUsers.map((user) => `
+    <tr data-id="${user.id}">
+      <td><span class="cell-primary">${escapeHtml(user.username)}</span><span class="cell-secondary">${escapeHtml(user.displayName || user.email || "-")}</span></td>
+      <td><span class="role-badge role-${escapeHtml(String(user.role || "").toLowerCase())}">${escapeHtml(user.role)}</span></td>
+      <td>${user.isActive ? translate("Actif") : translate("Desactive")}</td>
+      <td>${formatDate(user.lastLoginAt)}</td>
+    </tr>
+  `).join("") || `<tr><td colspan="4">${translate("Aucune donnee.")}</td></tr>`;
+  $$("#admin-users-table tr[data-id]").forEach((row) => row.addEventListener("click", () => editAdminUser(row.dataset.id)));
+}
+
+async function loadAdminUsers() {
+  if (!canPerformAction("USER_MANAGE")) return;
+  const data = await api("/admin/users");
+  state.adminUsers = data.users || [];
+  renderAdminUsers();
+}
+
+function resetAdminUserForm() {
+  const form = $("#admin-user-form");
+  form.reset();
+  form.elements.id.value = "";
+  form.elements.role.value = "VIEWER";
+  form.elements.isActive.checked = true;
+  $("#delete-admin-user").classList.add("is-hidden");
+}
+
+function editAdminUser(id) {
+  const user = state.adminUsers.find((item) => item.id === id);
+  if (!user) return;
+  const form = $("#admin-user-form");
+  form.elements.id.value = user.id;
+  form.elements.username.value = user.username || "";
+  form.elements.displayName.value = user.displayName || "";
+  form.elements.email.value = user.email || "";
+  form.elements.role.value = user.role || "VIEWER";
+  form.elements.password.value = "";
+  form.elements.isActive.checked = user.isActive !== false;
+  $("#delete-admin-user").classList.toggle("is-hidden", user.id === state.currentAdmin?.id);
+}
+
+function renderNotifications() {
+  const severity = $("#notification-severity-filter")?.value || "";
+  const readFilter = $("#notification-read-filter")?.value || "";
+  const notifications = state.notifications.filter((item) => {
+    if (severity && item.severity !== severity) return false;
+    if (readFilter === "read" && !item.is_read) return false;
+    if (readFilter === "unread" && item.is_read) return false;
+    return true;
+  });
+  $("#notifications-list").innerHTML = notifications.map((item) => `
+    <article class="notification-item ${item.is_read ? "is-read" : ""} severity-${String(item.severity || "INFO").toLowerCase()}">
+      <div>
+        <span class="notification-severity">${escapeHtml(item.severity || "INFO")}</span>
+        <strong>${escapeHtml(item.title)}</strong>
+        <p>${escapeHtml(item.message)}</p>
+        <small>${formatDate(item.created_at)} - ${escapeHtml(item.type || "")}</small>
+      </div>
+      ${item.is_read ? "" : `<button class="secondary mark-notification-read" type="button" data-id="${item.id}">${translate("Marquer lu")}</button>`}
+    </article>
+  `).join("") || `<p class="helper">${translate("Aucune donnee.")}</p>`;
+  $$(".mark-notification-read").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await api(`/admin/notifications/${button.dataset.id}/read`, { method: "POST", body: "{}" });
+      await loadNotifications();
+    });
+  });
+  const count = $("#notification-count");
+  count.textContent = String(state.unreadNotifications);
+  count.classList.toggle("is-hidden", state.unreadNotifications === 0);
+}
+
+async function loadNotifications() {
+  if (!canPerformAction("NOTIFICATION_VIEW")) return;
+  const data = await api("/admin/notifications");
+  state.notifications = data.notifications || [];
+  state.unreadNotifications = data.unread || 0;
+  renderNotifications();
 }
 
 function getSearchBlob(device) {
@@ -1126,6 +1259,7 @@ function renderDetail(device, scans, history = []) {
   const priorityValue = device.replacement_priority ?? device.obsolescence_index;
   const manufacturer = normalizeManufacturer(device.manufacturer, device.model);
   const family = detectDeviceFamily(manufacturer.manufacturerName, device.model);
+  const canEditDevice = canPerformAction("DEVICE_EDIT");
   const teamOptions = state.teams.map((team) =>
     `<option value="${team.id}" ${device.team_id === team.id ? "selected" : ""}>${escapeHtml(team.name)}</option>`).join("");
   const establishmentOptions = state.establishments.map((site) =>
@@ -1171,11 +1305,11 @@ function renderDetail(device, scans, history = []) {
         ["Priorite remplacement", priorityValue !== null && priorityValue !== undefined ? `${priorityValue}/100` : ""],
         ["Reco", localizedEnrichmentValue(device.recommendation)],
       ])}
-      <form id="status-form" class="form-grid one scan-history">
+      ${canEditDevice ? `<form id="status-form" class="form-grid one scan-history">
         <label>${translate("Statut")}<select name="status">${Object.entries(labels).map(([value, label]) => `<option value="${value}" ${device.status === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>
         <button type="submit" class="primary">${translate("Mettre a jour")}</button>
       </form>
-      <button id="enrich-device" class="secondary detail-enrich-button" type="button">${translate("Enrichir cette machine")}</button>
+      <button id="enrich-device" class="secondary detail-enrich-button" type="button">${translate("Enrichir cette machine")}</button>` : ""}
     </section>
     <section class="detail-tab-panel" data-detail-panel="hardware">
       ${detailRows([
@@ -1193,12 +1327,12 @@ function renderDetail(device, scans, history = []) {
     </section>
     <section class="detail-tab-panel" data-detail-panel="assignment">
       <div class="assignment-summary">${renderTeamBadge(device.team_name)} ${renderLocationBadge(device)}</div>
-      <form id="assignment-form" class="form-grid one assignment-form">
+      ${canEditDevice ? `<form id="assignment-form" class="form-grid one assignment-form">
         <label>${translate("Equipe")}<select name="teamId"><option value="">${translate("Non renseigne")}</option>${teamOptions}</select></label>
         <label>${translate("Etablissement")}<select name="establishmentId"><option value="">${translate("Non renseigne")}</option>${establishmentOptions}</select></label>
         <label>${translate("Proprietaire")}<select name="assignedUserId"><option value="">${translate("Non renseigne")}</option>${userOptions}</select></label>
         <button type="submit" class="primary">${translate("Enregistrer les affectations")}</button>
-      </form>
+      </form>` : ""}
     </section>
     <section class="detail-tab-panel" data-detail-panel="history">
       <form id="history-note-form" class="history-note-form">
@@ -1218,7 +1352,7 @@ function renderDetail(device, scans, history = []) {
     });
   });
 
-  $("#assignment-form").addEventListener("submit", async (event) => {
+  if ($("#assignment-form")) $("#assignment-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));
     try {
@@ -1246,7 +1380,7 @@ function renderDetail(device, scans, history = []) {
     }
   });
 
-  $("#status-form").addEventListener("submit", async (event) => {
+  if ($("#status-form")) $("#status-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const status = new FormData(event.currentTarget).get("status");
     try {
@@ -1263,7 +1397,7 @@ function renderDetail(device, scans, history = []) {
     }
   });
 
-  $("#enrich-device").addEventListener("click", async () => {
+  if ($("#enrich-device")) $("#enrich-device").addEventListener("click", async () => {
     const button = $("#enrich-device");
     button.disabled = true;
     button.textContent = translate("Enrichissement...");
@@ -1553,11 +1687,13 @@ function updateOrganizationDatalists() {
 }
 
 function renderOrganization() {
+  const canManageTeams = canPerformAction("TEAM_MANAGE");
+  const canManageLocations = canPerformAction("LOCATION_MANAGE");
   $("#teams-manager-list").innerHTML = state.teams
     .map(
       (team, index) => `
-        <div class="organization-sort-row ${team.active ? "" : "is-inactive"}" draggable="true" data-entity="team" data-id="${team.id}">
-          <button class="drag-handle" type="button" aria-label="Deplacer ${escapeHtml(team.name)}" title="Glisser pour reordonner">&#8942;&#8942;</button>
+        <div class="organization-sort-row ${team.active ? "" : "is-inactive"}" draggable="${canManageTeams}" data-entity="team" data-id="${team.id}">
+          ${canManageTeams ? `<button class="drag-handle" type="button" aria-label="Deplacer ${escapeHtml(team.name)}" title="Glisser pour reordonner">&#8942;&#8942;</button>` : ""}
           <button class="organization-item edit-team" type="button" data-id="${team.id}">
             <span class="organization-icon" style="--item-color:${escapeHtml(team.color || "#16735f")}">${teamIcon(normalizeTeamInfo(team.name).iconType)}</span>
             <span>
@@ -1566,10 +1702,10 @@ function renderOrganization() {
             </span>
             <span class="organization-chevron">&rsaquo;</span>
           </button>
-          <span class="sort-buttons">
+          ${canManageTeams ? `<span class="sort-buttons">
             <button type="button" class="sort-step" data-direction="-1" data-entity="team" data-id="${team.id}" ${index === 0 ? "disabled" : ""} aria-label="Monter">&#8593;</button>
             <button type="button" class="sort-step" data-direction="1" data-entity="team" data-id="${team.id}" ${index === state.teams.length - 1 ? "disabled" : ""} aria-label="Descendre">&#8595;</button>
-          </span>
+          </span>` : ""}
         </div>
       `,
     )
@@ -1579,8 +1715,8 @@ function renderOrganization() {
     .map((site, index) => {
       const location = [site.city, site.country].filter(Boolean).join(", ");
       return `
-        <div class="organization-sort-row ${site.active ? "" : "is-inactive"}" draggable="true" data-entity="establishment" data-id="${site.id}">
-          <button class="drag-handle" type="button" aria-label="Deplacer ${escapeHtml(site.name)}" title="Glisser pour reordonner">&#8942;&#8942;</button>
+        <div class="organization-sort-row ${site.active ? "" : "is-inactive"}" draggable="${canManageLocations}" data-entity="establishment" data-id="${site.id}">
+          ${canManageLocations ? `<button class="drag-handle" type="button" aria-label="Deplacer ${escapeHtml(site.name)}" title="Glisser pour reordonner">&#8942;&#8942;</button>` : ""}
           <button class="organization-item edit-establishment" type="button" data-id="${site.id}">
             <span class="organization-icon site type-${escapeHtml(site.establishment_type || "office")}">${establishmentIcon(site.establishment_type || "office")}</span>
             <span>
@@ -1589,10 +1725,10 @@ function renderOrganization() {
             </span>
             <span class="organization-chevron">&rsaquo;</span>
           </button>
-          <span class="sort-buttons">
+          ${canManageLocations ? `<span class="sort-buttons">
             <button type="button" class="sort-step" data-direction="-1" data-entity="establishment" data-id="${site.id}" ${index === 0 ? "disabled" : ""} aria-label="Monter">&#8593;</button>
             <button type="button" class="sort-step" data-direction="1" data-entity="establishment" data-id="${site.id}" ${index === state.establishments.length - 1 ? "disabled" : ""} aria-label="Descendre">&#8595;</button>
-          </span>
+          </span>` : ""}
         </div>
       `;
     })
@@ -1840,12 +1976,15 @@ async function selectAddressSuggestion(placeId) {
 }
 
 async function loadAdminData() {
+  applyPermissions();
   const data = await api("/admin/devices");
   loadAccessTokens().catch((error) => {
     state.accessTokens = [];
     renderAccessTokens();
     toast(`Module tokens indisponible: ${error.message}`);
   });
+  loadAdminUsers().catch((error) => toast(`Module utilisateurs indisponible: ${error.message}`, "error"));
+  loadNotifications().catch((error) => toast(`Module notifications indisponible: ${error.message}`, "error"));
   const organizationPromise = loadOrganization().catch((error) => toast(`Module organisation indisponible: ${error.message}`, "error"));
   loadCpuBenchmarkStats().catch(() => {
     state.cpuBenchmarkStats = null;
@@ -1993,13 +2132,16 @@ function bindEvents() {
 
   $("#admin-login-form").addEventListener("submit", async (event) => {
     event.preventDefault();
-    const password = new FormData(event.currentTarget).get("password");
+    const form = Object.fromEntries(new FormData(event.currentTarget));
     try {
-      const result = await api("/auth/admin", { method: "POST", body: JSON.stringify({ password }) });
+      const result = await api("/auth/admin", { method: "POST", body: JSON.stringify(form) });
       state.adminToken = result.token;
+      state.currentAdmin = result.user || null;
       localStorage.setItem("it_inventory_admin_token", state.adminToken);
+      localStorage.setItem("it_inventory_admin_user", JSON.stringify(state.currentAdmin));
       $("#admin-login").classList.add("is-hidden");
       $("#admin-dashboard").classList.remove("is-hidden");
+      applyPermissions();
       await loadAdminData();
     } catch (error) {
       toast(error.message);
@@ -2008,7 +2150,9 @@ function bindEvents() {
 
   $("#logout-admin").addEventListener("click", () => {
     state.adminToken = "";
+    state.currentAdmin = null;
     localStorage.removeItem("it_inventory_admin_token");
+    localStorage.removeItem("it_inventory_admin_user");
     $("#admin-login").classList.remove("is-hidden");
     $("#admin-dashboard").classList.add("is-hidden");
   });
@@ -2188,6 +2332,62 @@ function bindEvents() {
     await navigator.clipboard.writeText($("#generated-token").textContent);
     toast("Token copie.");
   });
+  $("#new-admin-user").addEventListener("click", resetAdminUserForm);
+  $("#admin-user-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form));
+    const id = values.id;
+    const payload = {
+      username: values.username,
+      displayName: values.displayName,
+      email: values.email || null,
+      role: values.role,
+      password: values.password || undefined,
+      isActive: form.elements.isActive.checked,
+    };
+    try {
+      await api(id ? `/admin/users/${id}` : "/admin/users", { method: "POST", body: JSON.stringify(payload) });
+      await loadAdminUsers();
+      resetAdminUserForm();
+      toast(id ? "Compte mis a jour." : "Compte cree.", "success");
+    } catch (error) {
+      toast(error.message, "error");
+    }
+  });
+  $("#delete-admin-user").addEventListener("click", async () => {
+    const id = $("#admin-user-form").elements.id.value;
+    if (!id) return;
+    const user = state.adminUsers.find((item) => item.id === id);
+    const confirmed = await confirmAction({
+      message: state.language === "en" ? `Delete account "${user?.username || id}"?` : `Supprimer le compte "${user?.username || id}" ?`,
+    });
+    if (!confirmed) return;
+    try {
+      await api(`/admin/users/${id}`, { method: "DELETE" });
+      await loadAdminUsers();
+      resetAdminUserForm();
+      toast("Compte supprime.", "success");
+    } catch (error) {
+      toast(error.message, "error");
+    }
+  });
+  $("#notifications-bell").addEventListener("click", () => {
+    setAdminView("notifications");
+    loadNotifications().catch((error) => toast(error.message, "error"));
+  });
+  $("#mark-all-notifications").addEventListener("click", async () => {
+    try {
+      await api("/admin/notifications/read-all", { method: "POST", body: "{}" });
+      await loadNotifications();
+      toast("Notifications mises a jour.", "success");
+    } catch (error) {
+      toast(error.message, "error");
+    }
+  });
+  ["notification-severity-filter", "notification-read-filter"].forEach((id) => {
+    $(`#${id}`).addEventListener("input", renderNotifications);
+  });
   $("#enrich-admin").addEventListener("click", () =>
     runEnrichment({ mode: "refresh", button: $("#enrich-admin") }).catch((error) => toast(error.message)));
   $("#valuation-enrich-all").addEventListener("click", () =>
@@ -2220,9 +2420,12 @@ languageObserver.observe(document.body, { childList: true, subtree: true });
 if (state.adminToken) {
   $("#admin-login").classList.add("is-hidden");
   $("#admin-dashboard").classList.remove("is-hidden");
+  applyPermissions();
   loadAdminData().catch(() => {
     state.adminToken = "";
+    state.currentAdmin = null;
     localStorage.removeItem("it_inventory_admin_token");
+    localStorage.removeItem("it_inventory_admin_user");
     $("#admin-login").classList.remove("is-hidden");
     $("#admin-dashboard").classList.add("is-hidden");
   });

@@ -124,7 +124,11 @@
           </div>
           <form id="admin-login-form" class="form-grid one">
             <label>
-              Mot de passe admin
+              Identifiant
+              <input name="username" autocomplete="username" placeholder="admin" />
+            </label>
+            <label>
+              Mot de passe
               <input name="password" type="password" autocomplete="current-password" required />
             </label>
             <button type="submit" class="primary">Se connecter</button>
@@ -138,6 +142,11 @@
               <h2>Vue du parc informatique</h2>
             </div>
             <div class="actions">
+              <button id="notifications-bell" class="icon-button notification-bell" type="button" aria-label="Notifications" title="Notifications">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M10 21h4"></path></svg>
+                <span id="notification-count" class="notification-count is-hidden">0</span>
+              </button>
+              <span id="admin-session-label" class="session-label"></span>
               <button id="refresh-admin" class="secondary" type="button">Actualiser</button>
               <button id="enrich-admin" class="secondary" type="button">Enrichir les donnees</button>
               <button id="export-csv" class="primary" type="button">Export CSV</button>
@@ -158,9 +167,17 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18M7 16l4-5 3 3 5-7"></path><path d="M19 7h-4M19 7v4"></path></svg>
               Valorisation
             </button>
-            <button class="admin-nav-button" type="button" data-admin-view="access">
+            <button class="admin-nav-button" type="button" data-admin-view="access" data-permission="TOKEN_MANAGE">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"></circle><path d="m21 2-9.6 9.6M15 7l2 2M18 4l2 2"></path></svg>
               Acces
+            </button>
+            <button class="admin-nav-button" type="button" data-admin-view="users" data-permission="USER_MANAGE">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M19 8v6M22 11h-6"></path></svg>
+              Users
+            </button>
+            <button class="admin-nav-button" type="button" data-admin-view="notifications">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M10 21h4"></path></svg>
+              Notifications
             </button>
           </nav>
 
@@ -198,7 +215,7 @@
             </section>
           </section>
 
-          <section class="panel token-manager admin-section-view section-access is-hidden">
+          <section class="panel token-manager admin-section-view section-access is-hidden" data-permission="TOKEN_MANAGE">
             <div class="panel-head inline">
               <div>
                 <p class="eyebrow">Acces collecte</p>
@@ -260,6 +277,55 @@
             </div>
           </section>
 
+          <section class="panel admin-section-view section-users is-hidden" data-permission="USER_MANAGE">
+            <div class="panel-head inline">
+              <div>
+                <p class="eyebrow">Securite</p>
+                <h3>Utilisateurs & roles</h3>
+              </div>
+              <button id="new-admin-user" class="secondary" type="button">Nouveau compte</button>
+            </div>
+            <form id="admin-user-form" class="form-grid">
+              <input name="id" type="hidden" />
+              <label>Identifiant<input name="username" required maxlength="80" autocomplete="off" /></label>
+              <label>Nom affiche<input name="displayName" required maxlength="120" /></label>
+              <label>Email<input name="email" type="email" maxlength="255" /></label>
+              <label>Role
+                <select name="role">
+                  <option value="ADMIN">ADMIN</option>
+                  <option value="MANAGER">MANAGER</option>
+                  <option value="VIEWER">VIEWER</option>
+                  <option value="READ_ONLY">READ_ONLY</option>
+                </select>
+              </label>
+              <label>Mot de passe<input name="password" type="password" minlength="10" autocomplete="new-password" placeholder="Vide = inchange" /></label>
+              <label class="checkbox-label"><input name="isActive" type="checkbox" checked /> Compte actif</label>
+              <button class="primary" type="submit">Enregistrer le compte</button>
+              <button id="delete-admin-user" class="danger-button is-hidden" type="button">Supprimer</button>
+            </form>
+            <div class="table-wrap">
+              <table class="users-table">
+                <thead><tr><th>Identifiant</th><th>Role</th><th>Etat</th><th>Derniere connexion</th></tr></thead>
+                <tbody id="admin-users-table"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel admin-section-view section-notifications is-hidden">
+            <div class="panel-head inline">
+              <div>
+                <p class="eyebrow">Notifications</p>
+                <h3>Centre de notifications</h3>
+              </div>
+              <button id="mark-all-notifications" class="secondary" type="button">Tout marquer comme lu</button>
+            </div>
+            <div class="filters notification-filters">
+              <label>Severite<select id="notification-severity-filter"><option value="">Toutes</option><option value="INFO">INFO</option><option value="SUCCESS">SUCCESS</option><option value="WARNING">WARNING</option><option value="ERROR">ERROR</option></select></label>
+              <label>Etat<select id="notification-read-filter"><option value="">Tous</option><option value="unread">Non lues</option><option value="read">Lues</option></select></label>
+            </div>
+            <div id="notifications-list" class="notifications-list"></div>
+          </section>
+
           <section class="admin-section-view section-organization is-hidden">
             <div class="organization-layout">
               <section class="panel organization-list-panel">
@@ -268,14 +334,14 @@
                     <p class="eyebrow">Structure</p>
                     <h3>Equipes</h3>
                   </div>
-                  <button id="new-team" class="secondary icon-button" type="button" aria-label="Nouvelle equipe" title="Nouvelle equipe">
+                  <button id="new-team" class="secondary icon-button" type="button" aria-label="Nouvelle equipe" title="Nouvelle equipe" data-permission="TEAM_MANAGE">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
                   </button>
                 </div>
                 <div id="teams-manager-list" class="organization-list"></div>
               </section>
 
-              <section class="panel organization-editor">
+              <section class="panel organization-editor" data-permission="TEAM_MANAGE">
                 <div class="panel-head">
                   <p class="eyebrow">Equipe</p>
                   <h3 id="team-editor-title">Nouvelle equipe</h3>
@@ -311,14 +377,14 @@
                     <p class="eyebrow">Implantations</p>
                     <h3>Etablissements</h3>
                   </div>
-                  <button id="new-establishment" class="secondary icon-button" type="button" aria-label="Nouvel etablissement" title="Nouvel etablissement">
+                  <button id="new-establishment" class="secondary icon-button" type="button" aria-label="Nouvel etablissement" title="Nouvel etablissement" data-permission="LOCATION_MANAGE">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
                   </button>
                 </div>
                 <div id="establishments-manager-list" class="organization-list"></div>
               </section>
 
-              <section class="panel organization-editor establishment-editor">
+              <section class="panel organization-editor establishment-editor" data-permission="LOCATION_MANAGE">
                 <div class="panel-head">
                   <p class="eyebrow">Etablissement</p>
                   <h3 id="establishment-editor-title">Nouvel etablissement</h3>

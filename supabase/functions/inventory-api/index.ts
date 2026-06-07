@@ -2,6 +2,28 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import cpuBenchmarkSeed from "./cpu_benchmarks.json" with { type: "json" };
 
 type Json = Record<string, unknown>;
+type Role = "ADMIN" | "MANAGER" | "VIEWER" | "READ_ONLY" | "COLLECTOR_USER";
+type Action =
+  | "DEVICE_VIEW"
+  | "DEVICE_EDIT"
+  | "DEVICE_DELETE"
+  | "TEAM_MANAGE"
+  | "LOCATION_MANAGE"
+  | "TOKEN_MANAGE"
+  | "USER_MANAGE"
+  | "PENDING_CHANGE_APPROVE"
+  | "EXPORT_DATA"
+  | "VIEW_HISTORY"
+  | "VIEW_DASHBOARD"
+  | "NOTIFICATION_VIEW"
+  | "NOTIFICATION_MANAGE";
+type AdminSession = {
+  id: string;
+  username: string;
+  displayName: string;
+  role: Role;
+  legacy?: boolean;
+};
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -130,22 +152,91 @@ async function hmac(input: string) {
   return Array.from(new Uint8Array(signature)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-async function createAdminToken() {
-  const payload = btoa(JSON.stringify({ role: "admin", exp: Date.now() + 12 * 60 * 60 * 1000 }));
+function base64Url(bytes: Uint8Array) {
+  return btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+}
+
+async function pbkdf2Hash(password: string, salt = base64Url(crypto.getRandomValues(new Uint8Array(16))), iterations = 210000) {
+  const keyMaterial = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
+  const saltBytes = Uint8Array.from(atob(salt.replaceAll("-", "+").replaceAll("_", "/")), (char) => char.charCodeAt(0));
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", hash: "SHA-256", salt: saltBytes, iterations },
+    keyMaterial,
+    256,
+  );
+  return `pbkdf2_sha256$${iterations}$${salt}$${base64Url(new Uint8Array(bits))}`;
+}
+
+async function verifyPassword(password: string, storedHash: string) {
+  const [algorithm, iterations, salt, hash] = storedHash.split("$");
+  if (algorithm !== "pbkdf2_sha256" || !iterations || !salt || !hash) return false;
+  return await pbkdf2Hash(password, salt, Number(iterations)) === storedHash;
+}
+
+function normalizedRole(role: unknown): Role {
+  const value = safeString(role, 40).toUpperCase();
+  if (value === "READ_ONLY") return "READ_ONLY";
+  if (["ADMIN", "MANAGER", "VIEWER", "COLLECTOR_USER"].includes(value)) return value as Role;
+  return "VIEWER";
+}
+
+const rolePermissions: Record<Role, Action[]> = {
+  ADMIN: [
+    "DEVICE_VIEW", "DEVICE_EDIT", "DEVICE_DELETE", "TEAM_MANAGE", "LOCATION_MANAGE", "TOKEN_MANAGE",
+    "USER_MANAGE", "PENDING_CHANGE_APPROVE", "EXPORT_DATA", "VIEW_HISTORY", "VIEW_DASHBOARD",
+    "NOTIFICATION_VIEW", "NOTIFICATION_MANAGE",
+  ],
+  MANAGER: [
+    "DEVICE_VIEW", "DEVICE_EDIT", "TEAM_MANAGE", "LOCATION_MANAGE", "EXPORT_DATA", "VIEW_HISTORY",
+    "VIEW_DASHBOARD", "NOTIFICATION_VIEW", "PENDING_CHANGE_APPROVE",
+  ],
+  VIEWER: ["DEVICE_VIEW", "VIEW_HISTORY", "VIEW_DASHBOARD", "NOTIFICATION_VIEW"],
+  READ_ONLY: ["DEVICE_VIEW", "VIEW_HISTORY", "VIEW_DASHBOARD", "NOTIFICATION_VIEW"],
+  COLLECTOR_USER: [],
+};
+
+function canPerformAction(user: AdminSession | null, action: Action) {
+  if (!user) return false;
+  return rolePermissions[user.role]?.includes(action) ?? false;
+}
+
+async function createAdminToken(user: AdminSession) {
+  const payload = btoa(JSON.stringify({ ...user, exp: Date.now() + 12 * 60 * 60 * 1000 }));
   return `${payload}.${await hmac(payload)}`;
 }
 
-async function isAdmin(request: Request) {
+async function getAdminSession(request: Request): Promise<AdminSession | null> {
   try {
     const token = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
     const [payload, signature] = token.split(".");
-    if (!payload || !signature) return false;
-    if ((await hmac(payload)) !== signature) return false;
+    if (!payload || !signature) return null;
+    if ((await hmac(payload)) !== signature) return null;
     const parsed = JSON.parse(atob(payload));
-    return parsed.role === "admin" && Number(parsed.exp) > Date.now();
+    if (Number(parsed.exp) <= Date.now()) return null;
+    if (parsed.role === "admin") {
+      return { id: "legacy-admin", username: "legacy-admin", displayName: "Legacy Admin", role: "ADMIN", legacy: true };
+    }
+    return {
+      id: safeString(parsed.id) || "legacy-admin",
+      username: safeString(parsed.username) || "admin",
+      displayName: safeString(parsed.displayName) || safeString(parsed.username) || "Admin",
+      role: normalizedRole(parsed.role),
+      legacy: Boolean(parsed.legacy),
+    };
   } catch {
-    return false;
+    return null;
   }
+}
+
+async function isAdmin(request: Request, action: Action = "VIEW_DASHBOARD") {
+  return canPerformAction(await getAdminSession(request), action);
+}
+
+async function requireAction(request: Request, action: Action) {
+  const session = await getAdminSession(request);
+  if (!session) return { response: badRequest(request, "Session admin invalide.", 401), session: null };
+  if (!canPerformAction(session, action)) return { response: badRequest(request, "Action non autorisee pour ce role.", 403), session };
+  return { response: null, session };
 }
 
 async function getOrCreateByName(table: "teams" | "establishments", name: string) {
@@ -160,6 +251,34 @@ async function getOrCreateByName(table: "teams" | "establishments", name: string
 async function audit(action: string, entityType: string, entityId: string | null, details: Json = {}) {
   await supabase.from("audit_logs").insert({ action, entity_type: entityType, entity_id: entityId, details });
 }
+
+async function notify(type: string, title: string, message: string, options: Json = {}) {
+  await supabase.from("notifications").insert({
+    type,
+    title,
+    message,
+    severity: safeString(options.severity, 20) || "INFO",
+    target_role: safeString(options.targetRole, 40) || "ADMIN",
+    target_user_id: safeString(options.targetUserId) || null,
+    related_entity_type: safeString(options.relatedEntityType, 80) || null,
+    related_entity_id: safeString(options.relatedEntityId) || null,
+  });
+}
+
+function publicAdminUser(user: Json) {
+  return {
+    id: user.id,
+    username: user.username,
+    displayName: user.display_name,
+    email: user.email,
+    role: user.role,
+    isActive: user.is_active,
+    createdAt: user.created_at,
+    updatedAt: user.updated_at,
+    lastLoginAt: user.last_login_at,
+  };
+}
+
 
 const deviceHistoryFields: Array<{ field: string; eventType: string }> = [
   { field: "hostname", eventType: "DEVICE_UPDATED" },
@@ -204,7 +323,7 @@ function changedDeviceHistory(deviceId: string, previous: Json | null, current: 
     if (oldValue === newValue) return [];
     return [{
       device_id: deviceId,
-      event_type: source === "import" ? "IMPORT_UPDATE" : eventType,
+      event_type: source.toUpperCase() === "IMPORT" ? "IMPORT_UPDATE" : eventType,
       field_name: field,
       old_value: oldValue,
       new_value: newValue,
@@ -265,8 +384,67 @@ async function upsertUserProfile(body: Json) {
 
 async function handleAdminLogin(request: Request) {
   const body = await request.json().catch(() => ({}));
-  if (safeString(body.password, 500) !== adminPassword) return badRequest(request, "Mot de passe incorrect.", 401);
-  return json(request, { token: await createAdminToken() });
+  const username = safeString(body.username, 80).toLowerCase();
+  const password = safeString(body.password, 500);
+  if (!password) return badRequest(request, "Mot de passe requis.", 400);
+
+  if (username) {
+    const { data: user, error } = await supabase
+      .from("admin_users")
+      .select("id,username,display_name,email,role,password_hash,is_active,last_login_at")
+      .eq("username", username)
+      .maybeSingle();
+    if (error) throw error;
+    if (user) {
+      if (!user.is_active) return badRequest(request, "Compte desactive.", 403);
+      if (!(await verifyPassword(password, safeString(user.password_hash, 1000)))) {
+        return badRequest(request, "Identifiants incorrects.", 401);
+      }
+      await supabase.from("admin_users").update({ last_login_at: new Date().toISOString() }).eq("id", user.id);
+      const session: AdminSession = {
+        id: safeString(user.id),
+        username: safeString(user.username),
+        displayName: safeString(user.display_name),
+        role: normalizedRole(user.role),
+      };
+      return json(request, { token: await createAdminToken(session), user: session });
+    }
+
+    const { count, error: countError } = await supabase.from("admin_users").select("id", { count: "exact", head: true });
+    if (countError) throw countError;
+    if ((count ?? 0) === 0 && password === adminPassword) {
+      const displayName = safeString(body.displayName, 120) || "Administrateur";
+      const email = safeString(body.email, 255).toLowerCase() || null;
+      const passwordHash = await pbkdf2Hash(password);
+      const { data: created, error: createError } = await supabase
+        .from("admin_users")
+        .insert({ username, display_name: displayName, email, role: "ADMIN", password_hash: passwordHash })
+        .select("id,username,display_name,role")
+        .single();
+      if (createError) throw createError;
+      await audit("admin_user_bootstrapped", "admin_user", created.id, { username });
+      await notify("ADMIN_ACTION_COMPLETED", "Premier administrateur cree", `Le compte admin ${username} a ete initialise.`, {
+        severity: "SUCCESS",
+        targetRole: "ADMIN",
+        relatedEntityType: "admin_user",
+        relatedEntityId: created.id,
+      });
+      const session: AdminSession = {
+        id: safeString(created.id),
+        username: safeString(created.username),
+        displayName: safeString(created.display_name),
+        role: "ADMIN",
+      };
+      return json(request, { token: await createAdminToken(session), user: session }, 201);
+    }
+  }
+
+  if (!username && password === adminPassword) {
+    const session: AdminSession = { id: "legacy-admin", username: "legacy-admin", displayName: "Legacy Admin", role: "ADMIN", legacy: true };
+    return json(request, { token: await createAdminToken(session), user: session });
+  }
+
+  return badRequest(request, "Identifiants incorrects.", 401);
 }
 
 async function handleProfile(request: Request) {
@@ -746,7 +924,24 @@ async function persistScan(request: Request, user: { id: string; team_id: string
     hardware_age_score: deviceValues.hardware_age_score,
   });
   if (scanError) throw scanError;
-  await appendDeviceHistory(changedDeviceHistory(device.id, previousDevice, deviceValues, safeString(rawBody.importedFrom) ? "import" : "collector", collectedAt));
+  const eventSource = safeString(rawBody.importedFrom) ? "IMPORT" : "COLLECTOR";
+  const historyRows = changedDeviceHistory(device.id, previousDevice, deviceValues, eventSource, collectedAt);
+  await appendDeviceHistory(historyRows);
+  if (!previousDevice) {
+    await notify("COLLECTOR_SUBMISSION_RECEIVED", "Nouvelle machine collectee", `${deviceValues.hostname} a ete ajoutee au parc.`, {
+      severity: "SUCCESS",
+      targetRole: "ADMIN",
+      relatedEntityType: "device",
+      relatedEntityId: device.id,
+    });
+  } else if (historyRows.some((row) => ["OS_CHANGED", "HARDWARE_CHANGED", "USER_REASSIGNED", "DEVICE_RESET", "IMPORT_UPDATE"].includes(safeString(row.event_type)))) {
+    await notify("COLLECTOR_SUBMISSION_RECEIVED", "Machine mise a jour", `${deviceValues.hostname} a remonte des changements materiels ou systeme.`, {
+      severity: "INFO",
+      targetRole: "ADMIN",
+      relatedEntityType: "device",
+      relatedEntityId: device.id,
+    });
+  }
 
   if (tokenId) {
     await supabase.from("collection_tokens").update({ used_at: new Date().toISOString() }).eq("id", tokenId);
@@ -803,8 +998,119 @@ async function handleLegacyScan(request: Request) {
   return await persistScan(request, user, body);
 }
 
+async function handleAdminListUsers(request: Request) {
+  const auth = await requireAction(request, "USER_MANAGE");
+  if (auth.response) return auth.response;
+  const { data, error } = await supabase
+    .from("admin_users")
+    .select("id,username,display_name,email,role,is_active,created_at,updated_at,last_login_at")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return json(request, { users: (data ?? []).map(publicAdminUser) });
+}
+
+async function handleAdminSaveUser(request: Request, id?: string) {
+  const auth = await requireAction(request, "USER_MANAGE");
+  if (auth.response) return auth.response;
+  const body = await request.json().catch(() => ({}));
+  const username = safeString(body.username, 80).toLowerCase();
+  const displayName = safeString(body.displayName, 120);
+  const email = safeString(body.email, 255).toLowerCase() || null;
+  const role = normalizedRole(body.role);
+  const password = safeString(body.password, 500);
+  if (!username) return badRequest(request, "Identifiant requis.");
+  if (!displayName) return badRequest(request, "Nom affiche requis.");
+  if (!id && !password) return badRequest(request, "Mot de passe requis pour creer un utilisateur.");
+  if (password && password.length < 10) return badRequest(request, "Mot de passe trop court: 10 caracteres minimum.");
+  const values: Json = {
+    username,
+    display_name: displayName,
+    email,
+    role,
+    is_active: body.isActive !== false,
+    updated_at: new Date().toISOString(),
+  };
+  if (password) values.password_hash = await pbkdf2Hash(password);
+  const query = id
+    ? supabase.from("admin_users").update(values).eq("id", id)
+    : supabase.from("admin_users").insert(values);
+  const { data, error } = await query
+    .select("id,username,display_name,email,role,is_active,created_at,updated_at,last_login_at")
+    .single();
+  if (error) {
+    if (error.code === "23505") return badRequest(request, "Un compte utilise deja cet identifiant ou email.", 409);
+    throw error;
+  }
+  await audit(id ? "admin_user_updated" : "admin_user_created", "admin_user", data.id, {
+    username,
+    role,
+    password_reset: Boolean(password && id),
+    actor: auth.session?.username,
+  });
+  await notify("ADMIN_ACTION_COMPLETED", id ? "Compte admin mis a jour" : "Compte admin cree", `${username} (${role})`, {
+    severity: "SUCCESS",
+    targetRole: "ADMIN",
+    relatedEntityType: "admin_user",
+    relatedEntityId: data.id,
+  });
+  return json(request, { user: publicAdminUser(data) }, id ? 200 : 201);
+}
+
+async function handleAdminDeleteUser(request: Request, id: string) {
+  const auth = await requireAction(request, "USER_MANAGE");
+  if (auth.response) return auth.response;
+  if (id === auth.session?.id) return badRequest(request, "Impossible de supprimer votre propre compte.", 409);
+  const { data: user, error: findError } = await supabase
+    .from("admin_users")
+    .select("id,username")
+    .eq("id", id)
+    .maybeSingle();
+  if (findError) throw findError;
+  if (!user) return badRequest(request, "Compte introuvable.", 404);
+  const { error } = await supabase.from("admin_users").delete().eq("id", id);
+  if (error) throw error;
+  await audit("admin_user_deleted", "admin_user", id, { username: user.username, actor: auth.session?.username });
+  await notify("ADMIN_ACTION_COMPLETED", "Compte admin supprime", `${user.username} a ete supprime.`, {
+    severity: "WARNING",
+    targetRole: "ADMIN",
+    relatedEntityType: "admin_user",
+    relatedEntityId: id,
+  });
+  return json(request, { deleted: true });
+}
+
+async function handleAdminListNotifications(request: Request) {
+  const auth = await requireAction(request, "NOTIFICATION_VIEW");
+  if (auth.response) return auth.response;
+  let query = supabase
+    .from("notifications")
+    .select("id,type,title,message,severity,target_role,target_user_id,related_entity_type,related_entity_id,is_read,created_at,read_at")
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (auth.session?.role !== "ADMIN") {
+    query = query.or(`target_role.eq.ALL,target_role.eq.${auth.session?.role},target_user_id.eq.${auth.session?.id}`);
+  }
+  const { data, error } = await query;
+  if (error) throw error;
+  return json(request, { notifications: data ?? [], unread: (data ?? []).filter((item) => !item.is_read).length });
+}
+
+async function handleAdminMarkNotification(request: Request, id?: string) {
+  const auth = await requireAction(request, "NOTIFICATION_VIEW");
+  if (auth.response) return auth.response;
+  const now = new Date().toISOString();
+  let query = supabase.from("notifications").update({ is_read: true, read_at: now });
+  query = id ? query.eq("id", id) : query.eq("is_read", false);
+  if (auth.session?.role !== "ADMIN") {
+    query = query.or(`target_role.eq.ALL,target_role.eq.${auth.session?.role},target_user_id.eq.${auth.session?.id}`);
+  }
+  const { error } = await query;
+  if (error) throw error;
+  return json(request, { ok: true });
+}
+
 async function handleAdminListAccessTokens(request: Request) {
-  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  if (!(await isAdmin(request, "TOKEN_MANAGE"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
   const { data, error } = await supabase
     .from("collection_access_tokens")
     .select("id,label,token_prefix,expires_at,max_uses,use_count,last_used_at,revoked_at,created_at")
@@ -815,7 +1121,7 @@ async function handleAdminListAccessTokens(request: Request) {
 }
 
 async function handleAdminCreateAccessToken(request: Request) {
-  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  if (!(await isAdmin(request, "TOKEN_MANAGE"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
   const body = await request.json().catch(() => ({}));
   const label = safeString(body.label, 120);
   const durationHours = Math.max(1, Math.min(Number(body.durationHours || 24), 8760));
@@ -849,7 +1155,7 @@ async function handleAdminCreateAccessToken(request: Request) {
 }
 
 async function handleAdminRevokeAccessToken(request: Request, id: string) {
-  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  if (!(await isAdmin(request, "TOKEN_MANAGE"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
   const { data, error } = await supabase
     .from("collection_access_tokens")
     .update({ revoked_at: new Date().toISOString() })
@@ -858,11 +1164,17 @@ async function handleAdminRevokeAccessToken(request: Request, id: string) {
     .single();
   if (error) throw error;
   await audit("collection_access_token_revoked", "collection_access_token", id, { label: data.label });
+  await notify("TOKEN_REVOKED", "Token revoque", `Le token ${data.label} a ete revoque.`, {
+    severity: "WARNING",
+    targetRole: "ADMIN",
+    relatedEntityType: "collection_access_token",
+    relatedEntityId: id,
+  });
   return json(request, { token: data });
 }
 
 async function handleAdminDeleteAccessToken(request: Request, id: string) {
-  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  if (!(await isAdmin(request, "TOKEN_MANAGE"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
   const { data: token, error: findError } = await supabase
     .from("collection_access_tokens")
     .select("id,label")
@@ -873,18 +1185,24 @@ async function handleAdminDeleteAccessToken(request: Request, id: string) {
   const { error } = await supabase.from("collection_access_tokens").delete().eq("id", id);
   if (error) throw error;
   await audit("collection_access_token_deleted", "collection_access_token", id, { label: token.label });
+  await notify("TOKEN_DELETED", "Token supprime", `Le token ${token.label} a ete supprime.`, {
+    severity: "WARNING",
+    targetRole: "ADMIN",
+    relatedEntityType: "collection_access_token",
+    relatedEntityId: id,
+  });
   return json(request, { deleted: true });
 }
 
 async function handleAdminDevices(request: Request) {
-  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  if (!(await isAdmin(request, "DEVICE_VIEW"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
   const { data, error } = await supabase.from("device_inventory_view").select("*").order("last_seen_at", { ascending: false });
   if (error) throw error;
   return json(request, { devices: data });
 }
 
 async function handleAdminOrganization(request: Request) {
-  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  if (!(await isAdmin(request, "VIEW_DASHBOARD"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
   const [
     { data: teams, error: teamsError },
     { data: establishments, error: establishmentsError },
@@ -940,7 +1258,7 @@ async function handleAdminOrganization(request: Request) {
 }
 
 async function handleAdminReorderOrganization(request: Request) {
-  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  if (!(await isAdmin(request, "TEAM_MANAGE")) && !(await isAdmin(request, "LOCATION_MANAGE"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
   const body = await request.json().catch(() => ({}));
   const entityType = safeString(body.entityType);
   const ids = Array.isArray(body.ids) ? body.ids.map((id: unknown) => safeString(id)).filter(Boolean).slice(0, 500) : [];
@@ -960,7 +1278,7 @@ async function handleAdminReorderOrganization(request: Request) {
 }
 
 async function handleAdminSaveTeam(request: Request, id?: string) {
-  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  if (!(await isAdmin(request, "TEAM_MANAGE"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
   const body = await request.json().catch(() => ({}));
   const name = safeString(body.name, 120);
   const color = safeString(body.color, 7) || "#16735f";
@@ -985,7 +1303,7 @@ async function handleAdminSaveTeam(request: Request, id?: string) {
 }
 
 async function handleAdminDeleteTeam(request: Request, id: string) {
-  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  if (!(await isAdmin(request, "TEAM_MANAGE"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
   const [{ count: deviceCount, error: deviceError }, { count: userCount, error: userError }] = await Promise.all([
     supabase.from("devices").select("id", { count: "exact", head: true }).eq("team_id", id),
     supabase.from("users").select("id", { count: "exact", head: true }).eq("team_id", id),
@@ -993,6 +1311,12 @@ async function handleAdminDeleteTeam(request: Request, id: string) {
   if (deviceError) throw deviceError;
   if (userError) throw userError;
   if ((deviceCount ?? 0) > 0 || (userCount ?? 0) > 0) {
+    await notify("LOCATION_TEAM_DELETE_BLOCKED", "Suppression equipe bloquee", `Une equipe liee a ${deviceCount ?? 0} machine(s) et ${userCount ?? 0} utilisateur(s) ne peut pas etre supprimee.`, {
+      severity: "WARNING",
+      targetRole: "ADMIN",
+      relatedEntityType: "team",
+      relatedEntityId: id,
+    });
     return json(request, {
       error: `Cette equipe ne peut pas etre supprimee: ${deviceCount ?? 0} machine(s) et ${userCount ?? 0} utilisateur(s) y sont lies.`,
       code: "ENTITY_IN_USE",
@@ -1008,7 +1332,7 @@ async function handleAdminDeleteTeam(request: Request, id: string) {
 }
 
 async function handleAdminSaveEstablishment(request: Request, id?: string) {
-  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  if (!(await isAdmin(request, "LOCATION_MANAGE"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
   const body = await request.json().catch(() => ({}));
   const name = safeString(body.name, 120);
   const establishmentType = safeString(body.establishmentType, 40) || "office";
@@ -1045,7 +1369,7 @@ async function handleAdminSaveEstablishment(request: Request, id?: string) {
 }
 
 async function handleAdminDeleteEstablishment(request: Request, id: string) {
-  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  if (!(await isAdmin(request, "LOCATION_MANAGE"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
   const [{ count: deviceCount, error: deviceError }, { count: userCount, error: userError }] = await Promise.all([
     supabase.from("devices").select("id", { count: "exact", head: true }).eq("establishment_id", id),
     supabase.from("users").select("id", { count: "exact", head: true }).eq("establishment_id", id),
@@ -1053,6 +1377,12 @@ async function handleAdminDeleteEstablishment(request: Request, id: string) {
   if (deviceError) throw deviceError;
   if (userError) throw userError;
   if ((deviceCount ?? 0) > 0 || (userCount ?? 0) > 0) {
+    await notify("LOCATION_TEAM_DELETE_BLOCKED", "Suppression etablissement bloquee", `Un etablissement lie a ${deviceCount ?? 0} machine(s) et ${userCount ?? 0} utilisateur(s) ne peut pas etre supprime.`, {
+      severity: "WARNING",
+      targetRole: "ADMIN",
+      relatedEntityType: "establishment",
+      relatedEntityId: id,
+    });
     return json(request, {
       error: `Cet etablissement ne peut pas etre supprime: ${deviceCount ?? 0} machine(s) et ${userCount ?? 0} utilisateur(s) y sont lies.`,
       code: "ENTITY_IN_USE",
@@ -1073,7 +1403,7 @@ function googleAddressComponent(components: Json[], type: string, short = false)
 }
 
 async function handleAdminAddressAutocomplete(request: Request) {
-  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  if (!(await isAdmin(request, "LOCATION_MANAGE"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
   if (!googleMapsApiKey) return badRequest(request, "Google Places n'est pas configure.", 503);
   const url = new URL(request.url);
   const input = safeString(url.searchParams.get("q"), 220);
@@ -1116,7 +1446,7 @@ async function handleAdminAddressAutocomplete(request: Request) {
 }
 
 async function handleAdminAddressDetails(request: Request) {
-  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  if (!(await isAdmin(request, "LOCATION_MANAGE"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
   if (!googleMapsApiKey) return badRequest(request, "Google Places n'est pas configure.", 503);
   const url = new URL(request.url);
   const placeId = safeString(url.searchParams.get("placeId"), 300);
@@ -1158,7 +1488,7 @@ async function handleAdminAddressDetails(request: Request) {
 }
 
 async function handleAdminDeviceDetail(request: Request, id: string) {
-  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  if (!(await isAdmin(request, "DEVICE_VIEW"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
   const [{ data: device, error: deviceError }, { data: assignment, error: assignmentError }] = await Promise.all([
     supabase.from("device_inventory_view").select("*").eq("id", id).single(),
     supabase.from("devices").select("assigned_user_id,team_id,establishment_id").eq("id", id).single(),
@@ -1197,7 +1527,7 @@ async function recordExists(table: "teams" | "establishments" | "users", id: str
 }
 
 async function handleAdminDeviceAssignment(request: Request, id: string) {
-  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  if (!(await isAdmin(request, "DEVICE_EDIT"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
   const body = await request.json().catch(() => ({}));
   const teamId = safeString(body.teamId) || null;
   const establishmentId = safeString(body.establishmentId) || null;
@@ -1212,7 +1542,7 @@ async function handleAdminDeviceAssignment(request: Request, id: string) {
   if (!userValid) return badRequest(request, "Utilisateur selectionne introuvable.", 404);
 
   const [{ data: currentDevice, error: currentError }, { data: targetTeam }, { data: targetSite }, { data: targetUser }] = await Promise.all([
-    supabase.from("device_inventory_view").select("team_name,establishment_name,first_name,last_name,email").eq("id", id).single(),
+    supabase.from("device_inventory_view").select("hostname,team_name,establishment_name,first_name,last_name,email").eq("id", id).single(),
     teamId ? supabase.from("teams").select("name").eq("id", teamId).maybeSingle() : Promise.resolve({ data: null }),
     establishmentId ? supabase.from("establishments").select("name").eq("id", establishmentId).maybeSingle() : Promise.resolve({ data: null }),
     assignedUserId ? supabase.from("users").select("first_name,last_name,email").eq("id", assignedUserId).maybeSingle() : Promise.resolve({ data: null }),
@@ -1247,12 +1577,20 @@ async function handleAdminDeviceAssignment(request: Request, id: string) {
     }]
   );
   await appendDeviceHistory(historyRows);
+  if (historyRows.length > 0) {
+    await notify("DEVICE_REASSIGNED", "Affectation machine modifiee", `La machine ${safeString(currentDevice.hostname) || id} a change d'affectation.`, {
+      severity: "INFO",
+      targetRole: "ADMIN",
+      relatedEntityType: "device",
+      relatedEntityId: id,
+    });
+  }
   await audit("device_assignment_updated", "device", id, values);
   return json(request, { device: data });
 }
 
 async function handleAdminBulkReassign(request: Request) {
-  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  if (!(await isAdmin(request, "DEVICE_EDIT"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
   const body = await request.json().catch(() => ({}));
   const entityType = safeString(body.entityType);
   const sourceId = safeString(body.sourceId);
@@ -1295,7 +1633,7 @@ async function handleAdminBulkReassign(request: Request) {
 }
 
 async function handleAdminDeviceHistoryNote(request: Request, id: string) {
-  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  if (!(await isAdmin(request, "VIEW_HISTORY"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
   const body = await request.json().catch(() => ({}));
   const notes = safeString(body.notes, 2000);
   if (!notes) return badRequest(request, "Note requise.");
@@ -1338,7 +1676,7 @@ function parseCsvLine(line: string) {
 }
 
 async function handleAdminImportCpuBenchmarks(request: Request) {
-  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  if (!(await isAdmin(request, "DEVICE_EDIT"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
   const body = await request.json().catch(() => ({}));
   const csv = typeof body.csv === "string" ? body.csv.slice(0, 2_000_000) : "";
   if (!csv.trim()) return badRequest(request, "Fichier CSV requis.");
@@ -1380,14 +1718,14 @@ async function handleAdminImportCpuBenchmarks(request: Request) {
 }
 
 async function handleAdminCpuBenchmarkStats(request: Request) {
-  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  if (!(await isAdmin(request, "VIEW_DASHBOARD"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
   const { count, error } = await supabase.from("cpu_benchmarks").select("id", { count: "exact", head: true });
   if (error) throw error;
   return json(request, { importedCount: count ?? 0, bundledCount: (cpuBenchmarkSeed as CpuBenchmark[]).length });
 }
 
 async function handleAdminEnrich(request: Request) {
-  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  if (!(await isAdmin(request, "DEVICE_EDIT"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
   const body = await request.json().catch(() => ({}));
   const mode = safeString(body.mode, 40) || "refresh";
   const force = Boolean(body.force) || mode === "recalculate";
@@ -1423,7 +1761,7 @@ async function handleAdminEnrich(request: Request) {
 }
 
 async function handleAdminDeviceStatus(request: Request, id: string) {
-  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  if (!(await isAdmin(request, "DEVICE_EDIT"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
   const body = await request.json().catch(() => ({}));
   const status = safeString(body.status, 40);
   const allowed = ["active", "replace", "stock", "lost", "retired"];
@@ -1463,6 +1801,15 @@ Deno.serve(async (request) => {
     if (request.method === "POST" && path.endsWith("/collect/legacy-scan")) return await handleLegacyScan(request);
     if (request.method === "GET" && path.endsWith("/admin/devices")) return await handleAdminDevices(request);
     if (request.method === "GET" && path.endsWith("/admin/organization")) return await handleAdminOrganization(request);
+    if (request.method === "GET" && path.endsWith("/admin/users")) return await handleAdminListUsers(request);
+    if (request.method === "POST" && path.endsWith("/admin/users")) return await handleAdminSaveUser(request);
+    const adminUserMatch = path.match(/\/admin\/users\/([0-9a-f-]+)$/i);
+    if (request.method === "POST" && adminUserMatch) return await handleAdminSaveUser(request, adminUserMatch[1]);
+    if (request.method === "DELETE" && adminUserMatch) return await handleAdminDeleteUser(request, adminUserMatch[1]);
+    if (request.method === "GET" && path.endsWith("/admin/notifications")) return await handleAdminListNotifications(request);
+    if (request.method === "POST" && path.endsWith("/admin/notifications/read-all")) return await handleAdminMarkNotification(request);
+    const notificationReadMatch = path.match(/\/admin\/notifications\/([0-9a-f-]+)\/read$/i);
+    if (request.method === "POST" && notificationReadMatch) return await handleAdminMarkNotification(request, notificationReadMatch[1]);
     if (request.method === "POST" && path.endsWith("/admin/organization/reassign")) return await handleAdminBulkReassign(request);
     if (request.method === "POST" && path.endsWith("/admin/organization/reorder")) return await handleAdminReorderOrganization(request);
     if (request.method === "GET" && path.endsWith("/admin/address/autocomplete")) return await handleAdminAddressAutocomplete(request);

@@ -140,6 +140,37 @@ create table if not exists public.audit_logs (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.admin_users (
+  id uuid primary key default gen_random_uuid(),
+  username text not null unique,
+  display_name text not null,
+  email text unique,
+  role text not null default 'VIEWER'
+    check (role in ('ADMIN', 'MANAGER', 'VIEWER', 'READ_ONLY', 'COLLECTOR_USER')),
+  password_hash text not null,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  last_login_at timestamptz
+);
+
+create table if not exists public.notifications (
+  id uuid primary key default gen_random_uuid(),
+  type text not null,
+  title text not null,
+  message text not null,
+  severity text not null default 'INFO'
+    check (severity in ('INFO', 'SUCCESS', 'WARNING', 'ERROR')),
+  target_role text not null default 'ALL'
+    check (target_role in ('ADMIN', 'MANAGER', 'VIEWER', 'READ_ONLY', 'COLLECTOR_USER', 'ALL')),
+  target_user_id uuid references public.admin_users(id) on delete cascade,
+  related_entity_type text,
+  related_entity_id uuid,
+  is_read boolean not null default false,
+  created_at timestamptz not null default now(),
+  read_at timestamptz
+);
+
 create table if not exists public.device_history (
   id uuid primary key default gen_random_uuid(),
   device_id uuid not null references public.devices(id) on delete cascade,
@@ -220,6 +251,11 @@ create index if not exists idx_device_scans_device_collected on public.device_sc
 create index if not exists idx_device_history_device_changed on public.device_history(device_id, changed_at desc);
 create index if not exists idx_teams_sort_index on public.teams(sort_index, name);
 create index if not exists idx_establishments_sort_index on public.establishments(sort_index, name);
+create index if not exists idx_admin_users_username on public.admin_users(username);
+create index if not exists idx_admin_users_role_active on public.admin_users(role, is_active);
+create index if not exists idx_notifications_created on public.notifications(created_at desc);
+create index if not exists idx_notifications_unread_role on public.notifications(target_role, is_read, created_at desc);
+create index if not exists idx_notifications_target_user on public.notifications(target_user_id, is_read, created_at desc);
 create index if not exists idx_collection_tokens_hash on public.collection_tokens(token_hash);
 create index if not exists idx_collection_access_tokens_hash on public.collection_access_tokens(token_hash);
 create index if not exists idx_collection_access_tokens_expiry on public.collection_access_tokens(expires_at desc);
@@ -343,6 +379,8 @@ alter table public.device_scans enable row level security;
 alter table public.collection_tokens enable row level security;
 alter table public.collection_access_tokens enable row level security;
 alter table public.audit_logs enable row level security;
+alter table public.admin_users enable row level security;
+alter table public.notifications enable row level security;
 alter table public.device_history enable row level security;
 alter table public.hardware_enrichment enable row level security;
 alter table public.market_price_history enable row level security;

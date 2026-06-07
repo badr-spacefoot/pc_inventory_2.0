@@ -176,7 +176,7 @@ Ne jamais mettre `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_PASSWORD` ou `ADMIN_SESSION
 
 Routes principales:
 
-- `POST /auth/admin` avec `{ "password": "..." }`
+- `POST /auth/admin` avec `{ "username": "...", "password": "..." }` ou fallback `{ "password": "..." }`
 - `POST /collect/profile` avec header `X-Collection-Access-Token`
 - `POST /collect/scan` avec header `Authorization: Bearer <collectionToken>`
 - `POST /collect/legacy-scan` avec header `X-Collection-Access-Token` pour accepter l'ancien payload du script Google Sheets
@@ -191,6 +191,8 @@ Routes principales:
 - `DELETE /admin/establishments/:id` avec token admin, uniquement si l'etablissement n'est plus utilise
 - `POST /admin/devices/:id/assignment` pour modifier equipe, etablissement et proprietaire
 - `POST /admin/organization/reassign` pour reaffecter en masse les machines et utilisateurs
+- `GET /admin/users`, `POST /admin/users`, `POST /admin/users/:id`, `DELETE /admin/users/:id` pour la gestion des comptes et roles
+- `GET /admin/notifications`, `POST /admin/notifications/:id/read`, `POST /admin/notifications/read-all` pour le centre de notifications
 
 ## Tokens temporaires de collecte
 
@@ -399,8 +401,10 @@ Les prix marche sont approximatifs: le dashboard affiche donc un score de confia
 
 ## Securite minimale
 
-- Mot de passe admin verifie uniquement dans l'Edge Function.
-- Session admin signee par HMAC avec expiration 12h.
+- Les comptes d'administration sont stockes dans `admin_users`.
+- Les mots de passe ne sont jamais stockes en clair. L'API stocke un hash `pbkdf2_sha256` avec sel unique et 210 000 iterations.
+- Session admin signee par HMAC avec expiration 12h. Le front conserve seulement le token signe et le role courant.
+- Le secret `ADMIN_PASSWORD` reste un filet de securite et sert au bootstrap du premier compte admin.
 - Token utilisateur public separe du token temporaire de script.
 - Token de script stocke hashe en base.
 - CORS limite par `ALLOWED_ORIGINS`.
@@ -408,9 +412,48 @@ Les prix marche sont approximatifs: le dashboard affiche donc un score de confia
 - Aucune policy publique: l'acces applicatif passe par l'Edge Function et la service role key cote serveur.
 - Validation serveur sur les champs obligatoires et tailles de chaines.
 
+## Roles et comptes admin
+
+L'interface admin supporte des comptes nominatifs avec roles:
+
+- `ADMIN`: acces complet, gestion utilisateurs, roles, tokens, equipes, etablissements, machines, historique, exports et notifications.
+- `MANAGER`: lecture du parc, edition et reaffectation des machines, gestion organisationnelle, exports, notifications et validations mineures.
+- `VIEWER` / `READ_ONLY`: lecture dashboards, details machines et historique, sans edition ni suppression.
+- `COLLECTOR_USER`: reserve aux futurs usages de collecte, sans acces dashboard admin.
+
+Le premier compte peut etre initialise depuis l'ecran de connexion:
+
+1. saisir un identifiant, par exemple `admin`;
+2. utiliser le mot de passe defini dans le secret Supabase `ADMIN_PASSWORD`;
+3. si aucun compte n'existe encore dans `admin_users`, l'API cree ce premier compte avec le role `ADMIN`.
+
+L'ancien mode sans identifiant continue de fonctionner avec `ADMIN_PASSWORD` pour eviter un verrouillage accidentel pendant la transition. Il est conseille de creer un compte `ADMIN`, puis d'utiliser des comptes `MANAGER` temporaires pour les tests ou interventions.
+
+La page `Users & roles` permet a un `ADMIN` de creer, modifier, desactiver, supprimer un compte et reinitialiser son mot de passe. Les actions sensibles creent des entrees dans `audit_logs` et des notifications.
+
+## Notifications
+
+La table `notifications` conserve:
+
+- type, titre, message et severite (`INFO`, `SUCCESS`, `WARNING`, `ERROR`);
+- cible par role ou utilisateur;
+- entite liee lorsque disponible;
+- etat lu/non lu et date de lecture.
+
+Le dashboard affiche une cloche avec compteur de notifications non lues, une page de notifications, des filtres par severite/etat et les actions `Marquer lu` / `Tout marquer comme lu`.
+
+Des notifications sont creees notamment lors de:
+
+- creation ou mise a jour importante d'une machine par le collecteur;
+- reaffectation d'une machine;
+- revocation ou suppression d'un token de collecte;
+- suppression equipe/etablissement bloquee;
+- creation, mise a jour, suppression ou bootstrap d'un compte admin.
+
+Les `ADMIN` voient toutes les notifications. Les autres roles voient les notifications globales, celles de leur role ou celles qui leur sont directement assignees.
+
 ## Limites connues
 
 - Le navigateur ne peut pas recuperer toute la configuration materielle. La collecte complete necessite PowerShell, puis plus tard un script Python multiplateforme.
 - Le score d'anciennete est volontairement simple. Il peut etre remplace par une logique basee sur date d'achat, garantie, modele ou politique interne.
 - L'export XLSX n'est pas inclus sans dependance externe; l'export CSV est pret et compatible Excel.
-- La gestion fine des roles admin multi-utilisateurs peut etre ajoutee ensuite avec Supabase Auth.

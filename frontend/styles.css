@@ -153,6 +153,34 @@ a.secondary {
   opacity: 0.38;
 }
 
+.notification-bell {
+  position: relative;
+}
+
+.notification-count {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  padding: 0 5px;
+  background: var(--danger);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.session-label {
+  align-self: center;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .topbar {
   display: flex;
   align-items: center;
@@ -1270,6 +1298,64 @@ tbody tr.is-selected {
   background: var(--soft);
   font-size: 12px;
   font-weight: 800;
+}
+
+.role-badge,
+.notification-severity {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: var(--soft);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.role-admin { color: var(--danger); }
+.role-manager { color: var(--brand); }
+.role-viewer,
+.role-read_only { color: var(--muted); }
+
+.notifications-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.notification-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--brand);
+  border-radius: 8px;
+  padding: 14px;
+  background: var(--surface);
+}
+
+.notification-item.is-read {
+  opacity: 0.68;
+}
+
+.notification-item.severity-success { border-left-color: var(--brand); }
+.notification-item.severity-warning { border-left-color: var(--accent); }
+.notification-item.severity-error { border-left-color: var(--danger); }
+
+.notification-item strong,
+.notification-item p,
+.notification-item small {
+  display: block;
+}
+
+.notification-item p {
+  margin: 6px 0;
+  color: var(--muted);
+}
+
+.notification-item small {
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .status.replace,
