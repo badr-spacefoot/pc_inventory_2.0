@@ -15,10 +15,17 @@ Lancement local:
 python collectors/desktop_collector/collector_app.py
 ```
 
-Packaging futur:
+Packaging local:
 
 ```bash
 pyinstaller --onefile --windowed collectors/desktop_collector/collector_app.py
 ```
 
-Ce dossier ne cherche pas a contourner les antivirus. Pour reduire les blocages en production, il faudra publier des binaires signes/notarises et documenter l'editeur.
+Packaging GitHub:
+
+- Workflow manuel: `Build collector apps`.
+- Release partageable: pousser un tag `collector-vX.Y.Z`.
+- Windows: signer le `.exe` avec un certificat Code Signing.
+- macOS: signer et notariser avec Apple Developer ID.
+
+Ce dossier ne cherche pas a contourner les antivirus. Pour reduire les blocages en production, publier des binaires signes/notarises, garder un nom d'editeur stable et distribuer depuis une source officielle.

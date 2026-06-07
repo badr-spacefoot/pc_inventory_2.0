@@ -140,25 +140,35 @@ Les navigateurs, extensions et antivirus peuvent bloquer les fichiers `.ps1` ou 
 La strategie recommandee est:
 
 1. Generer un token de collecteur depuis la page de collecte.
-2. Telecharger le lanceur adapte a l'ordinateur: Windows, macOS ou Linux.
-3. Ouvrir le fichier telecharge.
-4. Laisser le collecteur detecter automatiquement l'OS et envoyer l'inventaire.
+2. Telecharger l'application native officielle depuis les Releases GitHub.
+3. Ouvrir l'application Windows, macOS ou Linux.
+4. Coller le token temporaire dans l'application.
+5. Collecter, relire les donnees affichees, puis envoyer.
 
-Les lanceurs generes par la page collecte embarquent le token temporaire retourne par l'API. Ils doivent donc etre traites comme des fichiers sensibles et ne pas etre partages au-dela de leur duree de validite.
+Le token temporaire reste separe de l'application. Il doit etre traite comme une information sensible et ne pas etre partage au-dela de sa duree de validite.
 
-- Windows: telecharge un fichier `.cmd` double-clic. Il recupere `scripts/collect-windows.ps1`, lance PowerShell et garde la fenetre ouverte en cas d'erreur.
-- macOS: telecharge un fichier `.command` qui recupere `scripts/collect-cross-platform.py`, detecte macOS et lance Python.
-- Linux: telecharge un fichier `.sh` qui recupere `scripts/collect-cross-platform.py`, detecte Linux et lance Python.
+- Windows: application `.exe` PyInstaller, idealement signee avec un certificat Code Signing.
+- macOS: application PyInstaller, idealement signee et notarisee Apple.
+- Linux: binaire PyInstaller ou execution Python selon la politique interne.
 
-Sur macOS ou Linux, si le systeme bloque l'ouverture directe du fichier, l'utilisateur peut l'ouvrir depuis le Terminal avec `sh fichier-telecharge.sh` ou `sh fichier-telecharge.command`. Pour une experience totalement native sans Terminal, prevoir une prochaine etape de packaging avec binaires signes/notarises.
+Les scripts `.cmd`, `.ps1`, `.command` et `.sh` restent des modes avances IT. Ils peuvent etre bloques par les antivirus parce qu'ils lancent un interpreteur ou telechargent du code au moment de l'execution.
 
-Un workflow manuel GitHub Actions `Build collector apps` peut aussi produire des applications natives via PyInstaller:
+Un workflow GitHub Actions `Build collector apps` produit des applications natives via PyInstaller:
 
-1. Ouvrir l'onglet GitHub `Actions`.
-2. Lancer `Build collector apps` avec `Run workflow`.
-3. Recuperer les artefacts `spacefoot-it-collector-windows`, `spacefoot-it-collector-macos` ou `spacefoot-it-collector-linux`.
+1. Pour un test interne, ouvrir l'onglet GitHub `Actions`, lancer `Build collector apps`, puis recuperer les artefacts.
+2. Pour une release partageable, creer et pousser un tag `collector-vX.Y.Z`.
+3. Le workflow cree une draft release avec les builds Windows, macOS et Linux.
 
-Ces builds embarquent le collecteur Python cross-platform. Avant une diffusion large, signer le `.exe` Windows et notariser l'application macOS pour limiter les alertes systeme/antivirus.
+Ces builds embarquent le collecteur Python cross-platform. Avant une diffusion large, signer le `.exe` Windows et notariser l'application macOS pour limiter les alertes systeme/antivirus. Aucun packaging ne peut garantir zero alerte si l'application est non signee ou sans reputation SmartScreen.
+
+Secrets optionnels pour signature:
+
+- `WINDOWS_CODESIGN_PFX_BASE64`: certificat Windows `.pfx` encode en base64.
+- `WINDOWS_CODESIGN_PASSWORD`: mot de passe du certificat.
+- `MACOS_CERTIFICATE_BASE64`: certificat Apple Developer ID `.p12` encode en base64.
+- `MACOS_CERTIFICATE_PASSWORD`: mot de passe du certificat macOS.
+- `MACOS_CODESIGN_IDENTITY`: identite de signature Apple Developer ID.
+- `MACOS_NOTARY_APPLE_ID`, `MACOS_NOTARY_TEAM_ID`, `MACOS_NOTARY_PASSWORD`: notarisation Apple.
 
 Le prototype actuel est dans `collectors/desktop_collector/`:
 
