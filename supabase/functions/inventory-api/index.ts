@@ -31,6 +31,10 @@ const adminPassword = Deno.env.get("ADMIN_PASSWORD") ?? "";
 const adminSessionSecret = Deno.env.get("ADMIN_SESSION_SECRET") ?? "";
 const collectionAccessToken = Deno.env.get("COLLECTION_ACCESS_TOKEN") ?? "";
 const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ?? "*").split(",").map((origin) => origin.trim());
+const allowedEmailDomains = (Deno.env.get("ALLOWED_EMAIL_DOMAINS") ?? "")
+  .split(",")
+  .map((domain) => domain.trim().toLowerCase().replace(/^@/, ""))
+  .filter(Boolean);
 const ebayBrowseApiToken = Deno.env.get("EBAY_BROWSE_API_TOKEN") ?? "";
 const googleMapsApiKey = Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
 const enrichmentCacheDays = Number(Deno.env.get("ENRICHMENT_CACHE_DAYS") ?? 90);
@@ -93,6 +97,16 @@ function firstPresent(body: Json, ...keys: string[]) {
   for (const key of keys) {
     const value = safeString(body[key]);
     if (value) return value;
+  }
+  return "";
+}
+
+function emailValidationError(email: string) {
+  if (!email) return "Email requis.";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(email)) return "Adresse email invalide.";
+  const domain = email.split("@").pop()?.toLowerCase() ?? "";
+  if (allowedEmailDomains.length > 0 && !allowedEmailDomains.includes(domain)) {
+    return `Domaine email non autorise. Domaines acceptes: ${allowedEmailDomains.join(", ")}`;
   }
   return "";
 }
@@ -467,6 +481,10 @@ async function handleAdminLogin(request: Request) {
     if ((count ?? 0) === 0 && password === adminPassword) {
       const displayName = safeString(body.displayName, 120) || "Administrateur";
       const email = safeString(body.email, 255).toLowerCase() || null;
+      if (email) {
+        const emailError = emailValidationError(email);
+        if (emailError) return badRequest(request, emailError);
+      }
       const passwordHash = await pbkdf2Hash(password);
       const { data: created, error: createError } = await supabase
         .from("admin_users")
@@ -512,6 +530,8 @@ async function handleProfile(request: Request) {
   const proposedEstablishment = firstPresent(body, "proposedEstablishment", "proposed_establishment", "proposedLocation");
   if (!team && !proposedTeam) return badRequest(request, "Equipe requise ou proposition d'equipe requise.");
   if (!establishment && !proposedEstablishment) return badRequest(request, "Etablissement requis ou proposition d'etablissement requise.");
+  const emailError = emailValidationError(safeString(body.email, 255).toLowerCase());
+  if (emailError) return badRequest(request, emailError);
   const accessTokenId = await consumeCollectionAccessToken(accessToken);
   if (!accessTokenId) return badRequest(request, "Token de collecte invalide, expire, revoque ou epuise.", 401);
 
@@ -1059,6 +1079,8 @@ async function handleLegacyScan(request: Request) {
   if (!safeString(body.email)) {
     body.email = `${safeString(body.firstName).toLowerCase()}.${safeString(body.lastName).toLowerCase()}@legacy.local`;
   }
+  const emailError = emailValidationError(safeString(body.email, 255).toLowerCase());
+  if (emailError) return badRequest(request, emailError);
   const user = await upsertUserProfile(body);
   return await persistScan(request, user, body);
 }
@@ -1087,6 +1109,10 @@ async function handleAdminSaveUser(request: Request, id?: string) {
   if (!displayName) return badRequest(request, "Nom affiche requis.");
   if (!id && !password) return badRequest(request, "Mot de passe requis pour creer un utilisateur.");
   if (password && password.length < 10) return badRequest(request, "Mot de passe trop court: 10 caracteres minimum.");
+  if (email) {
+    const emailError = emailValidationError(email);
+    if (emailError) return badRequest(request, emailError);
+  }
   const values: Json = {
     username,
     display_name: displayName,
@@ -1344,11 +1370,14 @@ async function handleAdminOrganization(request: Request) {
 
 async function handleAdminPendingChanges(request: Request) {
   if (!(await isAdmin(request, "PENDING_CHANGE_APPROVE"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
-  const { data, error } = await supabase
+  const status = safeString(new URL(request.url).searchParams.get("status"), 40).toUpperCase() || "PENDING";
+  let query = supabase
     .from("pending_changes")
     .select("id,type,proposed_value,proposed_by_user,proposed_by_email,related_device_id,status,admin_decision_by,admin_decision_at,admin_notes,linked_entity_id,created_at")
     .order("created_at", { ascending: false })
     .limit(200);
+  if (status !== "ALL") query = query.eq("status", status);
+  const { data, error } = await query;
   if (error) throw error;
   return json(request, { pendingChanges: data ?? [] });
 }
@@ -1710,7 +1739,15 @@ async function handleAdminDeviceAssignment(request: Request, id: string) {
   const body = await request.json().catch(() => ({}));
   const teamId = safeString(body.teamId) || null;
   const establishmentId = safeString(body.establishmentId) || null;
-  const assignedUserId = safeString(body.assignedUserId) || null;
+  let assignedUserId = safeString(body.assignedUserId) || null;
+  const ownerFirstName = titleCase(safeString(body.ownerFirstName, 120));
+  const ownerLastName = safeString(body.ownerLastName, 120).toUpperCase();
+  const ownerEmail = safeString(body.ownerEmail, 255).toLowerCase();
+  const ownerChanged = Boolean(ownerFirstName || ownerLastName || ownerEmail);
+  if (ownerEmail) {
+    const emailError = emailValidationError(ownerEmail);
+    if (emailError) return badRequest(request, emailError);
+  }
   const [teamValid, establishmentValid, userValid] = await Promise.all([
     recordExists("teams", teamId),
     recordExists("establishments", establishmentId),
@@ -1720,13 +1757,65 @@ async function handleAdminDeviceAssignment(request: Request, id: string) {
   if (!establishmentValid) return badRequest(request, "Etablissement selectionne introuvable.", 404);
   if (!userValid) return badRequest(request, "Utilisateur selectionne introuvable.", 404);
 
-  const [{ data: currentDevice, error: currentError }, { data: targetTeam }, { data: targetSite }, { data: targetUser }] = await Promise.all([
-    supabase.from("device_inventory_view").select("hostname,team_name,establishment_name,first_name,last_name,email").eq("id", id).single(),
+  const [{ data: currentDevice, error: currentError }, { error: currentAssignmentError }, { data: targetTeam }, { data: targetSite }] = await Promise.all([
+    supabase.from("device_inventory_view").select("hostname,team_name,establishment_name,first_name,last_name,email,service,comment").eq("id", id).single(),
+    supabase.from("devices").select("assigned_user_id").eq("id", id).single(),
     teamId ? supabase.from("teams").select("name").eq("id", teamId).maybeSingle() : Promise.resolve({ data: null }),
     establishmentId ? supabase.from("establishments").select("name").eq("id", establishmentId).maybeSingle() : Promise.resolve({ data: null }),
-    assignedUserId ? supabase.from("users").select("first_name,last_name,email").eq("id", assignedUserId).maybeSingle() : Promise.resolve({ data: null }),
   ]);
   if (currentError) throw currentError;
+  if (currentAssignmentError) throw currentAssignmentError;
+
+  if (ownerChanged) {
+    if (!ownerEmail && !assignedUserId) return badRequest(request, "Email proprietaire requis pour creer ou modifier un proprietaire.");
+    if (assignedUserId) {
+      if (ownerEmail) {
+        const { data: duplicateUser, error: duplicateError } = await supabase
+          .from("users")
+          .select("id")
+          .eq("email", ownerEmail)
+          .neq("id", assignedUserId)
+          .maybeSingle();
+        if (duplicateError) throw duplicateError;
+        if (duplicateUser) return badRequest(request, "Un autre utilisateur utilise deja cet email.", 409);
+      }
+      const userValues: Json = {
+        first_name: ownerFirstName || currentDevice.first_name || "Utilisateur",
+        last_name: ownerLastName || currentDevice.last_name || "INCONNU",
+        email: ownerEmail || currentDevice.email,
+        team_id: teamId,
+        establishment_id: establishmentId,
+        service: safeString(currentDevice.service) || "Manual",
+        updated_at: new Date().toISOString(),
+      };
+      const { error: updateUserError } = await supabase.from("users").update(userValues).eq("id", assignedUserId);
+      if (updateUserError) throw updateUserError;
+    } else if (ownerEmail) {
+      const { data: ownerUser, error: ownerError } = await supabase
+        .from("users")
+        .upsert(
+          {
+            first_name: ownerFirstName || "Utilisateur",
+            last_name: ownerLastName || "INCONNU",
+            email: ownerEmail,
+            team_id: teamId,
+            establishment_id: establishmentId,
+            service: safeString(currentDevice.service) || "Manual",
+          },
+          { onConflict: "email" },
+        )
+        .select("id")
+        .single();
+      if (ownerError) throw ownerError;
+      assignedUserId = safeString(ownerUser.id);
+    }
+  }
+
+  const { data: targetUser, error: targetUserError } = assignedUserId
+    ? await supabase.from("users").select("first_name,last_name,email").eq("id", assignedUserId).maybeSingle()
+    : { data: null, error: null };
+  if (targetUserError) throw targetUserError;
+
   const values = {
     team_id: teamId,
     establishment_id: establishmentId,
@@ -1743,6 +1832,7 @@ async function handleAdminDeviceAssignment(request: Request, id: string) {
     ["team_id", "TEAM_CHANGED", currentDevice.team_name, targetTeam?.name],
     ["establishment_id", "LOCATION_CHANGED", currentDevice.establishment_name, targetSite?.name],
     ["assigned_user_id", oldUser ? "USER_REASSIGNED" : "USER_ASSIGNED", oldUser, newUser],
+    ["owner_email", "USER_REASSIGNED", currentDevice.email, targetUser?.email],
   ].flatMap(([fieldName, eventType, oldValue, newValue]) =>
     historyValue(oldValue) === historyValue(newValue) ? [] : [{
       device_id: id,

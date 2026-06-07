@@ -59,6 +59,7 @@ const englishTranslations = {
   "Token de collecte": "Collection token",
   "Champ requis.": "Required field.",
   "Adresse email invalide.": "Invalid email address.",
+  "Email proprietaire invalide.": "Invalid owner email.",
   "Veuillez completer les champs requis.": "Please complete the required fields.",
   "Nom": "Last name",
   "Prenom": "First name",
@@ -99,6 +100,7 @@ const englishTranslations = {
   "Compte actif": "Active account",
   "Desactive": "Disabled",
   "Derniere connexion": "Last login",
+  "Creation": "Created",
   "Centre de notifications": "Notification center",
   "Validation": "Validation",
   "Pending changes": "Pending changes",
@@ -331,6 +333,9 @@ const englishTranslations = {
   "Famille": "Family",
   "Affectations": "Assignments",
   "Proprietaire": "Owner",
+  "Prenom proprietaire": "Owner first name",
+  "Nom proprietaire": "Owner last name",
+  "Email proprietaire": "Owner email",
   "Enregistrer les affectations": "Save assignments",
   "Reaffecter les elements lies": "Reassign linked records",
   "Nouvelle destination": "New destination",
@@ -523,9 +528,47 @@ function applyPermissions() {
     if (node) node.classList.toggle("is-hidden", !editable);
   });
   $("#export-csv")?.classList.toggle("is-hidden", !canPerformAction("EXPORT_DATA"));
-  $("#admin-session-label").textContent = state.currentAdmin
-    ? `${state.currentAdmin.displayName || state.currentAdmin.username} - ${state.currentAdmin.role}`
-    : "";
+  const sessionLabel = $("#admin-session-label");
+  if (sessionLabel) {
+    sessionLabel.innerHTML = state.currentAdmin ? renderSessionRole(state.currentAdmin) : "";
+    sessionLabel.title = state.currentAdmin
+      ? `${state.currentAdmin.displayName || state.currentAdmin.username} - ${formatRoleLabel(state.currentAdmin.role)}`
+      : "";
+  }
+}
+
+function roleIcon(role) {
+  const paths = {
+    ADMIN: '<path d="M12 3 4 6v6c0 5 3.4 8.1 8 10 4.6-1.9 8-5 8-10V6l-8-3Z"></path><path d="m9 12 2 2 4-5"></path>',
+    MANAGER: '<rect width="18" height="14" x="3" y="7" rx="2"></rect><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"></path>',
+    VIEWER: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"></path><circle cx="12" cy="12" r="3"></circle>',
+    READ_ONLY: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"></path><circle cx="12" cy="12" r="3"></circle>',
+    COLLECTOR_USER: '<path d="M12 3v12"></path><path d="m8 11 4 4 4-4"></path><path d="M4 21h16"></path>',
+  };
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[role] || paths.VIEWER}</svg>`;
+}
+
+function formatRoleLabel(role) {
+  const labels = {
+    ADMIN: "Admin",
+    MANAGER: "Manager",
+    VIEWER: "Viewer",
+    READ_ONLY: "Read only",
+    COLLECTOR_USER: "Collector",
+  };
+  return labels[role] || role || "Viewer";
+}
+
+function renderSessionRole(user) {
+  const role = user.role || "VIEWER";
+  const name = user.displayName || user.username || "Admin";
+  return `
+    <span class="session-role-badge role-${escapeHtml(String(role).toLowerCase())}">
+      ${roleIcon(role)}
+      <span>${escapeHtml(name)}</span>
+      <small>${escapeHtml(formatRoleLabel(role))}</small>
+    </span>
+  `;
 }
 
 function collectionForm() {
@@ -641,8 +684,16 @@ function teamRecordByName(name) {
   return state.teams.find((team) => team.name === name) || null;
 }
 
+function teamRecordById(id) {
+  return state.teams.find((team) => team.id === id) || null;
+}
+
 function establishmentRecordByName(name) {
   return state.establishments.find((site) => site.name === name) || null;
+}
+
+function establishmentRecordById(id) {
+  return state.establishments.find((site) => site.id === id) || null;
 }
 
 function normalizeOsInfo(osString) {
@@ -846,10 +897,10 @@ function teamIcon(type) {
   return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[type] || paths.team}</svg>`;
 }
 
-function renderTeamBadge(teamName) {
-  const record = teamRecordByName(teamName);
+function renderTeamBadge(teamName, teamId = "", teamColor = "") {
+  const record = teamRecordById(teamId) || teamRecordByName(teamName);
   const info = normalizeTeamInfo(teamName, record?.abbreviation);
-  const color = record?.color || "#64748b";
+  const color = teamColor || record?.color || "#64748b";
   return `<span class="${info.badgeClass}" ${badgeStyle(color)} title="${escapeHtml(info.fullLabel)}">${teamIcon(info.iconType)}<span>${escapeHtml(info.displayLabel)}</span></span>`;
 }
 
@@ -890,7 +941,7 @@ function locationIcon(type) {
 }
 
 function renderLocationBadge(device) {
-  const site = establishmentRecordByName(device.establishment_name);
+  const site = establishmentRecordById(device.establishment_id) || establishmentRecordByName(device.establishment_name);
   const info = locationInfo(
     device.establishment_type || site?.establishment_type || "other",
     device.establishment_name,
@@ -1117,9 +1168,10 @@ function renderAdminUsers() {
       <td><span class="cell-primary">${escapeHtml(user.username)}</span><span class="cell-secondary">${escapeHtml(user.displayName || user.email || "-")}</span></td>
       <td><span class="role-badge role-${escapeHtml(String(user.role || "").toLowerCase())}">${escapeHtml(user.role)}</span></td>
       <td>${user.isActive ? translate("Actif") : translate("Desactive")}</td>
+      <td>${formatDate(user.createdAt)}</td>
       <td>${formatDate(user.lastLoginAt)}</td>
     </tr>
-  `).join("") || `<tr><td colspan="4">${translate("Aucune donnee.")}</td></tr>`;
+  `).join("") || `<tr><td colspan="5">${translate("Aucune donnee.")}</td></tr>`;
   $$("#admin-users-table tr[data-id]").forEach((row) => row.addEventListener("click", () => editAdminUser(row.dataset.id)));
 }
 
@@ -1136,6 +1188,7 @@ function resetAdminUserForm() {
   form.elements.id.value = "";
   form.elements.role.value = "VIEWER";
   form.elements.isActive.checked = true;
+  $("#admin-user-created-at").textContent = `${translate("Creation")}: -`;
   $("#delete-admin-user").classList.add("is-hidden");
 }
 
@@ -1150,6 +1203,7 @@ function editAdminUser(id) {
   form.elements.role.value = user.role || "VIEWER";
   form.elements.password.value = "";
   form.elements.isActive.checked = user.isActive !== false;
+  $("#admin-user-created-at").textContent = `${translate("Creation")}: ${formatDate(user.createdAt)}`;
   $("#delete-admin-user").classList.toggle("is-hidden", user.id === state.currentAdmin?.id);
 }
 
@@ -1301,7 +1355,7 @@ function renderPendingChanges() {
 async function loadPendingChanges() {
   if (!canPerformAction("PENDING_CHANGE_APPROVE")) return;
   const data = await api("/admin/pending-changes");
-  state.pendingChanges = data.pendingChanges || [];
+  state.pendingChanges = (data.pendingChanges || []).filter((item) => item.status === "PENDING");
   renderPendingChanges();
 }
 
@@ -1472,7 +1526,7 @@ function renderDevices() {
         <tr data-id="${device.id}" class="${device.id === state.selectedDeviceId ? "is-selected" : ""}">
           <td><strong class="cell-primary">${escapeHtml(device.hostname || "-")}</strong><small class="cell-secondary">${escapeHtml(device.serial_number || "")}</small></td>
           <td><strong class="cell-primary">${escapeHtml(`${device.first_name || ""} ${device.last_name || ""}`.trim() || "-")}</strong><small class="cell-secondary">${escapeHtml(device.email || "")}</small></td>
-          <td>${renderTeamBadge(device.team_name)}</td>
+          <td>${renderTeamBadge(device.team_name, device.team_id, device.team_color)}</td>
           <td>${renderLocationBadge(device)}</td>
           <td>${renderOsBadge(device)}</td>
           <td class="manufacturer-cell">${renderManufacturerBadge(device)}<small>${escapeHtml(device.model || "-")}</small></td>
@@ -1640,11 +1694,14 @@ function renderDetail(device, scans, history = []) {
       ${detailRows([["OS", device.os_name], ["Version OS", device.os_version], ["Derniere remontee", formatDate(device.last_seen_at)], ["Script", device.script_version]])}
     </section>
     <section class="detail-tab-panel" data-detail-panel="assignment">
-      <div class="assignment-summary">${renderTeamBadge(device.team_name)} ${renderLocationBadge(device)}</div>
+      <div class="assignment-summary">${renderTeamBadge(device.team_name, device.team_id, device.team_color)} ${renderLocationBadge(device)}</div>
       ${canEditDevice ? `<form id="assignment-form" class="form-grid one assignment-form">
         <label>${translate("Equipe")}<select name="teamId"><option value="">${translate("Non renseigne")}</option>${teamOptions}</select></label>
         <label>${translate("Etablissement")}<select name="establishmentId"><option value="">${translate("Non renseigne")}</option>${establishmentOptions}</select></label>
         <label>${translate("Proprietaire")}<select name="assignedUserId"><option value="">${translate("Non renseigne")}</option>${userOptions}</select></label>
+        <label>${translate("Prenom proprietaire")}<input name="ownerFirstName" value="${escapeHtml(device.first_name || "")}" maxlength="120" /></label>
+        <label>${translate("Nom proprietaire")}<input name="ownerLastName" value="${escapeHtml(device.last_name || "")}" maxlength="120" /></label>
+        <label>${translate("Email proprietaire")}<input name="ownerEmail" type="email" value="${escapeHtml(device.email || "")}" maxlength="255" /></label>
         <button type="submit" class="primary">${translate("Enregistrer les affectations")}</button>
       </form>` : ""}
     </section>
@@ -1680,6 +1737,11 @@ function renderDetail(device, scans, history = []) {
   if ($("#assignment-form")) $("#assignment-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));
+    const ownerEmail = String(values.ownerEmail || "").trim();
+    if (ownerEmail && !event.currentTarget.elements.ownerEmail.checkValidity()) {
+      toast("Email proprietaire invalide.", "error");
+      return;
+    }
     try {
       await api(`/admin/devices/${device.id}/assignment`, {
         method: "POST",

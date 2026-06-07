@@ -215,6 +215,7 @@ Secrets backend:
 - `ADMIN_SESSION_SECRET`
 - `COLLECTION_ACCESS_TOKEN`
 - `ALLOWED_ORIGINS`
+- `ALLOWED_EMAIL_DOMAINS` optionnel, vide par defaut pour accepter tout domaine email valide
 - `EBAY_BROWSE_API_TOKEN` optionnel
 - `GOOGLE_MAPS_API_KEY` optionnel, pour la recherche et l'autocompletion des adresses
 - `ENRICHMENT_CACHE_DAYS` optionnel
@@ -285,7 +286,9 @@ Les equipes et etablissements possedent un champ `color`. A la creation, l'API c
 
 `blue`, `teal`, `green`, `amber`, `orange`, `rose`, `purple`, `indigo`, `cyan`, `lime`, `slate`, `pink`.
 
-L'admin peut modifier la couleur avec le color picker ou revenir a la couleur de palette via `Couleur par defaut`. Les previews affichent le badge final avant sauvegarde. Les badges utilisent la couleur sauvegardee via une variable CSS `--badge-color`, ce qui garde une apparence coherente en light/dark mode.
+L'admin peut modifier la couleur avec le color picker ou revenir a la couleur de palette via `Couleur par defaut`. Les previews affichent le badge final avant sauvegarde. Les badges utilisent la couleur sauvegardee via les variables CSS `--badge-color` et `--item-color`, ce qui garde une apparence coherente en light/dark mode.
+
+La couleur sauvegardee d'un etablissement est prioritaire partout: liste Organisation, panneau d'edition, table du parc, detail machine, filtres et carte lorsque l'interface affiche un marqueur local. Aucun style par type de lieu ne doit remplacer la couleur stockee.
 
 Mapping equipes:
 
@@ -562,7 +565,27 @@ Le premier compte peut etre initialise depuis l'ecran de connexion:
 
 L'ancien mode sans identifiant continue de fonctionner avec `ADMIN_PASSWORD` pour eviter un verrouillage accidentel pendant la transition. Il est conseille de creer un compte `ADMIN`, puis d'utiliser des comptes `MANAGER` temporaires pour les tests ou interventions.
 
-La page `Users & roles` permet a un `ADMIN` de creer, modifier, desactiver, supprimer un compte et reinitialiser son mot de passe. Les actions sensibles creent des entrees dans `audit_logs` et des notifications.
+La page `Users & roles` permet a un `ADMIN` de creer, modifier, desactiver, supprimer un compte et reinitialiser son mot de passe. La liste et le panneau d'edition affichent aussi la date de creation du compte. Les actions sensibles creent des entrees dans `audit_logs` et des notifications.
+
+Le header admin affiche le nom connecte avec une icone et un libelle de role compact (`ADMIN`, `MANAGER`, `VIEWER` / `READ_ONLY`, `COLLECTOR_USER`), compatible dark mode et mobile.
+
+## Validation email et proprietaire machine
+
+Les emails sont valides cote navigateur et cote API avec un format standard. Les domaines `.com` sont acceptes par defaut; `.local` n'est pas requis.
+
+Le secret optionnel `ALLOWED_EMAIL_DOMAINS` peut restreindre les domaines si besoin, par exemple:
+
+```text
+ALLOWED_EMAIL_DOMAINS=spacefoot.com,example.com
+```
+
+Si `ALLOWED_EMAIL_DOMAINS` est vide, aucun filtrage de domaine n'est applique au-dela du format email valide.
+
+Dans le detail machine, l'onglet `Affectation` permet a un admin de modifier l'equipe, l'etablissement, le proprietaire, le prenom, le nom et l'email du proprietaire. Les changements de proprietaire creent des lignes dans `device_history` et une notification de reaffectation lorsque l'affectation change.
+
+## Propositions et rejets
+
+La validation admin affiche par defaut uniquement les propositions `PENDING`. Approuver, modifier puis approuver, ou rejeter une proposition change son statut et la retire immediatement de la liste par defaut. Les propositions traitees restent conservees en base et dans l'audit pour un usage historique.
 
 ## Notifications
 

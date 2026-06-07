@@ -182,6 +182,34 @@ a.secondary {
   white-space: nowrap;
 }
 
+.session-role-badge {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+  border-radius: 999px;
+  padding: 0 10px;
+  background: color-mix(in srgb, currentColor 8%, var(--surface));
+  color: var(--brand);
+}
+
+.session-role-badge svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.session-role-badge small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+}
+
 .topbar {
   display: flex;
   align-items: center;
@@ -914,43 +942,8 @@ pre {
   display: grid;
   place-items: center;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--item-color, var(--brand)) 14%, white);
+  background: color-mix(in srgb, var(--item-color, var(--brand)) 14%, var(--surface));
   color: var(--item-color, var(--brand));
-}
-
-.organization-icon.site {
-  background: var(--site-soft);
-  color: var(--site-ink);
-}
-
-.organization-icon.type-warehouse {
-  background: color-mix(in srgb, #d18b24 16%, var(--surface));
-  color: #b36c08;
-}
-
-.organization-icon.type-store {
-  background: color-mix(in srgb, #d94f70 14%, var(--surface));
-  color: #c53b5c;
-}
-
-.organization-icon.type-headquarters {
-  background: color-mix(in srgb, #387cc9 15%, var(--surface));
-  color: #387cc9;
-}
-
-.organization-icon.type-research {
-  background: color-mix(in srgb, #7a55b7 15%, var(--surface));
-  color: #7a55b7;
-}
-
-.organization-icon.type-accounting {
-  background: color-mix(in srgb, #26826d 15%, var(--surface));
-  color: #26826d;
-}
-
-.organization-icon.type-office {
-  background: color-mix(in srgb, #637168 15%, var(--surface));
-  color: var(--muted);
 }
 
 .organization-chevron {
