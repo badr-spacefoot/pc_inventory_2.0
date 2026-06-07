@@ -1350,7 +1350,7 @@ async function handleAdminDevices(request: Request) {
   return json(request, { devices: data });
 }
 
-function normalizeMac(value: unknown) {
+function normalizeMacKey(value: unknown) {
   return safeString(value, 80).toLowerCase().replace(/[^a-f0-9]/g, "");
 }
 
@@ -1381,7 +1381,7 @@ async function handleAdminImportLegacyHistory(request: Request) {
   const byMac = new Map<string, Json>();
   const byHostname = new Map<string, Json>();
   for (const device of devices ?? []) {
-    const mac = normalizeMac(device.mac_address);
+    const mac = normalizeMacKey(device.mac_address);
     const hostname = normalizeHostname(device.hostname);
     if (mac) byMac.set(mac, device);
     if (hostname) byHostname.set(hostname, device);
@@ -1392,7 +1392,7 @@ async function handleAdminImportLegacyHistory(request: Request) {
   const skippedDuplicates: Json[] = [];
 
   for (const row of rows) {
-    const mac = normalizeMac(row.mac);
+    const mac = normalizeMacKey(row.mac);
     const hostname = normalizeHostname(row.hostname);
     const device = (mac ? byMac.get(mac) : null) || (hostname ? byHostname.get(hostname) : null);
     if (!device) {
