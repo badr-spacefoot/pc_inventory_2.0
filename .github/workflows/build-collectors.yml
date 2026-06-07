@@ -73,10 +73,17 @@ jobs:
           WINDOWS_CODESIGN_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_PASSWORD }}
         run: |
           $target = "dist/${{ matrix.artifact }}.exe"
+          $signTool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match "\\x64\\signtool\.exe$" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $signTool) {
+            throw "signtool.exe not found in Windows SDK."
+          }
           if ($env:WINDOWS_CODESIGN_PFX_BASE64) {
             $certPath = Join-Path $env:RUNNER_TEMP "spacefoot-codesign.pfx"
             [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_CODESIGN_PFX_BASE64))
-            & signtool sign /f $certPath /p $env:WINDOWS_CODESIGN_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $target
+            & $signTool sign /f $certPath /p $env:WINDOWS_CODESIGN_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $target
             exit $LASTEXITCODE
           }
           Write-Host "No official Windows signing certificate configured. Creating a self-signed internal testing certificate."
@@ -90,7 +97,7 @@ jobs:
             -HashAlgorithm SHA256 `
             -NotAfter (Get-Date).AddYears(2)
           Export-Certificate -Cert $cert -FilePath "dist/spacefoot-it-collector-internal-test.cer" | Out-Null
-          & signtool sign /sha1 $cert.Thumbprint /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $target
+          & $signTool sign /sha1 $cert.Thumbprint /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $target
           exit $LASTEXITCODE
 
       - name: Sign and notarize macOS collector when credentials are configured
