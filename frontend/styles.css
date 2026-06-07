@@ -780,6 +780,43 @@ pre {
   margin-bottom: 18px;
 }
 
+.invite-banner,
+.support-token-details,
+.support-token-admin {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 14px 16px;
+}
+
+.invite-banner {
+  display: grid;
+  gap: 4px;
+  border-color: rgba(67, 192, 163, 0.5);
+}
+
+.invite-banner strong {
+  color: var(--accent);
+}
+
+.support-token-details summary,
+.support-token-admin summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.support-token-details label {
+  margin-top: 12px;
+}
+
+.support-token-admin {
+  margin-top: 22px;
+}
+
+.invite-manager-grid {
+  margin-bottom: 20px;
+}
+
 .token-manager-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 0.8fr);

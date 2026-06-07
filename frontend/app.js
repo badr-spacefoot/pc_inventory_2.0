@@ -22,6 +22,10 @@ const state = {
   selectedScans: [],
   selectedHistory: [],
   accessTokens: [],
+  collectionInvites: [],
+  currentInviteCode: "",
+  currentInvite: null,
+  rawInviteUrls: {},
   rawAccessTokens: {},
   teams: [],
   establishments: [],
@@ -68,6 +72,24 @@ const englishTranslations = {
   "Declarer un poste": "Register a computer",
   "Une page web seule ne peut pas lire le numero de serie, le CPU, la RAM ou le stockage complet. La collecte materielle passe donc par un script local lance volontairement par l'utilisateur.": "A web page alone cannot read the serial number, CPU, RAM, or full storage details. Hardware collection therefore uses a local script run voluntarily by the user.",
   "Token de collecte": "Collection token",
+  "Invitation chargee": "Invitation loaded",
+  "Vos informations sont pre-remplies. Telechargez le collecteur, relisez puis envoyez.": "Your information is prefilled. Download the collector, review, then submit.",
+  "Mode support IT: utiliser un token manuel": "IT support mode: use a manual token",
+  "Lien d'invitation": "Invitation link",
+  "Charge automatiquement depuis le lien": "Loaded automatically from the link",
+  "Methode recommandee: telechargez l'application adaptee a votre systeme. Le fichier de pre-remplissage est telecharge automatiquement et le collecteur le detectera au demarrage.": "Recommended method: download the app for your system. The prefill file is downloaded automatically and the collector will detect it at startup.",
+  "Code support de pre-remplissage": "Support prefill code",
+  "Preparation terminee. Telechargez le collecteur.": "Preparation complete. Download the collector.",
+  "Invitations de collecte": "Collection invitations",
+  "Creer un lien d'invitation": "Create invitation link",
+  "Envoyez ce lien a l'utilisateur. Il ne verra pas le token technique.": "Send this link to the user. They will not see the technical token.",
+  "Lien copie.": "Link copied.",
+  "Aucun lien a copier": "No link to copy",
+  "Invitation creee.": "Invitation created.",
+  "Invitation revoquee.": "Invitation revoked.",
+  "Aucune invitation generee.": "No invitations generated.",
+  "Tokens techniques avances": "Advanced technical tokens",
+  "Optionnel": "Optional",
   "Champ requis.": "Required field.",
   "Adresse email invalide.": "Invalid email address.",
   "Email proprietaire invalide.": "Invalid owner email.",
@@ -788,6 +810,7 @@ function restoreCollectionDraft() {
   Object.entries(state.collectionDraft || {}).forEach(([key, value]) => {
     if (form.elements[key]) form.elements[key].value = value;
   });
+  if (state.currentInviteCode && form.elements.inviteCode) form.elements.inviteCode.value = state.currentInviteCode;
   toggleProposalFields();
 }
 
@@ -805,6 +828,49 @@ function toggleProposalFields() {
   $("#proposed-establishment-field")?.classList.toggle("is-hidden", !establishmentOther);
   if (form.elements.proposedTeam) form.elements.proposedTeam.required = teamOther;
   if (form.elements.proposedEstablishment) form.elements.proposedEstablishment.required = establishmentOther;
+}
+
+function setCollectionInviteMode(invite = null) {
+  const form = collectionForm();
+  if (!form) return;
+  state.currentInvite = invite;
+  state.currentInviteCode = invite?.inviteCode || "";
+  if (form.elements.inviteCode) form.elements.inviteCode.value = state.currentInviteCode;
+  const hasInvite = Boolean(state.currentInviteCode);
+  $("#collect-invite-banner")?.classList.toggle("is-hidden", !hasInvite);
+  $("#collect-support-token")?.classList.toggle("is-hidden", hasInvite);
+  if (form.elements.accessToken) form.elements.accessToken.required = !hasInvite;
+}
+
+function applyCollectionInvite(invite) {
+  const form = collectionForm();
+  if (!form) return;
+  setCollectionInviteMode(invite);
+  ["firstName", "lastName", "email", "team", "establishment", "comment"].forEach((field) => {
+    if (form.elements[field] && invite[field]) form.elements[field].value = invite[field];
+  });
+  saveCollectionDraft();
+  toggleProposalFields();
+}
+
+async function loadInviteFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const inviteCode = params.get("invite") || "";
+  if (!inviteCode) {
+    setCollectionInviteMode(null);
+    return;
+  }
+  state.currentInviteCode = inviteCode;
+  collectionForm().elements.inviteCode.value = inviteCode;
+  try {
+    const invite = await api(`/collect/invite/${encodeURIComponent(inviteCode)}`);
+    applyCollectionInvite(invite);
+    toast("Invitation chargee.", "success");
+  } catch (error) {
+    setCollectionInviteMode(null);
+    if (collectionForm().elements.inviteCode) collectionForm().elements.inviteCode.value = inviteCode;
+    toast(error.message, "error");
+  }
 }
 
 function clearFieldErrors(form) {
@@ -1562,6 +1628,79 @@ function renderAccessTokens() {
       }
     });
   });
+}
+
+function inviteState(invite) {
+  if (invite.revoked_at) return { key: "revoked", label: translate("Revoque") };
+  if (new Date(invite.expires_at).getTime() <= Date.now()) return { key: "expired", label: translate("Expire") };
+  if (invite.max_uses !== null && Number(invite.use_count) >= Number(invite.max_uses)) {
+    return { key: "exhausted", label: translate("Epuise") };
+  }
+  return { key: "valid", label: translate("Valide") };
+}
+
+function renderCollectionInvites() {
+  const table = $("#invites-table");
+  if (!table) return;
+  table.innerHTML = state.collectionInvites
+    .map((invite) => {
+      const status = inviteState(invite);
+      const usage = invite.max_uses === null
+        ? `${invite.use_count} / ${state.language === "en" ? "unlimited" : "illimite"}`
+        : `${invite.use_count} / ${invite.max_uses}`;
+      const inviteUrl = invite.invite_url || state.rawInviteUrls[invite.id] || "";
+      return `
+        <tr>
+          <td>${escapeHtml(invite.label)}</td>
+          <td>
+            <div class="token-prefix">
+              <code>${escapeHtml(invite.invite_code)}</code>
+              <button class="secondary icon-button copy-invite-row" type="button" data-id="${invite.id}" aria-label="Copier le lien" title="Copier le lien">${copyIcon()}</button>
+            </div>
+            <span class="cell-secondary">${escapeHtml((invite.payload?.email || invite.payload?.team || invite.payload?.establishment || "").toString())}</span>
+          </td>
+          <td>${formatDate(invite.expires_at)}</td>
+          <td>${usage}</td>
+          <td>${formatDate(invite.last_used_at)}</td>
+          <td><span class="token-state ${status.key}">${status.label}</span></td>
+          <td>
+            <div class="token-actions">
+              ${status.key === "valid" ? `<button class="secondary revoke-invite" type="button" data-id="${invite.id}">${translate("Revoquer")}</button>` : ""}
+            </div>
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
+  if (state.collectionInvites.length === 0) {
+    table.innerHTML = `<tr><td colspan="7" class="helper">Aucune invitation generee.</td></tr>`;
+  }
+  $$(".copy-invite-row").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const invite = state.collectionInvites.find((item) => item.id === button.dataset.id);
+      await copyText(invite?.invite_url || state.rawInviteUrls[button.dataset.id], "Lien copie.", "Aucun lien a copier");
+    });
+  });
+  $$(".revoke-invite").forEach((button) => {
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
+        await api(`/admin/collection-invites/${button.dataset.id}/revoke`, { method: "POST", body: "{}" });
+        await loadCollectionInvites();
+        toast("Invitation revoquee.");
+      } catch (error) {
+        toast(error.message, "error");
+        button.disabled = false;
+      }
+    });
+  });
+}
+
+async function loadCollectionInvites() {
+  if (!canPerformAction("TOKEN_MANAGE")) return;
+  const data = await api("/admin/collection-invites");
+  state.collectionInvites = data.invites || [];
+  renderCollectionInvites();
 }
 
 async function loadAccessTokens() {
@@ -2850,6 +2989,7 @@ function setAdminView(view) {
 function updateOrganizationDatalists() {
   const teamSelect = collectionForm()?.elements.team;
   const establishmentSelect = collectionForm()?.elements.establishment;
+  const inviteForm = $("#invite-form");
   if (teamSelect) {
     const selected = teamSelect.value || state.collectionDraft.team || "";
     teamSelect.innerHTML = [
@@ -2871,6 +3011,26 @@ function updateOrganizationDatalists() {
       `<option value="__other__">${translate("Autre")}</option>`,
     ].join("");
     establishmentSelect.value = [...establishmentSelect.options].some((option) => option.value === selected) ? selected : "";
+  }
+  if (inviteForm?.elements.team) {
+    const selected = inviteForm.elements.team.value || "";
+    inviteForm.elements.team.innerHTML = [
+      `<option value="">${translate("Optionnel")}</option>`,
+      ...state.teams
+        .filter((team) => team.active !== false)
+        .map((team) => `<option value="${escapeHtml(team.name)}">${escapeHtml(displayWithAbbreviation(team.name, team.abbreviation))}</option>`),
+    ].join("");
+    inviteForm.elements.team.value = [...inviteForm.elements.team.options].some((option) => option.value === selected) ? selected : "";
+  }
+  if (inviteForm?.elements.establishment) {
+    const selected = inviteForm.elements.establishment.value || "";
+    inviteForm.elements.establishment.innerHTML = [
+      `<option value="">${translate("Optionnel")}</option>`,
+      ...state.establishments
+        .filter((site) => site.active !== false)
+        .map((site) => `<option value="${escapeHtml(site.name)}">${escapeHtml(displayWithAbbreviation(site.name, site.abbreviation))}</option>`),
+    ].join("");
+    inviteForm.elements.establishment.value = [...inviteForm.elements.establishment.options].some((option) => option.value === selected) ? selected : "";
   }
   toggleProposalFields();
 }
@@ -3138,6 +3298,7 @@ async function loadPublicOrganization() {
   state.establishments = data.establishments || [];
   updateOrganizationDatalists();
   restoreCollectionDraft();
+  await loadInviteFromUrl();
 }
 
 async function loadCpuBenchmarkStats() {
@@ -3224,6 +3385,11 @@ async function loadAdminData() {
     state.accessTokens = [];
     renderAccessTokens();
     toast(`Module tokens indisponible: ${error.message}`);
+  });
+  loadCollectionInvites().catch((error) => {
+    state.collectionInvites = [];
+    renderCollectionInvites();
+    toast(`Module invitations indisponible: ${error.message}`);
   });
   loadAdminUsers().catch((error) => toast(`Module utilisateurs indisponible: ${error.message}`, "error"));
   loadNotifications().catch((error) => toast(`Module notifications indisponible: ${error.message}`, "error"));
@@ -3369,21 +3535,26 @@ function bindEvents() {
     payload.language = state.language;
     payload.theme = document.documentElement.dataset.theme || "light";
     try {
-      const result = await api("/collect/prefill", {
-        method: "POST",
-        headers: { "X-Collection-Access-Token": form.accessToken },
-        body: JSON.stringify(payload),
-      });
+      const hasInvite = Boolean(state.currentInviteCode || form.inviteCode);
+      const result = hasInvite
+        ? await api(`/collect/invite/${encodeURIComponent(state.currentInviteCode || form.inviteCode)}/prefill`, {
+          method: "POST",
+          body: JSON.stringify(payload),
+        })
+        : await api("/collect/prefill", {
+          method: "POST",
+          headers: { "X-Collection-Access-Token": form.accessToken },
+          body: JSON.stringify(payload),
+        });
       $("#command-empty").classList.add("is-hidden");
       $("#command-result").classList.remove("is-hidden");
-      $("#collector-token").textContent = form.accessToken;
       $("#collector-prefill-code").textContent = result.prefillCode || "";
       state.prefillCode = result.prefillCode || "";
       $("#powershell-command").textContent = state.language === "en"
-        ? "Use the native collector app and load the prefill code shown above. The fallback script uses an internal scan token and is reserved for IT support."
-        : "Utilisez l'application collecteur native et chargez le code de pre-remplissage ci-dessus. Le script fallback utilise un token de scan interne reserve au support IT.";
+        ? "Use the native collector app. The prefill file is downloaded with the app and the fallback script is reserved for IT support."
+        : "Utilisez l'application collecteur native. Le fichier de pre-remplissage est telecharge avec l'app et le script fallback reste reserve au support IT.";
       updateCollectorDownloadUi();
-      toast(translate("Code cree. Telechargez le collecteur puis chargez le code de pre-remplissage."), "success");
+      toast(translate("Preparation terminee. Telechargez le collecteur."), "success");
     } catch (error) {
       saveCollectionDraft();
       toast(error.message, "error");
@@ -3393,8 +3564,8 @@ function bindEvents() {
   $("#copy-command").addEventListener("click", async () => {
     await copyText($("#powershell-command").textContent, "Commande copiee.", "Aucune commande a copier");
   });
-  $("#copy-collector-token").addEventListener("click", async () => {
-    await copyText($("#collector-token").textContent, "Token copie.", "Aucun token a copier");
+  $("#copy-collector-token")?.addEventListener("click", async () => {
+    await copyText($("#collector-token")?.textContent, "Token copie.", "Aucun token a copier");
   });
   $("#copy-prefill-code").addEventListener("click", async () => {
     await copyText($("#collector-prefill-code").textContent, "Code copie.", "Aucun code a copier");
@@ -3479,7 +3650,10 @@ function bindEvents() {
   });
 
   $("#refresh-admin").addEventListener("click", () => loadAdminData().catch((error) => toast(error.message)));
-  $("#refresh-tokens").addEventListener("click", () => loadAccessTokens().catch((error) => toast(error.message)));
+  $("#refresh-tokens").addEventListener("click", () => {
+    loadAccessTokens().catch((error) => toast(error.message));
+    loadCollectionInvites().catch((error) => toast(error.message));
+  });
   $("#refresh-pending-changes").addEventListener("click", () => loadPendingChanges().catch((error) => toast(error.message)));
   $("#new-team").addEventListener("click", resetTeamForm);
   $("#new-establishment").addEventListener("click", resetEstablishmentForm);
@@ -3653,6 +3827,38 @@ function bindEvents() {
   document.addEventListener("click", (event) => {
     if (event.target.closest(".address-search-field")) return;
     hideAddressSuggestions();
+  });
+  $("#invite-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    const payload = {
+      label: values.label,
+      durationHours: Number(values.durationHours),
+      maxUses: values.maxUses ? Number(values.maxUses) : null,
+      email: values.email,
+      firstName: values.firstName,
+      lastName: values.lastName,
+      team: values.team,
+      establishment: values.establishment,
+      language: state.language,
+      theme: document.documentElement.dataset.theme || "light",
+    };
+    try {
+      const result = await api("/admin/collection-invites", { method: "POST", body: JSON.stringify(payload) });
+      const inviteUrl = result.invite.inviteUrl || result.invite.invite_url;
+      state.rawInviteUrls[result.invite.id] = inviteUrl;
+      $("#generated-invite-url").textContent = inviteUrl;
+      $("#invite-result").classList.remove("is-hidden");
+      event.currentTarget.reset();
+      updateOrganizationDatalists();
+      await loadCollectionInvites();
+      toast("Invitation creee.", "success");
+    } catch (error) {
+      toast(error.message, "error");
+    }
+  });
+  $("#copy-invite-url").addEventListener("click", async () => {
+    await copyText($("#generated-invite-url").textContent, "Lien copie.", "Aucun lien a copier");
   });
   $("#token-form").addEventListener("submit", async (event) => {
     event.preventDefault();

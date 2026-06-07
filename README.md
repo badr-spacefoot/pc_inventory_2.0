@@ -324,6 +324,8 @@ Routes principales:
 
 - `POST /auth/admin` avec `{ "username": "...", "password": "..." }` ou fallback `{ "password": "..." }`
 - `GET /organization` pour exposer les equipes/etablissements actifs au formulaire public
+- `GET /collect/invite/:code` pour charger une invitation de collecte publique
+- `POST /collect/invite/:code/prefill` pour creer un pre-remplissage sans exposer le token technique
 - `POST /collect/profile` avec header `X-Collection-Access-Token`
 - `POST /collect/scan` avec header `Authorization: Bearer <collectionToken>`
 - `POST /collect/legacy-scan` avec header `X-Collection-Access-Token` pour accepter l'ancien payload du script Google Sheets
@@ -334,6 +336,9 @@ Routes principales:
 - `POST /admin/access-tokens` avec token admin pour generer un token
 - `POST /admin/access-tokens/:id/revoke` avec token admin pour revoquer un token
 - `DELETE /admin/access-tokens/:id` avec token admin pour supprimer definitivement un token
+- `GET /admin/collection-invites` avec token admin
+- `POST /admin/collection-invites` avec token admin pour generer un lien d'invitation
+- `POST /admin/collection-invites/:id/revoke` avec token admin pour revoquer un lien d'invitation
 - `DELETE /admin/teams/:id` avec token admin, uniquement si l'equipe n'est plus utilisee
 - `DELETE /admin/establishments/:id` avec token admin, uniquement si l'etablissement n'est plus utilise
 - `POST /admin/devices/:id/assignment` pour modifier equipe, etablissement et proprietaire
@@ -702,7 +707,13 @@ Attention aux deux types de tokens:
 - token d'enrolement temporaire admin `sfit_...`: visible sur la page web, accepte par le collecteur desktop et utilise pour creer le profil;
 - token/secret de scan retourne apres `/collect/profile`: interne, utilise uniquement par le script ou l'app pour poster `/collect/scan`, et non affiche comme token utilisateur.
 
-Le flux web ne montre plus le token interne de scan comme "token collecteur". Quand l'utilisateur remplit la page web, le front cree un brouillon temporaire via `POST /collect/prefill`, affiche le meme token d'enrolement `sfit_...` et un code de pre-remplissage. Le bouton de telechargement de l'app telecharge aussi un fichier `spacefoot-collector-prefill.json`; au demarrage, le collecteur cherche ce fichier dans le dossier Downloads et charge automatiquement le pre-remplissage. L'utilisateur n'a donc pas besoin de ressaisir le token dans l'app. Il peut aussi coller manuellement le code si necessaire.
+Le flux recommande utilise maintenant des invitations de collecte. L'admin cree un lien du type `https://.../pc_inventory_2.0/?invite=inv_...` depuis `Admin > Acces collecte`. L'utilisateur ouvre ce lien, voit ses champs pre-remplis si l'admin les a renseignes, puis clique sur le telechargement du collecteur. Le site telecharge aussi un fichier `spacefoot-collector-prefill.json`; au demarrage, le collecteur cherche ce fichier dans le dossier Downloads et charge automatiquement le pre-remplissage. L'utilisateur n'a donc pas besoin de voir ou copier le token technique.
+
+Les tokens `sfit_...` restent disponibles dans `Tokens techniques avances` pour le support IT, les imports et les cas de diagnostic. Le collecteur distingue:
+
+- lien d'invitation `inv_...`: experience utilisateur normale, partageable par email/Teams, expire et limite en utilisations;
+- token d'enrolement temporaire `sfit_...`: mode support IT avance;
+- token/secret de scan retourne apres `/collect/profile`: interne, utilise uniquement par le script ou l'app pour poster `/collect/scan`, jamais affiche comme token utilisateur.
 
 Dans le collecteur desktop, les champs `API URL`, token, prenom, nom, email, equipe, etablissement, propositions, langue et theme sont pre-remplis puis restent entierement modifiables avant l'envoi. Les listes equipe/etablissement sont rechargees depuis `/organization`; les champs `autre equipe` et `autre etablissement` ne sont visibles que si l'utilisateur choisit `Other` / `Autre`.
 

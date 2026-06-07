@@ -172,6 +172,7 @@ async function sha256(input: string) {
 async function validateCollectionAccessTokenValue(token: string) {
   const plainToken = safeString(token, 500);
   if (!plainToken) return null;
+  if (plainToken.startsWith("invite_")) return await validateCollectionInviteValue(plainToken.slice(7));
   if (collectionAccessToken && plainToken === collectionAccessToken) {
     return {
       id: "legacy-static-token",
@@ -203,6 +204,37 @@ async function validateCollectionAccessTokenValue(token: string) {
   else if (maxUses !== null && useCount >= maxUses) invalidReason = "exhausted";
 
   return { ...data, invalid_reason: invalidReason };
+}
+
+async function validateCollectionInviteValue(code: string) {
+  const inviteCode = safeString(code, 120);
+  if (!inviteCode) return null;
+  const { data, error } = await supabase
+    .from("collection_invites")
+    .select("id,label,invite_code,expires_at,max_uses,use_count,last_used_at,revoked_at,payload")
+    .eq("invite_code", inviteCode)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const expiresAt = safeString(data.expires_at);
+  const maxUses = data.max_uses === null || data.max_uses === undefined ? null : Number(data.max_uses);
+  const useCount = Number(data.use_count ?? 0);
+  let invalidReason = "";
+  if (data.revoked_at) invalidReason = "revoked";
+  else if (expiresAt && new Date(expiresAt).getTime() <= Date.now()) invalidReason = "expired";
+  else if (maxUses !== null && useCount >= maxUses) invalidReason = "exhausted";
+  return {
+    id: safeString(data.id),
+    label: safeString(data.label) || "Invitation de collecte",
+    token_prefix: `invite_${safeString(data.invite_code, 6)}`,
+    expires_at: data.expires_at ?? null,
+    max_uses: data.max_uses ?? null,
+    use_count: data.use_count ?? null,
+    last_used_at: data.last_used_at ?? null,
+    invalid_reason: invalidReason,
+    invite_code: safeString(data.invite_code),
+    payload: (data.payload && typeof data.payload === "object") ? data.payload : {},
+  };
 }
 
 async function hmac(input: string) {
@@ -487,11 +519,35 @@ function changedDeviceHistory(deviceId: string, previous: Json | null, current: 
 
 async function consumeCollectionAccessToken(token: string) {
   if (!token) return null;
+  if (token.startsWith("invite_")) return await consumeCollectionInvite(token.slice(7));
   if (token === collectionAccessToken) return "legacy-static-token";
   const tokenHash = await sha256(token);
   const { data, error } = await supabase.rpc("consume_collection_access_token", { p_token_hash: tokenHash });
   if (error) throw error;
   return safeString(data);
+}
+
+async function consumeCollectionInvite(code: string) {
+  const inviteCode = safeString(code, 120);
+  if (!inviteCode) return null;
+  const { data, error } = await supabase
+    .from("collection_invites")
+    .select("id,expires_at,max_uses,use_count,revoked_at")
+    .eq("invite_code", inviteCode)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  const maxUses = data.max_uses === null || data.max_uses === undefined ? null : Number(data.max_uses);
+  const useCount = Number(data.use_count ?? 0);
+  if (data.revoked_at) return null;
+  if (new Date(safeString(data.expires_at)).getTime() <= Date.now()) return null;
+  if (maxUses !== null && useCount >= maxUses) return null;
+  const { error: updateError } = await supabase
+    .from("collection_invites")
+    .update({ use_count: useCount + 1, last_used_at: new Date().toISOString() })
+    .eq("id", data.id);
+  if (updateError) throw updateError;
+  return `invite:${data.id}`;
 }
 
 async function upsertUserProfile(body: Json) {
@@ -676,6 +732,14 @@ function prefillPayload(body: Json) {
   };
 }
 
+function mergePrefillPayload(base: Json, override: Json) {
+  const merged = { ...base };
+  for (const [key, value] of Object.entries(override)) {
+    if (value !== "" && value !== null && value !== undefined) merged[key] = value;
+  }
+  return merged;
+}
+
 async function handleCreateCollectionPrefill(request: Request) {
   const accessToken = request.headers.get("x-collection-access-token") ?? "";
   const token = await validateCollectionAccessTokenValue(accessToken);
@@ -724,6 +788,60 @@ async function handleGetCollectionPrefill(request: Request, code: string) {
     expiresAt: data.expires_at,
     ...((data.payload && typeof data.payload === "object") ? (data.payload as Json) : {}),
   });
+}
+
+async function handleGetCollectionInvite(request: Request, code: string) {
+  const invite = await validateCollectionInviteValue(code);
+  if (!invite) return badRequest(request, "Invitation de collecte introuvable.", 404);
+  const invalidReason = safeString(invite.invalid_reason, 40);
+  if (invalidReason) {
+    const labels: Record<string, string> = {
+      revoked: "Invitation de collecte revoquee.",
+      expired: "Invitation de collecte expiree.",
+      exhausted: "Invitation de collecte deja utilisee.",
+    };
+    return badRequest(request, labels[invalidReason] || "Invitation de collecte invalide.", 401);
+  }
+  return json(request, {
+    inviteCode: safeString(invite.invite_code),
+    label: safeString(invite.label),
+    expiresAt: invite.expires_at ?? null,
+    maxUses: invite.max_uses ?? null,
+    useCount: invite.use_count ?? null,
+    ...((invite.payload && typeof invite.payload === "object") ? (invite.payload as Json) : {}),
+  });
+}
+
+async function handleCreateInvitePrefill(request: Request, code: string) {
+  const invite = await validateCollectionInviteValue(code);
+  if (!invite || safeString(invite.invalid_reason)) {
+    return badRequest(request, "Invitation de collecte invalide, expiree ou revoquee.", 401);
+  }
+  const body = await request.json().catch(() => ({}));
+  const payload = mergePrefillPayload(
+    (invite.payload && typeof invite.payload === "object") ? (invite.payload as Json) : {},
+    prefillPayload(body),
+  );
+  if (safeString(payload.email)) {
+    const emailError = emailValidationError(safeString(payload.email).toLowerCase());
+    if (emailError) return badRequest(request, emailError);
+  }
+  const ttlMinutes = Math.max(5, Math.min(Number(body.ttlMinutes || 1440), 1440));
+  const prefillCode = base64Url(crypto.getRandomValues(new Uint8Array(9)));
+  const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000).toISOString();
+  const { error } = await supabase.from("collection_prefills").insert({
+    prefill_code: prefillCode,
+    collection_access_token: `invite_${safeString(invite.invite_code, 120)}`,
+    payload,
+    expires_at: expiresAt,
+  });
+  if (error) throw error;
+  return json(request, {
+    prefillCode,
+    expiresAt,
+    inviteCode: safeString(invite.invite_code),
+    launchUrl: `spacefoot-collector://collect?prefillCode=${encodeURIComponent(prefillCode)}`,
+  }, 201);
 }
 
 async function handleValidateCollectionAccessToken(request: Request) {
@@ -1444,6 +1562,101 @@ async function handleAdminCreateAccessToken(request: Request) {
     max_uses: maxUses,
   });
   return json(request, { token: rawToken, record: data }, 201);
+}
+
+function invitePublicUrl(request: Request, inviteCode: string) {
+  const origin = request.headers.get("origin") || "https://badr-spacefoot.github.io";
+  try {
+    const url = new URL(origin);
+    url.pathname = url.hostname.includes("github.io") ? "/pc_inventory_2.0/" : "/";
+    url.searchParams.set("invite", inviteCode);
+    return url.toString();
+  } catch {
+    return `https://badr-spacefoot.github.io/pc_inventory_2.0/?invite=${encodeURIComponent(inviteCode)}`;
+  }
+}
+
+async function handleAdminListCollectionInvites(request: Request) {
+  if (!(await isAdmin(request, "TOKEN_MANAGE"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
+  const { data, error } = await supabase
+    .from("collection_invites")
+    .select("id,label,invite_code,payload,expires_at,max_uses,use_count,last_used_at,revoked_at,created_at")
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (error) throw error;
+  return json(request, {
+    invites: (data ?? []).map((invite) => ({
+      ...invite,
+      invite_url: invitePublicUrl(request, safeString(invite.invite_code)),
+    })),
+  });
+}
+
+async function handleAdminCreateCollectionInvite(request: Request) {
+  const auth = await requireAction(request, "TOKEN_MANAGE");
+  if (auth.response) return auth.response;
+  const body = await request.json().catch(() => ({}));
+  const label = safeString(body.label, 120);
+  const durationHours = Math.max(1, Math.min(Number(body.durationHours || 168), 8760));
+  const requestedMaxUses = body.maxUses === null || body.maxUses === "" ? null : Number(body.maxUses);
+  const maxUses = requestedMaxUses === null ? null : Math.max(1, Math.min(requestedMaxUses, 10000));
+  if (!label) return badRequest(request, "Libelle requis.");
+  if (!Number.isFinite(durationHours)) return badRequest(request, "Duree invalide.");
+  if (requestedMaxUses !== null && !Number.isFinite(requestedMaxUses)) return badRequest(request, "Nombre d'utilisations invalide.");
+  const payload = prefillPayload(body);
+  if (payload.email) {
+    const emailError = emailValidationError(payload.email);
+    if (emailError) return badRequest(request, emailError);
+  }
+  const inviteCode = `inv_${base64Url(crypto.getRandomValues(new Uint8Array(15)))}`;
+  const expiresAt = new Date(Date.now() + durationHours * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from("collection_invites")
+    .insert({
+      label,
+      invite_code: inviteCode,
+      payload,
+      expires_at: expiresAt,
+      max_uses: maxUses,
+      created_by: auth.session?.username || null,
+    })
+    .select("id,label,invite_code,payload,expires_at,max_uses,use_count,last_used_at,revoked_at,created_at")
+    .single();
+  if (error) throw error;
+  await audit("collection_invite_created", "collection_invite", data.id, {
+    label,
+    expires_at: expiresAt,
+    max_uses: maxUses,
+    actor: auth.session?.username,
+  });
+  const inviteUrl = invitePublicUrl(request, inviteCode);
+  return json(request, {
+    invite: {
+      ...data,
+      inviteCode,
+      inviteUrl,
+      invite_url: inviteUrl,
+    },
+  }, 201);
+}
+
+async function handleAdminRevokeCollectionInvite(request: Request, id: string) {
+  if (!(await isAdmin(request, "TOKEN_MANAGE"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
+  const { data, error } = await supabase
+    .from("collection_invites")
+    .update({ revoked_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("id,label,revoked_at")
+    .single();
+  if (error) throw error;
+  await audit("collection_invite_revoked", "collection_invite", id, { label: data.label });
+  await notify("TOKEN_REVOKED", "Invitation revoquee", `L'invitation ${data.label} a ete revoquee.`, {
+    severity: "WARNING",
+    targetRole: "ADMIN",
+    relatedEntityType: "collection_invite",
+    relatedEntityId: id,
+  });
+  return json(request, { invite: data });
 }
 
 async function handleAdminRevokeAccessToken(request: Request, id: string) {
@@ -2459,6 +2672,10 @@ Deno.serve(async (request) => {
     if (request.method === "POST" && path.endsWith("/collect/prefill")) return await handleCreateCollectionPrefill(request);
     const prefillMatch = path.match(/\/collect\/prefill\/([A-Za-z0-9_-]+)$/);
     if (request.method === "GET" && prefillMatch) return await handleGetCollectionPrefill(request, prefillMatch[1]);
+    const invitePrefillMatch = path.match(/\/collect\/invite\/([A-Za-z0-9_-]+)\/prefill$/);
+    if (request.method === "POST" && invitePrefillMatch) return await handleCreateInvitePrefill(request, invitePrefillMatch[1]);
+    const inviteMatch = path.match(/\/collect\/invite\/([A-Za-z0-9_-]+)$/);
+    if (request.method === "GET" && inviteMatch) return await handleGetCollectionInvite(request, inviteMatch[1]);
     if (request.method === "POST" && path.endsWith("/collect/profile")) return await handleProfile(request);
     if (request.method === "POST" && path.endsWith("/collect/scan")) return await handleScan(request);
     if (request.method === "POST" && path.endsWith("/collect/legacy-scan")) return await handleLegacyScan(request);
@@ -2500,6 +2717,10 @@ Deno.serve(async (request) => {
     if (request.method === "POST" && path.endsWith("/admin/cpu-benchmarks/import")) return await handleAdminImportCpuBenchmarks(request);
     if (request.method === "GET" && path.endsWith("/admin/access-tokens")) return await handleAdminListAccessTokens(request);
     if (request.method === "POST" && path.endsWith("/admin/access-tokens")) return await handleAdminCreateAccessToken(request);
+    if (request.method === "GET" && path.endsWith("/admin/collection-invites")) return await handleAdminListCollectionInvites(request);
+    if (request.method === "POST" && path.endsWith("/admin/collection-invites")) return await handleAdminCreateCollectionInvite(request);
+    const revokeInviteMatch = path.match(/\/admin\/collection-invites\/([0-9a-f-]+)\/revoke/i);
+    if (request.method === "POST" && revokeInviteMatch) return await handleAdminRevokeCollectionInvite(request, revokeInviteMatch[1]);
     const revokeTokenMatch = path.match(/\/admin\/access-tokens\/([0-9a-f-]+)\/revoke/i);
     if (request.method === "POST" && revokeTokenMatch) return await handleAdminRevokeAccessToken(request, revokeTokenMatch[1]);
     const deleteTokenMatch = path.match(/\/admin\/access-tokens\/([0-9a-f-]+)$/i);

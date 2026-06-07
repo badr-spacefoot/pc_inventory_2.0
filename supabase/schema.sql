@@ -155,6 +155,20 @@ create table if not exists public.collection_prefills (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.collection_invites (
+  id uuid primary key default gen_random_uuid(),
+  invite_code text not null unique,
+  label text not null,
+  payload jsonb not null default '{}'::jsonb,
+  expires_at timestamptz not null,
+  max_uses integer check (max_uses is null or max_uses > 0),
+  use_count integer not null default 0 check (use_count >= 0),
+  last_used_at timestamptz,
+  revoked_at timestamptz,
+  created_by text,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.audit_logs (
   id uuid primary key default gen_random_uuid(),
   actor_user_id uuid references public.users(id),
@@ -330,6 +344,8 @@ create index if not exists idx_collection_access_tokens_hash on public.collectio
 create index if not exists idx_collection_access_tokens_expiry on public.collection_access_tokens(expires_at desc);
 create index if not exists idx_collection_prefills_code on public.collection_prefills(prefill_code);
 create index if not exists idx_collection_prefills_expiry on public.collection_prefills(expires_at desc);
+create index if not exists idx_collection_invites_code on public.collection_invites(invite_code);
+create index if not exists idx_collection_invites_expiry on public.collection_invites(expires_at desc);
 create index if not exists idx_hardware_enrichment_recommendation on public.hardware_enrichment(recommendation);
 create index if not exists idx_hardware_enrichment_cpu_score on public.hardware_enrichment(cpu_score);
 create index if not exists idx_hardware_enrichment_priority on public.hardware_enrichment(replacement_priority desc);
@@ -458,6 +474,8 @@ alter table public.devices enable row level security;
 alter table public.device_scans enable row level security;
 alter table public.collection_tokens enable row level security;
 alter table public.collection_access_tokens enable row level security;
+alter table public.collection_prefills enable row level security;
+alter table public.collection_invites enable row level security;
 alter table public.audit_logs enable row level security;
 alter table public.admin_users enable row level security;
 alter table public.notifications enable row level security;
