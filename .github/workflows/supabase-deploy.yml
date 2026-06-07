@@ -56,20 +56,9 @@ jobs:
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
 
       - name: Apply database migrations
-        run: |
-          for migration in supabase/migrations/*.sql; do
-            echo "Applying $migration"
-            jq -Rs '{ query: . }' "$migration" > migration.json
-            curl --fail-with-body \
-              --request POST \
-              "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/database/query" \
-              --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
-              --header "Content-Type: application/json" \
-              --data @migration.json
-          done
+        run: supabase db push --linked --yes
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
 
       - name: Deploy inventory API
         run: supabase functions deploy inventory-api --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
