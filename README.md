@@ -115,8 +115,13 @@ Alternative: injecter ces valeurs avant `app.js` dans `frontend/index.html`:
   window.IT_INVENTORY_API_URL = "https://YOUR_PROJECT.supabase.co/functions/v1/inventory-api";
   window.IT_INVENTORY_SCRIPT_URL = "https://badr-spacefoot.github.io/pc_inventory_2.0/scripts/collect-windows.ps1";
   window.IT_INVENTORY_STALE_DAYS = 30;
+  window.IT_INVENTORY_WEATHER_LATITUDE = 48.8932;
+  window.IT_INVENTORY_WEATHER_LONGITUDE = 2.2879;
+  window.IT_INVENTORY_WEATHER_LOCATION = "Levallois-Perret";
 </script>
 ```
+
+La meteo de la barre superieure utilise Open-Meteo cote navigateur. Par defaut, aucune cle API n'est necessaire; les coordonnees ci-dessus permettent de choisir la ville affichee.
 
 ## Deploiement GitHub Pages
 
@@ -221,6 +226,9 @@ Variables publiques frontend:
 - `IT_INVENTORY_API_URL`
 - `IT_INVENTORY_SCRIPT_URL`
 - `IT_INVENTORY_STALE_DAYS`
+- `IT_INVENTORY_WEATHER_LATITUDE`
+- `IT_INVENTORY_WEATHER_LONGITUDE`
+- `IT_INVENTORY_WEATHER_LOCATION`
 
 Secrets backend:
 

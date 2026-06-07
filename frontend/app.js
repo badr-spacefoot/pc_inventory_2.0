@@ -2,6 +2,9 @@ const CONFIG = {
   apiBaseUrl: window.IT_INVENTORY_API_URL || "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api",
   scriptUrl: window.IT_INVENTORY_SCRIPT_URL || "https://badr-spacefoot.github.io/pc_inventory_2.0/scripts/collect-windows.ps1",
   staleDays: Number(window.IT_INVENTORY_STALE_DAYS || 30),
+  weatherLatitude: Number(window.IT_INVENTORY_WEATHER_LATITUDE || 48.8932),
+  weatherLongitude: Number(window.IT_INVENTORY_WEATHER_LONGITUDE || 2.2879),
+  weatherLocationLabel: window.IT_INVENTORY_WEATHER_LOCATION || "Levallois-Perret",
 };
 
 const state = {
@@ -9,6 +12,8 @@ const state = {
   currentAdmin: JSON.parse(localStorage.getItem("it_inventory_admin_user") || "null"),
   language: localStorage.getItem("it_inventory_language") || "fr",
   timeFormatPreference: localStorage.getItem("it_inventory_time_format") || "auto",
+  temperatureUnit: localStorage.getItem("it_inventory_temperature_unit") || "celsius",
+  weather: null,
   devices: [],
   filtered: [],
   selectedDeviceId: "",
@@ -130,6 +135,9 @@ const englishTranslations = {
   "Format horaire": "Time format",
   "Heure": "Time",
   "Heure actuelle": "Current time",
+  "Meteo": "Weather",
+  "Meteo indisponible": "Weather unavailable",
+  "Basculer Celsius Fahrenheit": "Toggle Celsius/Fahrenheit",
   "Auto": "Auto",
   "Sortir la machine du parc": "Retire device",
   "Ajoutez une note avant de confirmer la sortie du parc.": "Please add a retirement note before confirming.",
@@ -610,6 +618,7 @@ function applyLanguage(language, persist = true) {
   renderAccessTokens();
   renderNotifications();
   syncAdminUserActiveLabel();
+  updateWeatherDisplay();
   if (state.selectedDetail) renderDetail(state.selectedDetail, state.selectedScans, state.selectedHistory);
   translateElement(document.body);
   updateTimeFormatButton();
@@ -1172,11 +1181,23 @@ function formatTime(value = new Date()) {
   }).format(value instanceof Date ? value : new Date(value));
 }
 
+function formatHeaderDateTime(value = new Date()) {
+  const locale = state.language === "en" ? "en-US" : "fr-FR";
+  const date = value instanceof Date ? value : new Date(value);
+  const datePart = new Intl.DateTimeFormat(locale, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+  return `${datePart} · ${formatTime(date)}`;
+}
+
 function updateClock() {
   const clock = $("#current-time");
   if (!clock) return;
   const now = new Date();
-  clock.textContent = formatTime(now);
+  clock.textContent = formatHeaderDateTime(now);
   clock.dateTime = now.toISOString();
   clock.setAttribute("aria-label", `${translate("Heure actuelle")}: ${clock.textContent}`);
 }
@@ -1192,6 +1213,92 @@ function updateTimeFormatButton() {
   button.title = `${translate("Format horaire")}: ${display}`;
   button.setAttribute("aria-label", `${translate("Format horaire")}: ${display}`);
   updateClock();
+}
+
+function weatherIcon(code, isDay = true) {
+  if ([0, 1].includes(Number(code))) {
+    return isDay
+      ? '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"></path></svg>'
+      : '<svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"></path></svg>';
+  }
+  if ([2, 3].includes(Number(code))) {
+    return '<svg viewBox="0 0 24 24"><path d="M17.5 19H8a5 5 0 1 1 1.7-9.7A7 7 0 0 1 22 14a5 5 0 0 1-4.5 5Z"></path></svg>';
+  }
+  if ([45, 48].includes(Number(code))) {
+    return '<svg viewBox="0 0 24 24"><path d="M3 8h18M5 12h14M3 16h18"></path></svg>';
+  }
+  if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(Number(code))) {
+    return '<svg viewBox="0 0 24 24"><path d="M17.5 18H8a5 5 0 1 1 1.7-9.7A7 7 0 0 1 22 13.5"></path><path d="M9 19v2M13 18v2M17 19v2"></path></svg>';
+  }
+  if ([71, 73, 75, 77, 85, 86].includes(Number(code))) {
+    return '<svg viewBox="0 0 24 24"><path d="M12 2v20M4.9 4.9l14.2 14.2M2 12h20M4.9 19.1 19.1 4.9"></path></svg>';
+  }
+  if ([95, 96, 99].includes(Number(code))) {
+    return '<svg viewBox="0 0 24 24"><path d="m13 2-8 13h7l-1 7 8-13h-7l1-7Z"></path></svg>';
+  }
+  return '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v4M12 16h.01"></path></svg>';
+}
+
+function weatherLabel(code) {
+  const labels = {
+    fr: {
+      0: "Ciel clair", 1: "Plutot clair", 2: "Partiellement nuageux", 3: "Couvert",
+      45: "Brouillard", 48: "Brouillard givrant", 51: "Bruine legere", 53: "Bruine", 55: "Bruine forte",
+      61: "Pluie legere", 63: "Pluie", 65: "Pluie forte", 71: "Neige legere", 73: "Neige", 75: "Neige forte",
+      80: "Averses", 81: "Averses", 82: "Averses fortes", 95: "Orage", 96: "Orage avec grele", 99: "Orage avec grele",
+    },
+    en: {
+      0: "Clear sky", 1: "Mostly clear", 2: "Partly cloudy", 3: "Overcast",
+      45: "Fog", 48: "Rime fog", 51: "Light drizzle", 53: "Drizzle", 55: "Dense drizzle",
+      61: "Light rain", 63: "Rain", 65: "Heavy rain", 71: "Light snow", 73: "Snow", 75: "Heavy snow",
+      80: "Showers", 81: "Showers", 82: "Heavy showers", 95: "Thunderstorm", 96: "Thunderstorm with hail", 99: "Thunderstorm with hail",
+    },
+  };
+  return labels[state.language]?.[Number(code)] || (state.language === "en" ? "Weather" : "Meteo");
+}
+
+function updateWeatherDisplay() {
+  const button = $("#weather-toggle");
+  const icon = $("#weather-icon");
+  const value = $("#weather-value");
+  if (!button || !icon || !value) return;
+  if (!state.weather) {
+    icon.innerHTML = weatherIcon(null);
+    value.textContent = "--";
+    button.title = translate("Meteo indisponible");
+    return;
+  }
+  const unit = state.temperatureUnit === "fahrenheit" ? "°F" : "°C";
+  const temperature = Math.round(Number(state.weather.temperature));
+  const label = weatherLabel(state.weather.weatherCode);
+  icon.innerHTML = weatherIcon(state.weather.weatherCode, state.weather.isDay);
+  value.textContent = `${temperature}${unit}`;
+  button.title = `${CONFIG.weatherLocationLabel} · ${label} · ${temperature}${unit} · ${translate("Basculer Celsius Fahrenheit")}`;
+  button.setAttribute("aria-label", button.title);
+}
+
+async function loadWeather() {
+  const unit = state.temperatureUnit === "fahrenheit" ? "fahrenheit" : "celsius";
+  const url = new URL("https://api.open-meteo.com/v1/forecast");
+  url.searchParams.set("latitude", String(CONFIG.weatherLatitude));
+  url.searchParams.set("longitude", String(CONFIG.weatherLongitude));
+  url.searchParams.set("current", "temperature_2m,weather_code,is_day");
+  url.searchParams.set("timezone", "auto");
+  url.searchParams.set("temperature_unit", unit);
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Weather ${response.status}`);
+    const data = await response.json();
+    state.weather = {
+      temperature: data.current?.temperature_2m,
+      weatherCode: data.current?.weather_code,
+      isDay: Boolean(data.current?.is_day),
+      collectedAt: data.current?.time,
+    };
+  } catch {
+    state.weather = null;
+  }
+  updateWeatherDisplay();
 }
 
 function formatRelativeDate(value) {
@@ -3123,6 +3230,12 @@ function bindEvents() {
     applyFilters();
   });
 
+  $("#weather-toggle").addEventListener("click", () => {
+    state.temperatureUnit = state.temperatureUnit === "celsius" ? "fahrenheit" : "celsius";
+    localStorage.setItem("it_inventory_temperature_unit", state.temperatureUnit);
+    loadWeather();
+  });
+
   $("#cancel-retire").addEventListener("click", () => {
     pendingRetirement?.resolve("");
     pendingRetirement = null;
@@ -3441,6 +3554,8 @@ applyLanguage(state.language, false);
 languageObserver.observe(document.body, { childList: true, subtree: true });
 updateTimeFormatButton();
 setInterval(updateClock, 30000);
+loadWeather();
+setInterval(loadWeather, 20 * 60 * 1000);
 restoreCollectionDraft();
 loadPublicOrganization().catch((error) => {
   updateOrganizationDatalists();
