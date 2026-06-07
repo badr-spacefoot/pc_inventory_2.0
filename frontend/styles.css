@@ -1430,6 +1430,15 @@ pre {
   margin-top: 18px;
 }
 
+.detail-panel {
+  position: sticky;
+  top: 18px;
+  align-self: start;
+  max-height: calc(100vh - 36px);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
 .table-wrap {
   overflow: auto;
 }
@@ -1828,6 +1837,12 @@ tbody tr.is-selected {
 
   .filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .detail-panel {
+    position: static;
+    max-height: none;
+    overflow: visible;
   }
 }
 
