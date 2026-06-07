@@ -66,6 +66,7 @@ foreach ($row in $rows) {
   }
 
   $payload = @{
+    importedFrom = "legacy-google-sheets-csv"
     timestamp = $collectedAt
     firstName = $firstName
     lastName = $lastName

@@ -6,6 +6,7 @@ create table if not exists public.teams (
   description text,
   color text not null default '#16735f',
   active boolean not null default true,
+  sort_index integer,
   created_at timestamptz not null default now()
 );
 
@@ -13,7 +14,7 @@ create table if not exists public.establishments (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
   establishment_type text not null default 'office'
-    check (establishment_type in ('warehouse', 'store', 'headquarters', 'research', 'accounting', 'office', 'other')),
+    check (establishment_type in ('warehouse', 'store', 'headquarters', 'research', 'accounting', 'office', 'remote', 'other')),
   address text,
   postal_code text,
   city text,
@@ -21,12 +22,14 @@ create table if not exists public.establishments (
   latitude numeric,
   longitude numeric,
   active boolean not null default true,
+  sort_index integer,
   created_at timestamptz not null default now()
 );
 
 alter table public.teams add column if not exists description text;
 alter table public.teams add column if not exists color text not null default '#16735f';
 alter table public.teams add column if not exists active boolean not null default true;
+alter table public.teams add column if not exists sort_index integer;
 alter table public.establishments add column if not exists address text;
 alter table public.establishments add column if not exists establishment_type text not null default 'office';
 alter table public.establishments add column if not exists postal_code text;
@@ -35,6 +38,7 @@ alter table public.establishments add column if not exists country text not null
 alter table public.establishments add column if not exists latitude numeric;
 alter table public.establishments add column if not exists longitude numeric;
 alter table public.establishments add column if not exists active boolean not null default true;
+alter table public.establishments add column if not exists sort_index integer;
 
 create table if not exists public.users (
   id uuid primary key default gen_random_uuid(),
@@ -136,6 +140,19 @@ create table if not exists public.audit_logs (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.device_history (
+  id uuid primary key default gen_random_uuid(),
+  device_id uuid not null references public.devices(id) on delete cascade,
+  event_type text not null,
+  field_name text,
+  old_value text,
+  new_value text,
+  changed_by text not null default 'system',
+  source text not null default 'collector',
+  notes text,
+  changed_at timestamptz not null default now()
+);
+
 create table if not exists public.hardware_enrichment (
   device_id uuid primary key references public.devices(id) on delete cascade,
   cpu_name text,
@@ -200,6 +217,9 @@ create index if not exists idx_devices_status on public.devices(status);
 create index if not exists idx_devices_serial_number on public.devices(serial_number);
 create index if not exists idx_devices_hostname_mac on public.devices(hostname, mac_address);
 create index if not exists idx_device_scans_device_collected on public.device_scans(device_id, collected_at desc);
+create index if not exists idx_device_history_device_changed on public.device_history(device_id, changed_at desc);
+create index if not exists idx_teams_sort_index on public.teams(sort_index, name);
+create index if not exists idx_establishments_sort_index on public.establishments(sort_index, name);
 create index if not exists idx_collection_tokens_hash on public.collection_tokens(token_hash);
 create index if not exists idx_collection_access_tokens_hash on public.collection_access_tokens(token_hash);
 create index if not exists idx_collection_access_tokens_expiry on public.collection_access_tokens(expires_at desc);
@@ -323,6 +343,7 @@ alter table public.device_scans enable row level security;
 alter table public.collection_tokens enable row level security;
 alter table public.collection_access_tokens enable row level security;
 alter table public.audit_logs enable row level security;
+alter table public.device_history enable row level security;
 alter table public.hardware_enrichment enable row level security;
 alter table public.market_price_history enable row level security;
 alter table public.cpu_benchmarks enable row level security;

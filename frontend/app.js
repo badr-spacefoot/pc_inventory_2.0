@@ -12,6 +12,7 @@ const state = {
   selectedDeviceId: "",
   selectedDetail: null,
   selectedScans: [],
+  selectedHistory: [],
   accessTokens: [],
   rawAccessTokens: {},
   teams: [],
@@ -92,6 +93,7 @@ const englishTranslations = {
   "Structure": "Structure",
   "Equipes": "Teams",
   "Nouvelle equipe": "New team",
+  "Nom de l'equipe": "Team name",
   "Description": "Description",
   "Couleur": "Color",
   "Equipe active": "Active team",
@@ -99,6 +101,7 @@ const englishTranslations = {
   "Implantations": "Locations",
   "Etablissements": "Locations",
   "Nouvel etablissement": "New location",
+  "Nom de l'etablissement": "Location name",
   "Type d'etablissement": "Location type",
   "Entrepot": "Warehouse",
   "Boutique": "Store",
@@ -106,6 +109,7 @@ const englishTranslations = {
   "Centre R&D": "R&D center",
   "Comptabilite": "Accounting",
   "Bureau": "Office",
+  "Teletravail": "Remote",
   "Autre": "Other",
   "Rechercher une adresse": "Search for an address",
   "Commencez a saisir une adresse...": "Start typing an address...",
@@ -248,7 +252,9 @@ const englishTranslations = {
   "Etablissement supprime.": "Location deleted.",
   "Affectations mises a jour.": "Assignments updated.",
   "Reaffectation terminee.": "Reassignment completed.",
+  "Ordre enregistre.": "Order saved.",
   "Fabricant": "Manufacturer",
+  "Trier par": "Sort by",
   "Famille": "Family",
   "Affectations": "Assignments",
   "Proprietaire": "Owner",
@@ -259,6 +265,36 @@ const englishTranslations = {
   "Machines par fabricant": "Devices by manufacturer",
   "Fabricant et OS": "Manufacturer and OS",
   "Age moyen par fabricant": "Average age by manufacturer",
+  "Vue generale": "Overview",
+  "Materiel": "Hardware",
+  "Reseau": "Network",
+  "Affectation": "Assignment",
+  "Historique": "History",
+  "De": "From",
+  "Vers": "To",
+  "Aucun historique.": "No history.",
+  "Ajouter la note": "Add note",
+  "Ajouter une note a l'historique...": "Add a history note...",
+  "Machine creee": "Device created",
+  "Machine mise a jour": "Device updated",
+  "Utilisateur affecte": "User assigned",
+  "Utilisateur reaffecte": "User reassigned",
+  "Equipe modifiee": "Team changed",
+  "Etablissement modifie": "Location changed",
+  "Systeme mis a jour": "OS changed",
+  "Materiel modifie": "Hardware changed",
+  "Reinitialisation detectee": "Reset detected",
+  "Note administrateur": "Admin note",
+  "Import mis a jour": "Import updated",
+  "Sections machine": "Device sections",
+  "Scans": "Scans",
+  "Prix marche": "Market prices",
+  "Nom d'hote": "Hostname",
+  "Version OS": "OS version",
+  "Numero de serie": "Serial number",
+  "RAM totale": "Total RAM",
+  "Stockage total": "Total storage",
+  "Note ajoutee.": "Note added.",
   "Statut mis a jour.": "Status updated.",
   "Equipe mise a jour.": "Team updated.",
   "Equipe creee.": "Team created.",
@@ -342,7 +378,7 @@ function applyLanguage(language, persist = true) {
   renderValuation();
   renderOrganization();
   renderAccessTokens();
-  if (state.selectedDetail) renderDetail(state.selectedDetail, state.selectedScans);
+  if (state.selectedDetail) renderDetail(state.selectedDetail, state.selectedScans, state.selectedHistory);
   translateElement(document.body);
   setTheme(document.documentElement.dataset.theme || "light");
 }
@@ -535,21 +571,88 @@ function detectDeviceFamily(manufacturer, model) {
   return (rules[manufacturer] || []).find((family) => text.toLowerCase().includes(family.toLowerCase())) || "";
 }
 
-function manufacturerIcon(info) {
-  const initials = {
-    Dell: "D", HP: "hp", Lenovo: "L", ASUS: "A", Acer: "ac", Apple: "AP",
-    Microsoft: "MS", Surface: "S", MSI: "MSI", Samsung: "S", Fujitsu: "F",
-    Dynabook: "dyn", Toshiba: "T", Huawei: "H", Framework: "FW", "Intel NUC": "NUC", Gigabyte: "G",
-  }[info.manufacturerName];
-  if (initials) {
-    return `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="3" width="19" height="18" rx="4"></rect><text x="12" y="14.8">${escapeHtml(initials)}</text></svg>`;
-  }
-  return `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"></rect><path d="M8 21h8M12 17v4"></path></svg>`;
+function renderManufacturerLogo(info) {
+  const assetName = {
+    Surface: "microsoft",
+    Microsoft: "microsoft",
+    "Intel NUC": "intel",
+  }[info.manufacturerName] || info.logoType || "unknown";
+  return `<img src="./assets/logos/oem/${escapeHtml(assetName)}.svg" alt="" loading="lazy" />`;
 }
 
 function renderManufacturerBadge(device) {
   const info = normalizeManufacturer(device.manufacturer, device.model);
-  return `<span class="${info.badgeClass}" title="${escapeHtml(info.rawManufacturer || info.manufacturerName)}"><span class="manufacturer-logo ${info.colorClass}">${manufacturerIcon(info)}</span><span>${escapeHtml(info.manufacturerName)}</span></span>`;
+  return `<span class="${info.badgeClass}" title="${escapeHtml(info.rawManufacturer || info.manufacturerName)}"><span class="manufacturer-logo ${info.colorClass}">${renderManufacturerLogo(info)}</span><span>${escapeHtml(info.manufacturerName)}</span></span>`;
+}
+
+function normalizeTeamInfo(teamName) {
+  const rawTeamName = String(teamName || "").trim();
+  const normalized = rawTeamName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const rules = [
+    ["sav", /\b(sav|service apres[- ]vente|support)\b/],
+    ["purchase", /\b(achat|achats|procurement)\b/],
+    ["hr", /\b(rh|ressources humaines|human resources)\b/],
+    ["sales", /\b(commercial|commerciale|biz dev|business development)\b/],
+    ["tech", /\b(tech|it|informatique|developpement)\b/],
+    ["design", /\b(design|graphisme|creative)\b/],
+    ["store", /\b(store manager|responsable boutique)\b/],
+    ["logistics", /\b(logistique|logistics|warehouse)\b/],
+    ["catalog", /\b(catalogue|catalog|data)\b/],
+    ["b2c", /\bb2c\b/],
+  ];
+  const iconType = rules.find(([, pattern]) => pattern.test(normalized))?.[0] || "team";
+  return {
+    normalizedTeamName: normalized,
+    displayLabel: rawTeamName || translate("Non renseigne"),
+    iconType,
+    badgeClass: `team-badge team-${iconType}`,
+    rawTeamName,
+  };
+}
+
+function teamIcon(type) {
+  const paths = {
+    sav: '<path d="M4 14v-2a8 8 0 0 1 16 0v2M4 14a2 2 0 0 0 2 2h1v-6H6a2 2 0 0 0-2 2v2Zm16 0a2 2 0 0 1-2 2h-1v-6h1a2 2 0 0 1 2 2v2ZM17 18c-1 2-3 3-5 3"/>',
+    purchase: '<circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/><path d="M3 4h2l2.4 10.4a2 2 0 0 0 2 1.6h7.8a2 2 0 0 0 2-1.6L21 7H6"/>',
+    hr: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
+    sales: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18"/>',
+    tech: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M12 15h5"/>',
+    design: '<path d="m12 19 7-7 3 3-7 7-3-3ZM18 13l-1.5-7.5L2 2l3.5 14.5L13 18M2 2l7.6 7.6"/><circle cx="11" cy="11" r="2"/>',
+    store: '<path d="M3 9l2-5h14l2 5M5 13v7h14v-7M9 20v-6h6v6"/><path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"/>',
+    logistics: '<path d="M3 6h11v11H3zM14 10h4l3 3v4h-7z"/><circle cx="7" cy="19" r="2"/><circle cx="18" cy="19" r="2"/>',
+    catalog: '<path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/>',
+    b2c: '<path d="M3 9l2-5h14l2 5M5 13v7h14v-7"/><circle cx="12" cy="14" r="2"/><path d="M8 20v-1a4 4 0 0 1 8 0v1"/>',
+    team: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',
+  };
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[type] || paths.team}</svg>`;
+}
+
+function renderTeamBadge(teamName) {
+  const info = normalizeTeamInfo(teamName);
+  return `<span class="${info.badgeClass}">${teamIcon(info.iconType)}<span>${escapeHtml(info.displayLabel)}</span></span>`;
+}
+
+function locationInfo(type, name = "") {
+  const normalizedType = ["office", "store", "warehouse", "headquarters", "remote", "other"].includes(type) ? type : "other";
+  return { iconType: normalizedType, badgeClass: `location-badge location-${normalizedType}`, displayLabel: name || translate("Non renseigne") };
+}
+
+function locationIcon(type) {
+  const paths = {
+    office: '<path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M8 7h4M8 11h4M8 15h4M16 9h4v12"/>',
+    store: '<path d="M3 9l2-5h14l2 5M5 13v7h14v-7"/><path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"/>',
+    warehouse: '<path d="M3 21V8l9-5 9 5v13M7 21v-8h10v8M7 16h10"/>',
+    headquarters: '<path d="M3 21h18M5 21V3h10v18M15 9h4v12M8 7h4M8 11h4M8 15h4"/>',
+    remote: '<path d="m3 11 9-8 9 8M5 10v10h14V10M9 20v-6h6v6"/><path d="M9 10a5 5 0 0 1 6 0M11 12a2 2 0 0 1 2 0"/>',
+    other: '<path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
+  };
+  return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[type] || paths.other}</svg>`;
+}
+
+function renderLocationBadge(device) {
+  const site = state.establishments.find((item) => item.name === device.establishment_name);
+  const info = locationInfo(site?.establishment_type || "other", device.establishment_name);
+  return `<span class="${info.badgeClass}">${locationIcon(info.iconType)}<span>${escapeHtml(info.displayLabel)}</span></span>`;
 }
 
 function confirmAction({ title = "Confirmer la suppression", message, confirmLabel = "Supprimer" }) {
@@ -629,11 +732,11 @@ function valueBucket(device) {
   return "high";
 }
 
-function setOptions(select, values, label) {
+function setOptions(select, values, label, preserveOrder = false) {
   select.innerHTML = `<option value="">${label}</option>`;
-  values
-    .filter(Boolean)
-    .sort((a, b) => String(a).localeCompare(String(b), "fr"))
+  const options = values.filter(Boolean);
+  if (!preserveOrder) options.sort((a, b) => String(a).localeCompare(String(b), "fr"));
+  options
     .forEach((value) => {
       const option = document.createElement("option");
       option.value = value;
@@ -805,6 +908,17 @@ function applyFilters() {
     if (value && valueBucket(device) !== value) return false;
     return true;
   });
+  const sortBy = $("#sort-devices").value;
+  state.filtered.sort((left, right) => {
+    if (sortBy === "manufacturer") {
+      return normalizeManufacturer(left.manufacturer, left.model).manufacturerName.localeCompare(
+        normalizeManufacturer(right.manufacturer, right.model).manufacturerName,
+        state.language,
+      );
+    }
+    if (sortBy === "hostname") return String(left.hostname || "").localeCompare(String(right.hostname || ""), state.language);
+    return new Date(right.last_seen_at || 0).getTime() - new Date(left.last_seen_at || 0).getTime();
+  });
 
   renderDevices();
   renderMetrics();
@@ -913,10 +1027,10 @@ function renderDevices() {
     .map(
       (device) => `
         <tr data-id="${device.id}" class="${device.id === state.selectedDeviceId ? "is-selected" : ""}">
-          <td>${device.hostname || "-"}</td>
-          <td>${device.first_name || ""} ${device.last_name || ""}<br><small>${device.email || ""}</small></td>
-          <td>${device.team_name || "-"}</td>
-          <td>${device.establishment_name || "-"}</td>
+          <td><strong class="cell-primary">${escapeHtml(device.hostname || "-")}</strong><small class="cell-secondary">${escapeHtml(device.serial_number || "")}</small></td>
+          <td><strong class="cell-primary">${escapeHtml(`${device.first_name || ""} ${device.last_name || ""}`.trim() || "-")}</strong><small class="cell-secondary">${escapeHtml(device.email || "")}</small></td>
+          <td>${renderTeamBadge(device.team_name)}</td>
+          <td>${renderLocationBadge(device)}</td>
           <td>${renderOsBadge(device)}</td>
           <td class="manufacturer-cell">${renderManufacturerBadge(device)}<small>${escapeHtml(device.model || "-")}</small></td>
           <td>${formatDate(device.last_seen_at)}</td>
@@ -940,16 +1054,74 @@ async function selectDevice(id) {
   $("#device-detail").innerHTML = `<p class="helper">Chargement de l'historique...</p>`;
   try {
     const detail = await api(`/admin/devices/${id}`);
-    renderDetail({ ...detail.device, priceHistory: detail.priceHistory || [] }, detail.scans || []);
+    renderDetail({ ...detail.device, priceHistory: detail.priceHistory || [] }, detail.scans || [], detail.history || []);
   } catch (error) {
     toast(error.message);
-    renderDetail(device, []);
+    renderDetail(device, [], []);
   }
 }
 
-function renderDetail(device, scans) {
+function historyLabel(event) {
+  const labels = {
+    DEVICE_CREATED: "Machine creee",
+    DEVICE_UPDATED: "Machine mise a jour",
+    USER_ASSIGNED: "Utilisateur affecte",
+    USER_REASSIGNED: "Utilisateur reaffecte",
+    TEAM_CHANGED: "Equipe modifiee",
+    LOCATION_CHANGED: "Etablissement modifie",
+    OS_CHANGED: "Systeme mis a jour",
+    HARDWARE_CHANGED: "Materiel modifie",
+    DEVICE_RESET: "Reinitialisation detectee",
+    MANUAL_EDIT: "Note administrateur",
+    IMPORT_UPDATE: "Import mis a jour",
+  };
+  return labels[event.event_type] || event.event_type;
+}
+
+function historyFieldLabel(fieldName) {
+  const labels = {
+    hostname: "Nom d'hote",
+    os_name: "OS",
+    os_version: "Version OS",
+    manufacturer: "Fabricant",
+    model: "Modele",
+    serial_number: "Numero de serie",
+    cpu: "CPU",
+    gpu: "GPU",
+    ram_total_gb: "RAM totale",
+    storage_total_gb: "Stockage total",
+    storage_type: "Type stockage",
+    windows_user: "Utilisateur OS",
+    team_id: "Equipe",
+    establishment_id: "Etablissement",
+    assigned_user_id: "Proprietaire",
+    status: "Statut",
+  };
+  return translate(labels[fieldName] || fieldName);
+}
+
+function renderHistoryTimeline(history) {
+  return history.map((event) => `
+    <article class="history-event">
+      <span class="history-marker"></span>
+      <div>
+        <time>${formatDate(event.changed_at)}</time>
+        <strong>${escapeHtml(translate(historyLabel(event)))}</strong>
+        ${event.field_name ? `<small>${escapeHtml(historyFieldLabel(event.field_name))}</small>` : ""}
+        ${event.old_value !== null || event.new_value !== null ? `
+          <p><span>${translate("De")}: ${escapeHtml(event.old_value || "-")}</span><span>${translate("Vers")}: ${escapeHtml(event.new_value || "-")}</span></p>
+        ` : ""}
+        ${event.notes ? `<p>${escapeHtml(event.notes)}</p>` : ""}
+        <small>${escapeHtml(event.changed_by || "system")} - ${escapeHtml(event.source || "system")}</small>
+      </div>
+    </article>
+  `).join("") || `<p class="helper">${translate("Aucun historique.")}</p>`;
+}
+
+function renderDetail(device, scans, history = []) {
   state.selectedDetail = device;
   state.selectedScans = scans;
+  state.selectedHistory = history;
   const labels = currentStatusLabels();
   const priorityValue = device.replacement_priority ?? device.obsolescence_index;
   const manufacturer = normalizeManufacturer(device.manufacturer, device.model);
@@ -962,37 +1134,7 @@ function renderDetail(device, scans) {
     const name = `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.email;
     return `<option value="${user.id}" ${device.assigned_user_id === user.id ? "selected" : ""}>${escapeHtml(name)} (${escapeHtml(user.email)})</option>`;
   }).join("");
-  const rows = [
-    ["OS", [device.os_name, device.os_version].filter(Boolean).join(" ")],
-    ["Fabricant", manufacturer.manufacturerName],
-    ["Famille", family],
-    ["Modele", device.model],
-    ["Serial", device.serial_number],
-    ["MAC", device.mac_address],
-    ["IP locale", device.local_ip],
-    ["CPU", device.cpu],
-    ["GPU", device.gpu],
-    ["RAM", device.ram_total_gb ? `${device.ram_total_gb} Go` : ""],
-    ["Stockage", `${device.storage_total_gb || "-"} Go total / ${device.storage_free_gb || "-"} Go libres`],
-    ["Type stockage", device.storage_type],
-    ["Utilisateur OS", device.windows_user],
-    ["Script", device.script_version],
-    ["Score age", `${device.hardware_age_score || 0}/100`],
-    ["Score CPU", device.cpu_benchmark_score || device.cpu_score],
-    ["Generation CPU", device.cpu_generation],
-    ["Annee CPU", device.cpu_release_year],
-    ["Annee modele", device.release_year || device.model_release_year],
-    ["Prix lancement", money(device.estimated_launch_price)],
-    ["Valeur actuelle estimee", money(device.estimated_current_value || device.current_market_price_avg)],
-    ["Confiance prix", (device.price_confidence_score ?? device.confidence_score) ? `${device.price_confidence_score ?? device.confidence_score}/100` : ""],
-    ["Categorie materielle", localizedEnrichmentValue(device.device_category)],
-    ["Priorite remplacement", priorityValue !== null && priorityValue !== undefined ? `${priorityValue}/100` : ""],
-    ["Statut enrichissement", localizedEnrichmentValue(device.enrichment_status)],
-    ["Source enrichissement", device.enrichment_source || device.market_source],
-    ["Notes enrichissement", device.enrichment_notes],
-    ["Reco", localizedEnrichmentValue(device.recommendation)],
-    ["Dernier enrichissement", device.last_enriched_at ? formatDate(device.last_enriched_at) : ""],
-  ];
+  const detailRows = (rows) => `<dl class="detail-list">${rows.map(([key, value]) => `<div><dt>${escapeHtml(translate(key))}</dt><dd>${escapeHtml(value || "-")}</dd></div>`).join("")}</dl>`;
   const priceRows = (device.priceHistory || [])
     .slice(0, 8)
     .map((row) => `<li>${formatDate(row.collected_at)} - ${row.source} - ${money(row.price)} - ${row.condition || "-"}</li>`)
@@ -1004,59 +1146,77 @@ function renderDetail(device, scans) {
 
   $("#device-detail").innerHTML = `
     <div class="manufacturer-hero">
-      <span class="manufacturer-logo ${manufacturer.colorClass}">${manufacturerIcon(manufacturer)}</span>
+      <span class="manufacturer-logo ${manufacturer.colorClass}">${renderManufacturerLogo(manufacturer)}</span>
       <span>
         <strong>${escapeHtml(manufacturer.manufacturerName)}${family ? ` ${escapeHtml(family)}` : ""}</strong>
         <span>${escapeHtml(device.model || translate("Non renseigne"))}</span>
       </span>
     </div>
-    <dl class="detail-list">
-      ${rows.map(([key, value]) => `<div><dt>${escapeHtml(key)}</dt><dd>${escapeHtml(value || "-")}</dd></div>`).join("")}
-    </dl>
-    <form id="assignment-form" class="form-grid one assignment-form">
-      <h3>Affectations</h3>
-      <label>
-        Equipe
-        <select name="teamId">
-          <option value="">Non renseigne</option>
-          ${teamOptions}
-        </select>
-      </label>
-      <label>
-        Etablissement
-        <select name="establishmentId">
-          <option value="">Non renseigne</option>
-          ${establishmentOptions}
-        </select>
-      </label>
-      <label>
-        Proprietaire
-        <select name="assignedUserId">
-          <option value="">Non renseigne</option>
-          ${userOptions}
-        </select>
-      </label>
-      <button type="submit" class="primary">Enregistrer les affectations</button>
-    </form>
-    <form id="status-form" class="form-grid one scan-history">
-      <label>
-        Statut
-        <select name="status">
-          ${Object.entries(labels).map(([value, label]) => `<option value="${value}" ${device.status === value ? "selected" : ""}>${label}</option>`).join("")}
-        </select>
-      </label>
-      <button type="submit" class="primary">Mettre a jour</button>
-    </form>
-    <button id="enrich-device" class="secondary detail-enrich-button" type="button">Enrichir cette machine</button>
-    <div class="scan-history">
-      <h3>Historique des scans</h3>
-      <ul>${scanRows || "<li>Aucun scan detaille.</li>"}</ul>
-    </div>
-    <div class="scan-history">
-      <h3>Historique prix marche</h3>
-      <ul>${priceRows || "<li>Aucun prix externe collecte.</li>"}</ul>
-    </div>
+    <nav class="detail-tabs" aria-label="${escapeHtml(translate("Sections machine"))}">
+      <button class="detail-tab is-active" type="button" data-detail-tab="overview">${translate("Vue generale")}</button>
+      <button class="detail-tab" type="button" data-detail-tab="hardware">${translate("Materiel")}</button>
+      <button class="detail-tab" type="button" data-detail-tab="network">${translate("Reseau")}</button>
+      <button class="detail-tab" type="button" data-detail-tab="assignment">${translate("Affectation")}</button>
+      <button class="detail-tab" type="button" data-detail-tab="history">${translate("Historique")}</button>
+    </nav>
+    <section class="detail-tab-panel is-active" data-detail-panel="overview">
+      ${detailRows([
+        ["Hostname", device.hostname],
+        ["OS", [device.os_name, device.os_version].filter(Boolean).join(" ")],
+        ["Fabricant", manufacturer.manufacturerName],
+        ["Famille", family],
+        ["Modele", device.model],
+        ["Derniere remontee", formatDate(device.last_seen_at)],
+        ["Score age", `${device.hardware_age_score || 0}/100`],
+        ["Priorite remplacement", priorityValue !== null && priorityValue !== undefined ? `${priorityValue}/100` : ""],
+        ["Reco", localizedEnrichmentValue(device.recommendation)],
+      ])}
+      <form id="status-form" class="form-grid one scan-history">
+        <label>${translate("Statut")}<select name="status">${Object.entries(labels).map(([value, label]) => `<option value="${value}" ${device.status === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>
+        <button type="submit" class="primary">${translate("Mettre a jour")}</button>
+      </form>
+      <button id="enrich-device" class="secondary detail-enrich-button" type="button">${translate("Enrichir cette machine")}</button>
+    </section>
+    <section class="detail-tab-panel" data-detail-panel="hardware">
+      ${detailRows([
+        ["Serial", device.serial_number], ["CPU", device.cpu], ["GPU", device.gpu],
+        ["RAM", device.ram_total_gb ? `${device.ram_total_gb} Go` : ""],
+        ["Stockage", `${device.storage_total_gb || "-"} Go total / ${device.storage_free_gb || "-"} Go libres`],
+        ["Type stockage", device.storage_type], ["Score CPU", device.cpu_benchmark_score || device.cpu_score],
+        ["Generation CPU", device.cpu_generation], ["Annee modele", device.release_year || device.model_release_year],
+        ["Prix lancement", money(device.estimated_launch_price)],
+        ["Valeur actuelle estimee", money(device.estimated_current_value || device.current_market_price_avg)],
+      ])}
+    </section>
+    <section class="detail-tab-panel" data-detail-panel="network">
+      ${detailRows([["MAC", device.mac_address], ["IP locale", device.local_ip], ["Utilisateur OS", device.windows_user], ["Script", device.script_version]])}
+    </section>
+    <section class="detail-tab-panel" data-detail-panel="assignment">
+      <div class="assignment-summary">${renderTeamBadge(device.team_name)} ${renderLocationBadge(device)}</div>
+      <form id="assignment-form" class="form-grid one assignment-form">
+        <label>${translate("Equipe")}<select name="teamId"><option value="">${translate("Non renseigne")}</option>${teamOptions}</select></label>
+        <label>${translate("Etablissement")}<select name="establishmentId"><option value="">${translate("Non renseigne")}</option>${establishmentOptions}</select></label>
+        <label>${translate("Proprietaire")}<select name="assignedUserId"><option value="">${translate("Non renseigne")}</option>${userOptions}</select></label>
+        <button type="submit" class="primary">${translate("Enregistrer les affectations")}</button>
+      </form>
+    </section>
+    <section class="detail-tab-panel" data-detail-panel="history">
+      <form id="history-note-form" class="history-note-form">
+        <textarea name="notes" rows="3" maxlength="2000" placeholder="${escapeHtml(translate("Ajouter une note a l'historique..."))}" required></textarea>
+        <button class="secondary" type="submit">${translate("Ajouter la note")}</button>
+      </form>
+      <div class="history-timeline">${renderHistoryTimeline(history)}</div>
+      <div class="scan-history"><h3>${translate("Scans")}</h3><ul>${scanRows || `<li>${translate("Aucun scan detaille.")}</li>`}</ul></div>
+      <div class="scan-history"><h3>${translate("Prix marche")}</h3><ul>${priceRows || `<li>${translate("Aucun prix externe collecte.")}</li>`}</ul></div>
+    </section>
   `;
+
+  $$(".detail-tab").forEach((button) => {
+    button.addEventListener("click", () => {
+      $$(".detail-tab").forEach((tab) => tab.classList.toggle("is-active", tab === button));
+      $$(".detail-tab-panel").forEach((panel) => panel.classList.toggle("is-active", panel.dataset.detailPanel === button.dataset.detailTab));
+    });
+  });
 
   $("#assignment-form").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -1069,6 +1229,18 @@ function renderDetail(device, scans) {
       await loadAdminData();
       await selectDevice(device.id);
       toast("Affectations mises a jour.");
+    } catch (error) {
+      toast(error.message, "error");
+    }
+  });
+
+  $("#history-note-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const notes = new FormData(event.currentTarget).get("notes");
+    try {
+      await api(`/admin/devices/${device.id}/history-note`, { method: "POST", body: JSON.stringify({ notes }) });
+      await selectDevice(device.id);
+      toast("Note ajoutee.", "success");
     } catch (error) {
       toast(error.message, "error");
     }
@@ -1312,6 +1484,7 @@ const establishmentTypeLabels = {
   research: "Centre R&D",
   accounting: "Comptabilite",
   office: "Bureau",
+  remote: "Teletravail",
   other: "Autre",
 };
 
@@ -1323,6 +1496,7 @@ function establishmentIcon(type) {
     research: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3M8 15h8"></path></svg>`,
     accounting: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="2" width="16" height="20" rx="2"></rect><path d="M8 6h8M8 10h2M14 10h2M8 14h2M14 14h2M8 18h2M14 18h2"></path></svg>`,
     office: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M9 8h1M14 8h1M9 12h1M14 12h1M9 16h1M14 16h1"></path></svg>`,
+    remote: locationIcon("remote"),
     other: organizationIcon("site"),
   };
   return icons[type] || icons.other;
@@ -1381,31 +1555,45 @@ function updateOrganizationDatalists() {
 function renderOrganization() {
   $("#teams-manager-list").innerHTML = state.teams
     .map(
-      (team) => `
-        <button class="organization-item edit-team ${team.active ? "" : "is-inactive"}" type="button" data-id="${team.id}">
-          <span class="organization-icon" style="--item-color:${escapeHtml(team.color || "#16735f")}">${organizationIcon("team")}</span>
-          <span>
-            <strong>${escapeHtml(team.name)}</strong>
-            <small>${state.language === "en" ? `${team.device_count} computer(s), ${team.user_count || 0} user(s)` : `${team.device_count} machine(s), ${team.user_count || 0} utilisateur(s)`}${team.description ? ` - ${escapeHtml(team.description)}` : ""}</small>
+      (team, index) => `
+        <div class="organization-sort-row ${team.active ? "" : "is-inactive"}" draggable="true" data-entity="team" data-id="${team.id}">
+          <button class="drag-handle" type="button" aria-label="Deplacer ${escapeHtml(team.name)}" title="Glisser pour reordonner">&#8942;&#8942;</button>
+          <button class="organization-item edit-team" type="button" data-id="${team.id}">
+            <span class="organization-icon" style="--item-color:${escapeHtml(team.color || "#16735f")}">${teamIcon(normalizeTeamInfo(team.name).iconType)}</span>
+            <span>
+              <strong>${escapeHtml(team.name)}</strong>
+              <small>${state.language === "en" ? `${team.device_count} computer(s), ${team.user_count || 0} user(s)` : `${team.device_count} machine(s), ${team.user_count || 0} utilisateur(s)`}${team.description ? ` - ${escapeHtml(team.description)}` : ""}</small>
+            </span>
+            <span class="organization-chevron">&rsaquo;</span>
+          </button>
+          <span class="sort-buttons">
+            <button type="button" class="sort-step" data-direction="-1" data-entity="team" data-id="${team.id}" ${index === 0 ? "disabled" : ""} aria-label="Monter">&#8593;</button>
+            <button type="button" class="sort-step" data-direction="1" data-entity="team" data-id="${team.id}" ${index === state.teams.length - 1 ? "disabled" : ""} aria-label="Descendre">&#8595;</button>
           </span>
-          <span class="organization-chevron">&rsaquo;</span>
-        </button>
+        </div>
       `,
     )
     .join("") || `<p class="helper">Aucune equipe.</p>`;
 
   $("#establishments-manager-list").innerHTML = state.establishments
-    .map((site) => {
+    .map((site, index) => {
       const location = [site.city, site.country].filter(Boolean).join(", ");
       return `
-        <button class="organization-item edit-establishment ${site.active ? "" : "is-inactive"}" type="button" data-id="${site.id}">
-          <span class="organization-icon site type-${escapeHtml(site.establishment_type || "office")}">${establishmentIcon(site.establishment_type || "office")}</span>
-          <span>
-            <strong>${escapeHtml(site.name)}</strong>
-            <small>${translate(establishmentTypeLabels[site.establishment_type] || establishmentTypeLabels.office)} - ${state.language === "en" ? `${site.device_count} computer(s), ${site.user_count || 0} user(s)` : `${site.device_count} machine(s), ${site.user_count || 0} utilisateur(s)`}${location ? ` - ${escapeHtml(location)}` : ""}</small>
+        <div class="organization-sort-row ${site.active ? "" : "is-inactive"}" draggable="true" data-entity="establishment" data-id="${site.id}">
+          <button class="drag-handle" type="button" aria-label="Deplacer ${escapeHtml(site.name)}" title="Glisser pour reordonner">&#8942;&#8942;</button>
+          <button class="organization-item edit-establishment" type="button" data-id="${site.id}">
+            <span class="organization-icon site type-${escapeHtml(site.establishment_type || "office")}">${establishmentIcon(site.establishment_type || "office")}</span>
+            <span>
+              <strong>${escapeHtml(site.name)}</strong>
+              <small>${translate(establishmentTypeLabels[site.establishment_type] || establishmentTypeLabels.office)} - ${state.language === "en" ? `${site.device_count} computer(s), ${site.user_count || 0} user(s)` : `${site.device_count} machine(s), ${site.user_count || 0} utilisateur(s)`}${location ? ` - ${escapeHtml(location)}` : ""}</small>
+            </span>
+            <span class="organization-chevron">&rsaquo;</span>
+          </button>
+          <span class="sort-buttons">
+            <button type="button" class="sort-step" data-direction="-1" data-entity="establishment" data-id="${site.id}" ${index === 0 ? "disabled" : ""} aria-label="Monter">&#8593;</button>
+            <button type="button" class="sort-step" data-direction="1" data-entity="establishment" data-id="${site.id}" ${index === state.establishments.length - 1 ? "disabled" : ""} aria-label="Descendre">&#8595;</button>
           </span>
-          <span class="organization-chevron">&rsaquo;</span>
-        </button>
+        </div>
       `;
     })
     .join("") || `<p class="helper">Aucun etablissement.</p>`;
@@ -1414,6 +1602,62 @@ function renderOrganization() {
   $$(".edit-establishment").forEach((button) =>
     button.addEventListener("click", () => editEstablishment(button.dataset.id)),
   );
+  bindOrganizationSorting();
+}
+
+async function saveOrganizationOrder(entityType) {
+  const items = entityType === "team" ? state.teams : state.establishments;
+  await api("/admin/organization/reorder", {
+    method: "POST",
+    body: JSON.stringify({ entityType, ids: items.map((item) => item.id) }),
+  });
+}
+
+async function moveOrganizationItem(entityType, id, targetIndex) {
+  const items = entityType === "team" ? state.teams : state.establishments;
+  const currentIndex = items.findIndex((item) => item.id === id);
+  const boundedIndex = Math.max(0, Math.min(targetIndex, items.length - 1));
+  if (currentIndex < 0 || currentIndex === boundedIndex) return;
+  const [item] = items.splice(currentIndex, 1);
+  items.splice(boundedIndex, 0, item);
+  renderOrganization();
+  updateOrganizationDatalists();
+  try {
+    await saveOrganizationOrder(entityType);
+    toast("Ordre enregistre.", "success");
+  } catch (error) {
+    toast(error.message, "error");
+    await loadOrganization();
+  }
+}
+
+function bindOrganizationSorting() {
+  $$(".sort-step").forEach((button) => {
+    button.addEventListener("click", () => {
+      const items = button.dataset.entity === "team" ? state.teams : state.establishments;
+      const index = items.findIndex((item) => item.id === button.dataset.id);
+      moveOrganizationItem(button.dataset.entity, button.dataset.id, index + Number(button.dataset.direction));
+    });
+  });
+  $$(".organization-sort-row").forEach((row) => {
+    row.addEventListener("dragstart", (event) => {
+      row.classList.add("is-dragging");
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", `${row.dataset.entity}:${row.dataset.id}`);
+    });
+    row.addEventListener("dragend", () => row.classList.remove("is-dragging"));
+    row.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+    });
+    row.addEventListener("drop", (event) => {
+      event.preventDefault();
+      const [entityType, id] = event.dataTransfer.getData("text/plain").split(":");
+      if (entityType !== row.dataset.entity) return;
+      const items = entityType === "team" ? state.teams : state.establishments;
+      moveOrganizationItem(entityType, id, items.findIndex((item) => item.id === row.dataset.id));
+    });
+  });
 }
 
 function resetTeamForm() {
@@ -1620,6 +1864,9 @@ async function loadAdminData() {
   setOptions($("#filter-manufacturer"), manufacturers, "Tous");
   applyFilters();
   await organizationPromise;
+  setOptions($("#filter-team"), state.teams.map((team) => team.name), "Toutes", true);
+  setOptions($("#filter-establishment"), state.establishments.map((site) => site.name), "Tous", true);
+  applyFilters();
 }
 
 function hydrateDatalists() {
@@ -1960,7 +2207,7 @@ function bindEvents() {
   });
   $("#export-enriched-csv").addEventListener("click", () => exportCsv(true));
   $("#export-csv").addEventListener("click", () => exportCsv(false));
-  ["global-search", "filter-team", "filter-establishment", "filter-os", "filter-age", "filter-model", "filter-manufacturer", "filter-status", "filter-cpu-score", "filter-value"].forEach((id) => {
+  ["global-search", "filter-team", "filter-establishment", "filter-os", "filter-age", "filter-model", "filter-manufacturer", "filter-status", "filter-cpu-score", "filter-value", "sort-devices"].forEach((id) => {
     $(`#${id}`).addEventListener("input", applyFilters);
   });
 }

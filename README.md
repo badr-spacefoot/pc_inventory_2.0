@@ -310,9 +310,31 @@ La detection couvre Windows 10, Windows 11, Windows Server, Ubuntu, Debian, Fedo
 - `ASUSTeK COMPUTER INC.` devient `ASUS`;
 - les valeurs OEM generiques ou inconnues deviennent `Unknown`.
 
-Les badges SVG sont integres au frontend et fonctionnent hors ligne. Les fabricants pris en charge incluent Dell, HP, Lenovo, ASUS, Acer, Apple, Microsoft/Surface, MSI, Samsung, Fujitsu, Dynabook, Toshiba, Huawei, Framework, Intel NUC et Gigabyte.
+Les logos SVG sont stockes dans `frontend/assets/logos/oem/` et fonctionnent hors ligne. Les fabricants pris en charge incluent Dell, HP, Lenovo, ASUS, Acer, Apple, Microsoft/Surface, MSI, Samsung, Fujitsu, Dynabook, Toshiba, Huawei, Framework, Intel NUC et Gigabyte. Un logo generique est utilise pour les valeurs inconnues.
+
+La majorite des pictogrammes de marque proviennent du projet Simple Icons et sont copies dans le depot, sans chargement distant. Les marques restent la propriete de leurs detenteurs respectifs. Pour ajouter une marque:
+
+1. ajouter un SVG monochrome dans `frontend/assets/logos/oem/`;
+2. ajouter la regle correspondante dans `manufacturerRules`;
+3. faire correspondre `logoType` au nom du fichier sans extension.
 
 La fiche machine detecte aussi les familles courantes: Latitude, Precision, OptiPlex, XPS, EliteBook, ProBook, ZBook, EliteDesk, ThinkPad, ThinkCentre, ThinkBook, MacBook, iMac et Surface. Le dashboard affiche les volumes par fabricant, la combinaison fabricant/OS et l'age moyen par fabricant.
+
+## Icones equipes et etablissements
+
+`normalizeTeamInfo(teamName)` associe automatiquement les equipes aux categories SAV, achats, RH, commerciale/Biz Dev, Tech/IT, Design, Store Manager, Logistique, Catalogue et B2C. Les noms inconnus utilisent l'icone equipe generique.
+
+Les etablissements utilisent leur type enregistre: bureau, boutique, entrepot, siege, teletravail ou autre. Ces icones SVG sont integrees au frontend et apparaissent dans les listes d'organisation, le tableau du parc et la fiche machine.
+
+## Ordre personnalise
+
+Les tables `teams` et `establishments` possedent un champ `sort_index`. Dans Admin > Organisation:
+
+- glisser-deposer un element pour le deplacer sur ordinateur;
+- utiliser les boutons haut/bas sur mobile ou au clavier;
+- l'ordre est sauvegarde immediatement par `POST /admin/organization/reorder`.
+
+Les listes de gestion, les champs de collecte et les filtres equipe/etablissement reutilisent cet ordre. Les anciennes lignes sans `sort_index` sont classees alphabetiquement puis initialisees par la migration.
 
 ## Affectation et reaffectation
 
@@ -335,7 +357,22 @@ Les equipes et etablissements disposent d'une action `Supprimer` dans leur formu
 - La suppression d'un etablissement inutilise supprime egalement son adresse et ses coordonnees, car elles appartiennent au meme enregistrement.
 - Le dialogue de reaffectation permet de choisir une autre destination, de deplacer les machines et profils utilisateurs, puis de supprimer l'ancien element.
 
-Aucune migration supplementaire n'est necessaire: ces controles utilisent les cles etrangeres existantes.
+La migration `20260607150000_device_history_and_ordering.sql` ajoute l'ordre persistant et la table d'historique.
+
+## Historique du cycle de vie
+
+`device_history` conserve la machine, le type d'evenement, le champ modifie, l'ancienne et la nouvelle valeur, la source, l'auteur et la date.
+
+La fiche machine comporte les onglets Vue generale, Materiel, Reseau, Affectation et Historique. L'onglet Historique affiche les evenements les plus recents et permet d'ajouter une note administrateur.
+
+Les evenements sont ajoutes lorsque:
+
+- une machine est creee;
+- le collecteur ou l'import modifie le hostname, l'OS, le fabricant, le modele, le CPU, la RAM, le stockage ou l'utilisateur OS;
+- un administrateur change le proprietaire, l'equipe, l'etablissement ou le statut;
+- une reaffectation en masse deplace les machines vers une autre equipe ou un autre etablissement.
+
+`last_seen_at` et les scans identiques ne generent pas d'evenement afin d'eviter un historique bruyant. Les valeurs actuelles restent dans `devices`; les anciennes valeurs restent dans `device_history`.
 
 Un message `0 machine(s), 1 utilisateur(s)` indique generalement qu'un ancien profil de collecte conserve encore cette equipe ou cet etablissement. Ce n'est pas une coordonnee de carte. Le dialogue de reaffectation deplace ce profil proprement. Pour un audit manuel, consulter les colonnes `team_id` et `establishment_id` de la table `users`; ne pas supprimer directement une reference sans avoir choisi sa nouvelle affectation.
 

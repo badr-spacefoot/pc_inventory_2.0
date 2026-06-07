@@ -161,6 +161,73 @@ async function audit(action: string, entityType: string, entityId: string | null
   await supabase.from("audit_logs").insert({ action, entity_type: entityType, entity_id: entityId, details });
 }
 
+const deviceHistoryFields: Array<{ field: string; eventType: string }> = [
+  { field: "hostname", eventType: "DEVICE_UPDATED" },
+  { field: "os_name", eventType: "OS_CHANGED" },
+  { field: "os_version", eventType: "OS_CHANGED" },
+  { field: "manufacturer", eventType: "HARDWARE_CHANGED" },
+  { field: "model", eventType: "HARDWARE_CHANGED" },
+  { field: "serial_number", eventType: "HARDWARE_CHANGED" },
+  { field: "cpu", eventType: "HARDWARE_CHANGED" },
+  { field: "gpu", eventType: "HARDWARE_CHANGED" },
+  { field: "ram_total_gb", eventType: "HARDWARE_CHANGED" },
+  { field: "storage_total_gb", eventType: "HARDWARE_CHANGED" },
+  { field: "storage_type", eventType: "HARDWARE_CHANGED" },
+  { field: "windows_user", eventType: "USER_REASSIGNED" },
+];
+
+function historyValue(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  return typeof value === "object" ? JSON.stringify(value) : String(value);
+}
+
+async function appendDeviceHistory(rows: Json[]) {
+  if (rows.length === 0) return;
+  const { error } = await supabase.from("device_history").insert(rows);
+  if (error) throw error;
+}
+
+function changedDeviceHistory(deviceId: string, previous: Json | null, current: Json, source: string, changedAt: string) {
+  if (!previous) {
+    return [{
+      device_id: deviceId,
+      event_type: "DEVICE_CREATED",
+      new_value: historyValue(current.hostname),
+      changed_by: source === "admin" ? "admin" : "collector",
+      source,
+      changed_at: changedAt,
+    }];
+  }
+  const changes = deviceHistoryFields.flatMap(({ field, eventType }) => {
+    const oldValue = historyValue(previous[field]);
+    const newValue = historyValue(current[field]);
+    if (oldValue === newValue) return [];
+    return [{
+      device_id: deviceId,
+      event_type: source === "import" ? "IMPORT_UPDATE" : eventType,
+      field_name: field,
+      old_value: oldValue,
+      new_value: newValue,
+      changed_by: source === "admin" ? "admin" : "collector",
+      source,
+      changed_at: changedAt,
+    }];
+  });
+  const osChanged = historyValue(previous.os_version) !== historyValue(current.os_version);
+  const userChanged = historyValue(previous.windows_user) !== historyValue(current.windows_user);
+  if (osChanged && userChanged) {
+    changes.push({
+      device_id: deviceId,
+      event_type: "DEVICE_RESET",
+      changed_by: "collector",
+      source,
+      notes: "OS and local user changed in the same collection; reset or reinstall may have occurred.",
+      changed_at: changedAt,
+    });
+  }
+  return changes;
+}
+
 async function consumeCollectionAccessToken(token: string) {
   if (!token) return null;
   if (token === collectionAccessToken) return "legacy-static-token";
@@ -679,6 +746,7 @@ async function persistScan(request: Request, user: { id: string; team_id: string
     hardware_age_score: deviceValues.hardware_age_score,
   });
   if (scanError) throw scanError;
+  await appendDeviceHistory(changedDeviceHistory(device.id, previousDevice, deviceValues, safeString(rawBody.importedFrom) ? "import" : "collector", collectedAt));
 
   if (tokenId) {
     await supabase.from("collection_tokens").update({ used_at: new Date().toISOString() }).eq("id", tokenId);
@@ -824,10 +892,11 @@ async function handleAdminOrganization(request: Request) {
     { data: users, error: usersError },
   ] =
     await Promise.all([
-      supabase.from("teams").select("id,name,description,color,active,created_at").order("name"),
+      supabase.from("teams").select("id,name,description,color,active,sort_index,created_at").order("sort_index", { nullsFirst: false }).order("name"),
       supabase
         .from("establishments")
-        .select("id,name,establishment_type,address,postal_code,city,country,latitude,longitude,active,created_at")
+        .select("id,name,establishment_type,address,postal_code,city,country,latitude,longitude,active,sort_index,created_at")
+        .order("sort_index", { nullsFirst: false })
         .order("name"),
       supabase.from("devices").select("team_id,establishment_id"),
       supabase.from("users").select("id,first_name,last_name,email,service,team_id,establishment_id").order("last_name"),
@@ -868,6 +937,26 @@ async function handleAdminOrganization(request: Request) {
     users: users ?? [],
     map_provider: googleMapsApiKey ? "google" : "openstreetmap",
   });
+}
+
+async function handleAdminReorderOrganization(request: Request) {
+  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  const body = await request.json().catch(() => ({}));
+  const entityType = safeString(body.entityType);
+  const ids = Array.isArray(body.ids) ? body.ids.map((id: unknown) => safeString(id)).filter(Boolean).slice(0, 500) : [];
+  if (!["team", "establishment"].includes(entityType) || ids.length === 0 || new Set(ids).size !== ids.length) {
+    return badRequest(request, "Ordre invalide.");
+  }
+  const table = entityType === "team" ? "teams" : "establishments";
+  const updates = ids.map((id: string, sortIndex: number) =>
+    supabase.from(table).update({ sort_index: sortIndex }).eq("id", id).select("id").maybeSingle()
+  );
+  const results = await Promise.all(updates);
+  const failure = results.find((result) => result.error || !result.data);
+  if (failure?.error) throw failure.error;
+  if (failure) return badRequest(request, "Un element a reordonner est introuvable.", 404);
+  await audit(`${entityType}_order_updated`, entityType, null, { ids });
+  return json(request, { ok: true });
 }
 
 async function handleAdminSaveTeam(request: Request, id?: string) {
@@ -923,7 +1012,7 @@ async function handleAdminSaveEstablishment(request: Request, id?: string) {
   const body = await request.json().catch(() => ({}));
   const name = safeString(body.name, 120);
   const establishmentType = safeString(body.establishmentType, 40) || "office";
-  const allowedTypes = ["warehouse", "store", "headquarters", "research", "accounting", "office", "other"];
+  const allowedTypes = ["warehouse", "store", "headquarters", "research", "accounting", "office", "remote", "other"];
   const latitude = body.latitude === "" || body.latitude === null || body.latitude === undefined ? null : safeNumber(body.latitude);
   const longitude = body.longitude === "" || body.longitude === null || body.longitude === undefined ? null : safeNumber(body.longitude);
   if (!name) return badRequest(request, "Nom de l'etablissement requis.");
@@ -1090,7 +1179,14 @@ async function handleAdminDeviceDetail(request: Request, id: string) {
     .order("collected_at", { ascending: false })
     .limit(20);
   if (priceHistoryError) throw priceHistoryError;
-  return json(request, { device: { ...device, ...assignment }, scans, priceHistory });
+  const { data: history, error: historyError } = await supabase
+    .from("device_history")
+    .select("id,event_type,field_name,old_value,new_value,changed_by,source,notes,changed_at")
+    .eq("device_id", id)
+    .order("changed_at", { ascending: false })
+    .limit(200);
+  if (historyError) throw historyError;
+  return json(request, { device: { ...device, ...assignment }, scans, priceHistory, history: history ?? [] });
 }
 
 async function recordExists(table: "teams" | "establishments" | "users", id: string | null) {
@@ -1115,6 +1211,13 @@ async function handleAdminDeviceAssignment(request: Request, id: string) {
   if (!establishmentValid) return badRequest(request, "Etablissement selectionne introuvable.", 404);
   if (!userValid) return badRequest(request, "Utilisateur selectionne introuvable.", 404);
 
+  const [{ data: currentDevice, error: currentError }, { data: targetTeam }, { data: targetSite }, { data: targetUser }] = await Promise.all([
+    supabase.from("device_inventory_view").select("team_name,establishment_name,first_name,last_name,email").eq("id", id).single(),
+    teamId ? supabase.from("teams").select("name").eq("id", teamId).maybeSingle() : Promise.resolve({ data: null }),
+    establishmentId ? supabase.from("establishments").select("name").eq("id", establishmentId).maybeSingle() : Promise.resolve({ data: null }),
+    assignedUserId ? supabase.from("users").select("first_name,last_name,email").eq("id", assignedUserId).maybeSingle() : Promise.resolve({ data: null }),
+  ]);
+  if (currentError) throw currentError;
   const values = {
     team_id: teamId,
     establishment_id: establishmentId,
@@ -1124,6 +1227,26 @@ async function handleAdminDeviceAssignment(request: Request, id: string) {
   const { data, error } = await supabase.from("devices").update(values).eq("id", id).select("id").maybeSingle();
   if (error) throw error;
   if (!data) return badRequest(request, "Machine introuvable.", 404);
+  const oldUser = [currentDevice.first_name, currentDevice.last_name].filter(Boolean).join(" ") || currentDevice.email || null;
+  const newUser = targetUser ? [targetUser.first_name, targetUser.last_name].filter(Boolean).join(" ") || targetUser.email : null;
+  const changedAt = new Date().toISOString();
+  const historyRows = [
+    ["team_id", "TEAM_CHANGED", currentDevice.team_name, targetTeam?.name],
+    ["establishment_id", "LOCATION_CHANGED", currentDevice.establishment_name, targetSite?.name],
+    ["assigned_user_id", oldUser ? "USER_REASSIGNED" : "USER_ASSIGNED", oldUser, newUser],
+  ].flatMap(([fieldName, eventType, oldValue, newValue]) =>
+    historyValue(oldValue) === historyValue(newValue) ? [] : [{
+      device_id: id,
+      event_type: eventType,
+      field_name: fieldName,
+      old_value: historyValue(oldValue),
+      new_value: historyValue(newValue),
+      changed_by: "admin",
+      source: "manual",
+      changed_at: changedAt,
+    }]
+  );
+  await appendDeviceHistory(historyRows);
   await audit("device_assignment_updated", "device", id, values);
   return json(request, { device: data });
 }
@@ -1141,18 +1264,53 @@ async function handleAdminBulkReassign(request: Request) {
   const column = entityType === "team" ? "team_id" : "establishment_id";
   if (!(await recordExists(table, targetId))) return badRequest(request, "Destination introuvable.", 404);
 
+  const [{ data: linkedDevices, error: linkedError }, { data: source }, { data: target }] = await Promise.all([
+    supabase.from("devices").select("id").eq(column, sourceId),
+    supabase.from(table).select("name").eq("id", sourceId).maybeSingle(),
+    supabase.from(table).select("name").eq("id", targetId).maybeSingle(),
+  ]);
+  if (linkedError) throw linkedError;
   const [{ data: devices, error: deviceError }, { data: users, error: userError }] = await Promise.all([
     supabase.from("devices").update({ [column]: targetId, updated_at: new Date().toISOString() }).eq(column, sourceId).select("id"),
     supabase.from("users").update({ [column]: targetId, updated_at: new Date().toISOString() }).eq(column, sourceId).select("id"),
   ]);
   if (deviceError) throw deviceError;
   if (userError) throw userError;
+  await appendDeviceHistory((linkedDevices ?? []).map((device) => ({
+    device_id: device.id,
+    event_type: entityType === "team" ? "TEAM_CHANGED" : "LOCATION_CHANGED",
+    field_name: column,
+    old_value: historyValue(source?.name),
+    new_value: historyValue(target?.name),
+    changed_by: "admin",
+    source: "bulk-reassignment",
+    changed_at: new Date().toISOString(),
+  })));
   await audit(`${entityType}_references_reassigned`, entityType, sourceId, {
     target_id: targetId,
     device_count: devices?.length ?? 0,
     user_count: users?.length ?? 0,
   });
   return json(request, { devices: devices?.length ?? 0, users: users?.length ?? 0 });
+}
+
+async function handleAdminDeviceHistoryNote(request: Request, id: string) {
+  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  const body = await request.json().catch(() => ({}));
+  const notes = safeString(body.notes, 2000);
+  if (!notes) return badRequest(request, "Note requise.");
+  const { data: device, error: deviceError } = await supabase.from("devices").select("id").eq("id", id).maybeSingle();
+  if (deviceError) throw deviceError;
+  if (!device) return badRequest(request, "Machine introuvable.", 404);
+  await appendDeviceHistory([{
+    device_id: id,
+    event_type: "MANUAL_EDIT",
+    changed_by: "admin",
+    source: "manual-note",
+    notes,
+    changed_at: new Date().toISOString(),
+  }]);
+  return json(request, { ok: true });
 }
 
 function parseCsvLine(line: string) {
@@ -1270,8 +1428,22 @@ async function handleAdminDeviceStatus(request: Request, id: string) {
   const status = safeString(body.status, 40);
   const allowed = ["active", "replace", "stock", "lost", "retired"];
   if (!allowed.includes(status)) return badRequest(request, "Statut invalide.");
+  const { data: previous, error: previousError } = await supabase.from("devices").select("status").eq("id", id).single();
+  if (previousError) throw previousError;
   const { data: device, error } = await supabase.from("devices").update({ status }).eq("id", id).select("id,status").single();
   if (error) throw error;
+  if (previous.status !== status) {
+    await appendDeviceHistory([{
+      device_id: id,
+      event_type: "DEVICE_UPDATED",
+      field_name: "status",
+      old_value: previous.status,
+      new_value: status,
+      changed_by: "admin",
+      source: "manual",
+      changed_at: new Date().toISOString(),
+    }]);
+  }
   await audit("device_status_updated", "device", id, { status });
   return json(request, { device });
 }
@@ -1292,6 +1464,7 @@ Deno.serve(async (request) => {
     if (request.method === "GET" && path.endsWith("/admin/devices")) return await handleAdminDevices(request);
     if (request.method === "GET" && path.endsWith("/admin/organization")) return await handleAdminOrganization(request);
     if (request.method === "POST" && path.endsWith("/admin/organization/reassign")) return await handleAdminBulkReassign(request);
+    if (request.method === "POST" && path.endsWith("/admin/organization/reorder")) return await handleAdminReorderOrganization(request);
     if (request.method === "GET" && path.endsWith("/admin/address/autocomplete")) return await handleAdminAddressAutocomplete(request);
     if (request.method === "GET" && path.endsWith("/admin/address/details")) return await handleAdminAddressDetails(request);
     if (request.method === "POST" && path.endsWith("/admin/teams")) return await handleAdminSaveTeam(request);
@@ -1319,6 +1492,8 @@ Deno.serve(async (request) => {
     if (request.method === "POST" && statusMatch) return await handleAdminDeviceStatus(request, statusMatch[1]);
     const assignmentMatch = path.match(/\/admin\/devices\/([0-9a-f-]+)\/assignment/i);
     if (request.method === "POST" && assignmentMatch) return await handleAdminDeviceAssignment(request, assignmentMatch[1]);
+    const historyNoteMatch = path.match(/\/admin\/devices\/([0-9a-f-]+)\/history-note/i);
+    if (request.method === "POST" && historyNoteMatch) return await handleAdminDeviceHistoryNote(request, historyNoteMatch[1]);
     const detailMatch = path.match(/\/admin\/devices\/([0-9a-f-]+)/i);
     if (request.method === "GET" && detailMatch) return await handleAdminDeviceDetail(request, detailMatch[1]);
     return badRequest(request, "Route inconnue.", 404);

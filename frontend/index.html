@@ -37,7 +37,7 @@
             <span id="current-language-flag" aria-hidden="true">&#x1F1EB;&#x1F1F7;</span>
           </button>
           <div id="language-menu" class="language-menu is-hidden" role="menu">
-            <button type="button" data-language="fr" role="menuitem"><span aria-hidden="true">&#x1F1EB;&#x1F1F7;</span> Français</button>
+            <button type="button" data-language="fr" role="menuitem"><span aria-hidden="true">&#x1F1EB;&#x1F1F7;</span> Fran&ccedil;ais</button>
             <button type="button" data-language="en" role="menuitem"><span aria-hidden="true">&#x1F1EC;&#x1F1E7;</span> English</button>
           </div>
         </div>
@@ -283,7 +283,7 @@
                 <form id="team-form" class="form-grid one">
                   <input name="id" type="hidden" />
                   <label>
-                    Nom
+                    Nom de l'equipe
                     <input name="name" required maxlength="120" />
                   </label>
                   <label>
@@ -326,7 +326,7 @@
                 <form id="establishment-form" class="form-grid">
                   <input name="id" type="hidden" />
                   <label>
-                    Nom
+                    Nom de l'etablissement
                     <input name="name" required maxlength="120" />
                   </label>
                   <label>
@@ -338,6 +338,7 @@
                       <option value="research">Centre R&amp;D</option>
                       <option value="accounting">Comptabilite</option>
                       <option value="office" selected>Bureau</option>
+                      <option value="remote">Teletravail</option>
                       <option value="other">Autre</option>
                     </select>
                   </label>
@@ -438,6 +439,14 @@
               <label>
                 Fabricant
                 <select id="filter-manufacturer"></select>
+              </label>
+              <label>
+                Trier par
+                <select id="sort-devices">
+                  <option value="last_seen">Derniere remontee</option>
+                  <option value="manufacturer">Fabricant</option>
+                  <option value="hostname">Hostname</option>
+                </select>
               </label>
               <label>
                 Statut
