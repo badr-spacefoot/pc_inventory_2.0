@@ -165,6 +165,7 @@
           </nav>
 
           <section class="metric-grid admin-section-view section-fleet" id="metrics"></section>
+          <section class="metric-grid oem-metrics admin-section-view section-fleet" id="oem-metrics"></section>
 
           <section class="admin-section-view section-valuation is-hidden">
             <section class="panel valuation-toolbar">
@@ -435,6 +436,10 @@
                 <select id="filter-model"></select>
               </label>
               <label>
+                Fabricant
+                <select id="filter-manufacturer"></select>
+              </label>
+              <label>
                 Statut
                 <select id="filter-status">
                   <option value="">Tous</option>
@@ -481,7 +486,7 @@
                       <th>Equipe</th>
                       <th>Etablissement</th>
                       <th>OS</th>
-                      <th>Modele</th>
+                      <th>Fabricant / Modele</th>
                       <th>Derniere remontee</th>
                       <th>Statut</th>
                     </tr>
@@ -513,6 +518,9 @@
             <div class="panel chart" data-chart="value-by-site"></div>
             <div class="panel chart" data-chart="replace-top"></div>
             <div class="panel chart" data-chart="age-performance"></div>
+            <div class="panel chart" data-chart="manufacturers"></div>
+            <div class="panel chart" data-chart="manufacturer-os"></div>
+            <div class="panel chart" data-chart="manufacturer-age"></div>
           </section>
         </section>
       </section>
@@ -530,6 +538,25 @@
         <div class="confirm-actions">
           <button class="secondary" value="cancel">Annuler</button>
           <button id="confirm-action" class="danger-button" value="confirm">Supprimer</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="reassign-dialog" class="confirm-dialog reassign-dialog">
+      <form id="reassign-form">
+        <div class="confirm-icon neutral" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M17 3l4 4-4 4"></path><path d="M3 7h18M7 21l-4-4 4-4"></path><path d="M21 17H3"></path></svg>
+        </div>
+        <h3>Reaffecter les elements lies</h3>
+        <p id="reassign-message"></p>
+        <input name="entityType" type="hidden" />
+        <input name="sourceId" type="hidden" />
+        <label>
+          Nouvelle destination
+          <select name="targetId" required></select>
+        </label>
+        <div class="confirm-actions">
+          <button id="cancel-reassign" class="secondary" type="button">Annuler</button>
+          <button class="primary" type="submit">Reaffecter</button>
         </div>
       </form>
     </dialog>

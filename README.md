@@ -29,6 +29,7 @@ Flux:
 - Commande PowerShell personnalisee et telechargement du script.
 - Dashboard admin protege par mot de passe cote backend.
 - Liste des machines, recherche globale et filtres equipe, etablissement, OS, anciennete, modele, statut.
+- Badges locaux pour les systemes et fabricants, avec normalisation des valeurs OEM et detection des familles professionnelles.
 - Vue detail machine et historique des scans.
 - Score simple d'anciennete materielle.
 - Graphiques: etablissements, equipes, OS, machines non remontees, anciennete, modeles, RAM moyenne, stockage faible.
@@ -188,6 +189,8 @@ Routes principales:
 - `DELETE /admin/access-tokens/:id` avec token admin pour supprimer definitivement un token
 - `DELETE /admin/teams/:id` avec token admin, uniquement si l'equipe n'est plus utilisee
 - `DELETE /admin/establishments/:id` avec token admin, uniquement si l'etablissement n'est plus utilise
+- `POST /admin/devices/:id/assignment` pour modifier equipe, etablissement et proprietaire
+- `POST /admin/organization/reassign` pour reaffecter en masse les machines et utilisateurs
 
 ## Tokens temporaires de collecte
 
@@ -296,6 +299,32 @@ Les tableaux utilisent `normalizeOsInfo(osString)` pour transformer la chaine co
 
 La valeur originale n'est jamais modifiee en base. Elle reste disponible dans l'infobulle du badge et dans la fiche detaillee de la machine.
 
+La detection couvre Windows 10, Windows 11, Windows Server, Ubuntu, Debian, Fedora, Linux et macOS. Windows 10 et Windows 11 utilisent des icones distinctes. Ubuntu, macOS et les systemes inconnus disposent egalement de badges locaux, sans image distante.
+
+## Fabricants et familles de machines
+
+`normalizeManufacturer(manufacturerString, modelString)` transforme les valeurs collectees sans modifier la valeur brute stockee:
+
+- `Dell Inc.` et `DELL` deviennent `Dell`;
+- `Hewlett-Packard` et `HP Inc.` deviennent `HP`;
+- `ASUSTeK COMPUTER INC.` devient `ASUS`;
+- les valeurs OEM generiques ou inconnues deviennent `Unknown`.
+
+Les badges SVG sont integres au frontend et fonctionnent hors ligne. Les fabricants pris en charge incluent Dell, HP, Lenovo, ASUS, Acer, Apple, Microsoft/Surface, MSI, Samsung, Fujitsu, Dynabook, Toshiba, Huawei, Framework, Intel NUC et Gigabyte.
+
+La fiche machine detecte aussi les familles courantes: Latitude, Precision, OptiPlex, XPS, EliteBook, ProBook, ZBook, EliteDesk, ThinkPad, ThinkCentre, ThinkBook, MacBook, iMac et Surface. Le dashboard affiche les volumes par fabricant, la combinaison fabricant/OS et l'age moyen par fabricant.
+
+## Affectation et reaffectation
+
+Dans la fiche detaillee d'une machine, le formulaire `Affectations` permet de changer:
+
+- l'equipe;
+- l'etablissement;
+- le proprietaire parmi les utilisateurs existants;
+- le statut materiel dans le formulaire voisin.
+
+Les listes sont chargees depuis Supabase et l'API valide chaque identifiant avant la mise a jour. Une equipe ou un etablissement absent est affiche comme non renseigne au lieu de creer une reference invalide.
+
 ## Suppression des donnees d'organisation
 
 Les equipes et etablissements disposent d'une action `Supprimer` dans leur formulaire d'edition. Une confirmation est toujours demandee.
@@ -304,8 +333,30 @@ Les equipes et etablissements disposent d'une action `Supprimer` dans leur formu
 - Un etablissement ne peut pas etre supprime si une machine ou un utilisateur lui est affecte.
 - L'API retourne le nombre de references bloquantes afin de permettre leur reaffectation.
 - La suppression d'un etablissement inutilise supprime egalement son adresse et ses coordonnees, car elles appartiennent au meme enregistrement.
+- Le dialogue de reaffectation permet de choisir une autre destination, de deplacer les machines et profils utilisateurs, puis de supprimer l'ancien element.
 
 Aucune migration supplementaire n'est necessaire: ces controles utilisent les cles etrangeres existantes.
+
+Un message `0 machine(s), 1 utilisateur(s)` indique generalement qu'un ancien profil de collecte conserve encore cette equipe ou cet etablissement. Ce n'est pas une coordonnee de carte. Le dialogue de reaffectation deplace ce profil proprement. Pour un audit manuel, consulter les colonnes `team_id` et `establishment_id` de la table `users`; ne pas supprimer directement une reference sans avoir choisi sa nouvelle affectation.
+
+## Collecte Windows, Linux et macOS
+
+Le script historique `scripts/collect-windows.ps1` reste recommande pour Windows. Le script standard Python `scripts/collect-cross-platform.py` fonctionne sous Windows, Ubuntu/Linux et macOS sans paquet Python externe:
+
+```bash
+python3 scripts/collect-cross-platform.py \
+  --api-url "https://YOUR_PROJECT.supabase.co/functions/v1/inventory-api" \
+  --token "TOKEN_DE_SCRIPT"
+```
+
+Ajouter `--include-mac` uniquement lorsque la collecte de l'adresse MAC est autorisee.
+
+- Linux lit `/etc/os-release`, `/proc`, `/sys/class/dmi/id`, `lsblk` et `lspci` lorsqu'ils sont disponibles.
+- `dmidecode` n'est utilise que si la commande existe et que le script est execute avec les droits necessaires.
+- macOS utilise `system_profiler`, `sw_vers`, `sysctl` et les informations de stockage locales.
+- Windows utilise CIM via PowerShell et revient a des informations generiques si CIM est indisponible.
+
+Une permission manquante produit un champ vide; elle ne doit pas interrompre l'envoi de l'inventaire.
 
 Les prix marche sont approximatifs: le dashboard affiche donc un score de confiance. Plus il y a de signaux recents et concordants, plus la confiance augmente.
 

@@ -16,6 +16,7 @@ const state = {
   rawAccessTokens: {},
   teams: [],
   establishments: [],
+  users: [],
   cpuBenchmarkStats: null,
   mapProvider: "openstreetmap",
 };
@@ -29,6 +30,7 @@ const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 const originalText = new WeakMap();
 const originalAttributes = new WeakMap();
+let pendingReassignment = null;
 
 const englishTranslations = {
   "Inventaire IT": "IT Inventory",
@@ -244,6 +246,19 @@ const englishTranslations = {
   "Token supprime.": "Token deleted.",
   "Equipe supprimee.": "Team deleted.",
   "Etablissement supprime.": "Location deleted.",
+  "Affectations mises a jour.": "Assignments updated.",
+  "Reaffectation terminee.": "Reassignment completed.",
+  "Fabricant": "Manufacturer",
+  "Famille": "Family",
+  "Affectations": "Assignments",
+  "Proprietaire": "Owner",
+  "Enregistrer les affectations": "Save assignments",
+  "Reaffecter les elements lies": "Reassign linked records",
+  "Nouvelle destination": "New destination",
+  "Reaffecter": "Reassign",
+  "Machines par fabricant": "Devices by manufacturer",
+  "Fabricant et OS": "Manufacturer and OS",
+  "Age moyen par fabricant": "Average age by manufacturer",
   "Statut mis a jour.": "Status updated.",
   "Equipe mise a jour.": "Team updated.",
   "Equipe creee.": "Team created.",
@@ -322,6 +337,7 @@ function applyLanguage(language, persist = true) {
   $$("[data-language]").forEach((button) => button.classList.toggle("is-active", button.dataset.language === state.language));
   renderDevices();
   renderMetrics();
+  renderOemMetrics();
   renderCharts();
   renderValuation();
   renderOrganization();
@@ -349,9 +365,10 @@ function setTheme(theme) {
   }
 }
 
-function toast(message) {
+function toast(message, type = "info") {
   const node = $("#toast");
   node.textContent = translate(message);
+  node.dataset.type = type;
   node.classList.add("show");
   window.setTimeout(() => node.classList.remove("show"), 3200);
 }
@@ -365,7 +382,12 @@ async function api(path, options = {}) {
   const response = await fetch(`${CONFIG.apiBaseUrl}${path}`, { ...options, headers });
   const contentType = response.headers.get("content-type") || "";
   const body = contentType.includes("application/json") ? await response.json() : await response.text();
-  if (!response.ok) throw new Error(body.error || body.message || "Erreur API");
+  if (!response.ok) {
+    const error = new Error(body.error || body.message || "Erreur API");
+    error.details = typeof body === "object" ? body : {};
+    error.status = response.status;
+    throw error;
+  }
   return body;
 }
 
@@ -388,18 +410,33 @@ function normalizeOsInfo(osString) {
   const buildVersion = original.match(/\b\d+\.\d+\.\d+(?:\.\d+)?\b/)?.[0] || "";
   let osFamily = "Unknown";
   let iconType = "unknown";
-  if (normalized.includes("windows 11")) {
+  let osVersion = "";
+  if (normalized.includes("windows server")) {
+    const serverVersion = original.match(/Windows Server\s*(\d{4})?/i)?.[1] || "";
+    osFamily = "Windows Server";
+    osVersion = serverVersion;
+    iconType = "windows-server";
+  } else if (normalized.includes("windows 11")) {
     osFamily = "Windows 11";
     iconType = "windows-11";
   } else if (normalized.includes("windows 10")) {
     osFamily = "Windows 10";
     iconType = "windows-10";
-  } else if (normalized.includes("macos") || normalized.includes("mac os")) {
-    osFamily = "macOS";
-    iconType = "macos";
-  } else if (normalized.includes("linux") || normalized.includes("ubuntu")) {
-    osFamily = "Linux";
+  } else if (/\b(ubuntu)\b/.test(normalized)) {
+    osFamily = "Ubuntu";
+    osVersion = original.match(/\b\d{2}\.\d{2}(?:\.\d+)?(?:\s+LTS)?/i)?.[0] || "";
+    iconType = "ubuntu";
+  } else if (/\b(debian|fedora|linux)\b/.test(normalized)) {
+    const distro = normalized.includes("debian") ? "Debian" : normalized.includes("fedora") ? "Fedora" : "Linux";
+    osFamily = distro;
+    osVersion = original.match(/\b\d+(?:\.\d+){1,2}\b/)?.[0] || "";
     iconType = "linux";
+  } else if (/\b(macos|mac os|darwin|sonoma|ventura|monterey|sequoia)\b/.test(normalized)) {
+    osFamily = "macOS";
+    const releaseName = original.match(/\b(Sequoia|Sonoma|Ventura|Monterey)\b/i)?.[0] || "";
+    const releaseNumber = original.match(/\b\d{1,2}\.\d+(?:\.\d+)?\b/)?.[0] || "";
+    osVersion = [releaseName, releaseNumber].filter(Boolean).join(" ");
+    iconType = "macos";
   }
 
   let osEdition = "Unknown";
@@ -410,26 +447,33 @@ function normalizeOsInfo(osString) {
 
   return {
     osFamily,
+    osVersion,
     osEdition,
     buildVersion,
-    displayLabel: [osFamily, osEdition === "Unknown" ? "" : osEdition].filter(Boolean).join(" "),
+    displayLabel: [osFamily, osVersion, osEdition === "Unknown" ? "" : osEdition].filter(Boolean).join(" "),
     iconType,
-    original,
+    badgeClass: `os-${iconType}`,
+    rawOsString: original,
   };
 }
 
 function osIcon(iconType) {
-  if (!iconType.startsWith("windows-")) {
-    return `
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <rect x="3" y="4" width="18" height="13" rx="2"></rect>
-        <path d="M8 21h8M12 17v4"></path>
-      </svg>
-    `;
+  if (iconType === "windows-11") {
+    return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h8v8H3V3Zm10 0h8v8h-8V3ZM3 13h8v8H3v-8Zm10 0h8v8h-8v-8Z"></path></svg>`;
+  }
+  if (iconType === "windows-10" || iconType === "windows-server") {
+    return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 5 8-1.2v7.5H3V5Zm9.5-1.4L21 2.3v9h-8.5V3.6ZM3 12.7h8v7.5L3 19v-6.3Zm9.5 0H21v9l-8.5-1.3v-7.7Z"></path></svg>`;
+  }
+  if (iconType === "ubuntu") {
+    return `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><circle cx="12" cy="3.5" r="2"></circle><circle cx="4.7" cy="16.2" r="2"></circle><circle cx="19.3" cy="16.2" r="2"></circle><path d="M11 5.5 9.5 8M6.4 15.2 8.8 14M15.2 14l2.4 1.2"></path></svg>`;
+  }
+  if (iconType === "macos") {
+    return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 4.2c-1 .1-2.2.7-2.8 1.5-.6.7-1.1 1.8-.9 2.8 1.1.1 2.2-.5 2.9-1.3.7-.8 1.1-1.9.8-3Z"></path><path d="M19.3 16.7c-.5 1.2-.8 1.8-1.5 2.9-1 1.5-2.4 3.4-4.1 3.4-1.5 0-1.9-1-3.8-1s-2.4 1-3.9 1c-1.7 0-3-1.7-4-3.2C-.6 16 .5 10.3 3.1 8.7c1.8-1.1 4.5-.9 6 .2 1.1.8 1.8.8 2.9 0 1.5-1.1 4.2-1.4 6-.2.7.4 1.7 1.3 2.2 2.2-1.9 1.1-2.3 3.7-.9 5.8Z"></path></svg>`;
   }
   return `
     <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M3 4.8 10.6 3.7v7.4H3V4.8Zm8.7-1.3L21 2.2v8.9h-9.3V3.5ZM3 12.2h7.6v7.4L3 18.5v-6.3Zm8.7 0H21v8.9l-9.3-1.3v-7.6Z"></path>
+      <rect x="3" y="4" width="18" height="13" rx="2"></rect>
+      <path d="M8 21h8M12 17v4"></path>
     </svg>
   `;
 }
@@ -438,7 +482,74 @@ function renderOsBadge(device) {
   const fullOs = [device.os_name, device.os_version].filter(Boolean).join(" ").trim();
   if (!fullOs) return "-";
   const info = normalizeOsInfo(fullOs);
-  return `<span class="os-badge ${info.iconType}" title="${escapeHtml(fullOs)}">${osIcon(info.iconType)}<span>${escapeHtml(info.displayLabel)}</span></span>`;
+  return `<span class="os-badge ${info.iconType}" title="${escapeHtml(fullOs)}" aria-label="${escapeHtml(fullOs)}">${osIcon(info.iconType)}<span>${escapeHtml(info.displayLabel)}</span></span>`;
+}
+
+const manufacturerRules = [
+  ["Surface", /\bsurface\b/],
+  ["Dell", /\bdell\b/],
+  ["HP", /\b(hp|hewlett[- ]?packard)\b/],
+  ["Lenovo", /\blenovo\b/],
+  ["ASUS", /\b(asus|asustek)\b/],
+  ["Acer", /\bacer\b/],
+  ["Apple", /\bapple\b/],
+  ["Microsoft", /\bmicrosoft\b/],
+  ["MSI", /\b(msi|micro-star)\b/],
+  ["Samsung", /\bsamsung\b/],
+  ["Fujitsu", /\bfujitsu\b/],
+  ["Dynabook", /\bdynabook\b/],
+  ["Toshiba", /\btoshiba\b/],
+  ["Huawei", /\bhuawei\b/],
+  ["Framework", /\bframework\b/],
+  ["Intel NUC", /\b(intel.*nuc|nuc)\b/],
+  ["Gigabyte", /\bgigabyte\b/],
+];
+
+function normalizeManufacturer(manufacturerString, modelString = "") {
+  const rawManufacturer = String(manufacturerString || "").trim();
+  const searchable = `${rawManufacturer} ${modelString || ""}`.toLowerCase();
+  const generic = /^(|system manufacturer|default string|to be filled by o\.e\.m\.|unknown|not available|oem)$/i;
+  const matched = generic.test(rawManufacturer) ? null : manufacturerRules.find(([, pattern]) => pattern.test(searchable));
+  const manufacturerName = matched?.[0] || "Unknown";
+  const normalizedName = manufacturerName.toLowerCase().replaceAll(" ", "-");
+  return {
+    manufacturerName,
+    normalizedName,
+    logoType: normalizedName,
+    badgeClass: `manufacturer-badge oem-${normalizedName}`,
+    colorClass: `oem-${normalizedName}`,
+    rawManufacturer,
+  };
+}
+
+function detectDeviceFamily(manufacturer, model) {
+  const text = String(model || "");
+  const rules = {
+    Dell: ["Latitude", "Precision", "OptiPlex", "XPS"],
+    HP: ["EliteBook", "ProBook", "ZBook", "EliteDesk"],
+    Lenovo: ["ThinkPad", "ThinkCentre", "ThinkBook"],
+    Apple: ["MacBook Air", "MacBook Pro", "iMac", "Mac Mini"],
+    Microsoft: ["Surface Laptop", "Surface Pro", "Surface Studio", "Surface"],
+    Surface: ["Surface Laptop", "Surface Pro", "Surface Studio", "Surface"],
+  };
+  return (rules[manufacturer] || []).find((family) => text.toLowerCase().includes(family.toLowerCase())) || "";
+}
+
+function manufacturerIcon(info) {
+  const initials = {
+    Dell: "D", HP: "hp", Lenovo: "L", ASUS: "A", Acer: "ac", Apple: "AP",
+    Microsoft: "MS", Surface: "S", MSI: "MSI", Samsung: "S", Fujitsu: "F",
+    Dynabook: "dyn", Toshiba: "T", Huawei: "H", Framework: "FW", "Intel NUC": "NUC", Gigabyte: "G",
+  }[info.manufacturerName];
+  if (initials) {
+    return `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="3" width="19" height="18" rx="4"></rect><text x="12" y="14.8">${escapeHtml(initials)}</text></svg>`;
+  }
+  return `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"></rect><path d="M8 21h8M12 17v4"></path></svg>`;
+}
+
+function renderManufacturerBadge(device) {
+  const info = normalizeManufacturer(device.manufacturer, device.model);
+  return `<span class="${info.badgeClass}" title="${escapeHtml(info.rawManufacturer || info.manufacturerName)}"><span class="manufacturer-logo ${info.colorClass}">${manufacturerIcon(info)}</span><span>${escapeHtml(info.manufacturerName)}</span></span>`;
 }
 
 function confirmAction({ title = "Confirmer la suppression", message, confirmLabel = "Supprimer" }) {
@@ -451,6 +562,28 @@ function confirmAction({ title = "Confirmer la suppression", message, confirmLab
   return new Promise((resolve) => {
     dialog.addEventListener("close", () => resolve(dialog.returnValue === "confirm"), { once: true });
   });
+}
+
+function openReassignment(entityType, sourceId, references) {
+  const candidates = entityType === "team" ? state.teams : state.establishments;
+  const select = $("#reassign-form").elements.targetId;
+  select.innerHTML = candidates
+    .filter((item) => item.id !== sourceId && item.active)
+    .map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`)
+    .join("");
+  if (!select.options.length) {
+    toast(state.language === "en"
+      ? "Create another active destination before reassigning."
+      : "Creez une autre destination active avant la reaffectation.", "error");
+    return;
+  }
+  pendingReassignment = { entityType, sourceId };
+  $("#reassign-form").elements.entityType.value = entityType;
+  $("#reassign-form").elements.sourceId.value = sourceId;
+  $("#reassign-message").textContent = state.language === "en"
+    ? `${references.devices || 0} device(s) and ${references.users || 0} user(s) are linked. Choose a destination; the original record will then be deleted.`
+    : `${references.devices || 0} machine(s) et ${references.users || 0} utilisateur(s) sont lies. Choisissez une destination; l'ancien element sera ensuite supprime.`;
+  $("#reassign-dialog").showModal();
 }
 
 function formatDate(value) {
@@ -653,6 +786,7 @@ function applyFilters() {
   const establishment = $("#filter-establishment").value;
   const os = $("#filter-os").value;
   const model = $("#filter-model").value;
+  const manufacturer = $("#filter-manufacturer").value;
   const status = $("#filter-status").value;
   const age = $("#filter-age").value;
   const cpuScore = $("#filter-cpu-score").value;
@@ -664,6 +798,7 @@ function applyFilters() {
     if (establishment && device.establishment_name !== establishment) return false;
     if (os && device.os_name !== os) return false;
     if (model && device.model !== model) return false;
+    if (manufacturer && normalizeManufacturer(device.manufacturer, device.model).manufacturerName !== manufacturer) return false;
     if (status && device.status !== status) return false;
     if (age && ageBucket(device) !== age) return false;
     if (cpuScore && cpuScoreBucket(device) !== cpuScore) return false;
@@ -673,6 +808,7 @@ function applyFilters() {
 
   renderDevices();
   renderMetrics();
+  renderOemMetrics();
   renderCharts();
   renderValuation();
 }
@@ -693,6 +829,17 @@ function renderMetrics() {
     ["Stockage faible", lowStorage],
     ["A remplacer", replace],
   ]
+    .map(([label, value]) => `<article class="metric"><span>${label}</span><strong>${value}</strong></article>`)
+    .join("");
+}
+
+function renderOemMetrics() {
+  const counts = countBy(state.filtered, (device) => normalizeManufacturer(device.manufacturer, device.model).manufacturerName);
+  const primary = ["Dell", "HP", "Lenovo", "Apple"];
+  const other = Object.entries(counts)
+    .filter(([name]) => !primary.includes(name))
+    .reduce((sum, [, count]) => sum + count, 0);
+  $("#oem-metrics").innerHTML = [...primary.map((name) => [name, counts[name] || 0]), ["Autres", other]]
     .map(([label, value]) => `<article class="metric"><span>${label}</span><strong>${value}</strong></article>`)
     .join("");
 }
@@ -771,7 +918,7 @@ function renderDevices() {
           <td>${device.team_name || "-"}</td>
           <td>${device.establishment_name || "-"}</td>
           <td>${renderOsBadge(device)}</td>
-          <td>${device.manufacturer || ""} ${device.model || "-"}</td>
+          <td class="manufacturer-cell">${renderManufacturerBadge(device)}<small>${escapeHtml(device.model || "-")}</small></td>
           <td>${formatDate(device.last_seen_at)}</td>
           <td><span class="${statusClass(device.status)}">${labels[device.status] || device.status || "Actif"}</span></td>
         </tr>
@@ -805,8 +952,21 @@ function renderDetail(device, scans) {
   state.selectedScans = scans;
   const labels = currentStatusLabels();
   const priorityValue = device.replacement_priority ?? device.obsolescence_index;
+  const manufacturer = normalizeManufacturer(device.manufacturer, device.model);
+  const family = detectDeviceFamily(manufacturer.manufacturerName, device.model);
+  const teamOptions = state.teams.map((team) =>
+    `<option value="${team.id}" ${device.team_id === team.id ? "selected" : ""}>${escapeHtml(team.name)}</option>`).join("");
+  const establishmentOptions = state.establishments.map((site) =>
+    `<option value="${site.id}" ${device.establishment_id === site.id ? "selected" : ""}>${escapeHtml(site.name)}</option>`).join("");
+  const userOptions = state.users.map((user) => {
+    const name = `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.email;
+    return `<option value="${user.id}" ${device.assigned_user_id === user.id ? "selected" : ""}>${escapeHtml(name)} (${escapeHtml(user.email)})</option>`;
+  }).join("");
   const rows = [
     ["OS", [device.os_name, device.os_version].filter(Boolean).join(" ")],
+    ["Fabricant", manufacturer.manufacturerName],
+    ["Famille", family],
+    ["Modele", device.model],
     ["Serial", device.serial_number],
     ["MAC", device.mac_address],
     ["IP locale", device.local_ip],
@@ -843,9 +1003,41 @@ function renderDetail(device, scans) {
     .join("");
 
   $("#device-detail").innerHTML = `
+    <div class="manufacturer-hero">
+      <span class="manufacturer-logo ${manufacturer.colorClass}">${manufacturerIcon(manufacturer)}</span>
+      <span>
+        <strong>${escapeHtml(manufacturer.manufacturerName)}${family ? ` ${escapeHtml(family)}` : ""}</strong>
+        <span>${escapeHtml(device.model || translate("Non renseigne"))}</span>
+      </span>
+    </div>
     <dl class="detail-list">
-      ${rows.map(([key, value]) => `<div><dt>${key}</dt><dd>${value || "-"}</dd></div>`).join("")}
+      ${rows.map(([key, value]) => `<div><dt>${escapeHtml(key)}</dt><dd>${escapeHtml(value || "-")}</dd></div>`).join("")}
     </dl>
+    <form id="assignment-form" class="form-grid one assignment-form">
+      <h3>Affectations</h3>
+      <label>
+        Equipe
+        <select name="teamId">
+          <option value="">Non renseigne</option>
+          ${teamOptions}
+        </select>
+      </label>
+      <label>
+        Etablissement
+        <select name="establishmentId">
+          <option value="">Non renseigne</option>
+          ${establishmentOptions}
+        </select>
+      </label>
+      <label>
+        Proprietaire
+        <select name="assignedUserId">
+          <option value="">Non renseigne</option>
+          ${userOptions}
+        </select>
+      </label>
+      <button type="submit" class="primary">Enregistrer les affectations</button>
+    </form>
     <form id="status-form" class="form-grid one scan-history">
       <label>
         Statut
@@ -865,6 +1057,22 @@ function renderDetail(device, scans) {
       <ul>${priceRows || "<li>Aucun prix externe collecte.</li>"}</ul>
     </div>
   `;
+
+  $("#assignment-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    try {
+      await api(`/admin/devices/${device.id}/assignment`, {
+        method: "POST",
+        body: JSON.stringify(values),
+      });
+      await loadAdminData();
+      await selectDevice(device.id);
+      toast("Affectations mises a jour.");
+    } catch (error) {
+      toast(error.message, "error");
+    }
+  });
 
   $("#status-form").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -970,6 +1178,30 @@ function renderCharts() {
   renderBarChart('[data-chart="value-by-site"]', "Valeur par etablissement", sumBy(state.filtered, (d) => d.establishment_name, estimatedValue), " EUR");
   renderBarChart('[data-chart="replace-top"]', "Top machines a remplacer", topReplaceCandidates(state.filtered));
   renderScatter('[data-chart="age-performance"]', "Age materiel vs CPU", state.filtered);
+  renderBarChart(
+    '[data-chart="manufacturers"]',
+    translate("Machines par fabricant"),
+    countBy(state.filtered, (device) => normalizeManufacturer(device.manufacturer, device.model).manufacturerName),
+  );
+  renderBarChart(
+    '[data-chart="manufacturer-os"]',
+    translate("Fabricant et OS"),
+    countBy(state.filtered, (device) => {
+      const manufacturer = normalizeManufacturer(device.manufacturer, device.model).manufacturerName;
+      const os = normalizeOsInfo([device.os_name, device.os_version].filter(Boolean).join(" ")).osFamily;
+      return `${manufacturer} / ${os}`;
+    }),
+  );
+  renderBarChart(
+    '[data-chart="manufacturer-age"]',
+    translate("Age moyen par fabricant"),
+    averageBy(
+      state.filtered,
+      (device) => normalizeManufacturer(device.manufacturer, device.model).manufacturerName,
+      (device) => deviceAge(device),
+    ),
+    state.language === "en" ? " yrs" : " ans",
+  );
 }
 
 function sumBy(items, groupGetter, valueGetter) {
@@ -1154,7 +1386,7 @@ function renderOrganization() {
           <span class="organization-icon" style="--item-color:${escapeHtml(team.color || "#16735f")}">${organizationIcon("team")}</span>
           <span>
             <strong>${escapeHtml(team.name)}</strong>
-            <small>${state.language === "en" ? `${team.device_count} computer${team.device_count === 1 ? "" : "s"}` : `${team.device_count} machine${team.device_count === 1 ? "" : "s"}`}${team.description ? ` - ${escapeHtml(team.description)}` : ""}</small>
+            <small>${state.language === "en" ? `${team.device_count} computer(s), ${team.user_count || 0} user(s)` : `${team.device_count} machine(s), ${team.user_count || 0} utilisateur(s)`}${team.description ? ` - ${escapeHtml(team.description)}` : ""}</small>
           </span>
           <span class="organization-chevron">&rsaquo;</span>
         </button>
@@ -1170,7 +1402,7 @@ function renderOrganization() {
           <span class="organization-icon site type-${escapeHtml(site.establishment_type || "office")}">${establishmentIcon(site.establishment_type || "office")}</span>
           <span>
             <strong>${escapeHtml(site.name)}</strong>
-            <small>${translate(establishmentTypeLabels[site.establishment_type] || establishmentTypeLabels.office)} - ${state.language === "en" ? `${site.device_count} computer${site.device_count === 1 ? "" : "s"}` : `${site.device_count} machine${site.device_count === 1 ? "" : "s"}`}${location ? ` - ${escapeHtml(location)}` : ""}</small>
+            <small>${translate(establishmentTypeLabels[site.establishment_type] || establishmentTypeLabels.office)} - ${state.language === "en" ? `${site.device_count} computer(s), ${site.user_count || 0} user(s)` : `${site.device_count} machine(s), ${site.user_count || 0} utilisateur(s)`}${location ? ` - ${escapeHtml(location)}` : ""}</small>
           </span>
           <span class="organization-chevron">&rsaquo;</span>
         </button>
@@ -1279,6 +1511,7 @@ async function loadOrganization() {
   const data = await api("/admin/organization");
   state.teams = data.teams || [];
   state.establishments = data.establishments || [];
+  state.users = data.users || [];
   state.mapProvider = data.map_provider === "google" ? "google" : "openstreetmap";
   renderOrganization();
   updateOrganizationDatalists();
@@ -1369,7 +1602,7 @@ async function loadAdminData() {
     renderAccessTokens();
     toast(`Module tokens indisponible: ${error.message}`);
   });
-  loadOrganization().catch((error) => toast(`Module organisation indisponible: ${error.message}`));
+  const organizationPromise = loadOrganization().catch((error) => toast(`Module organisation indisponible: ${error.message}`, "error"));
   loadCpuBenchmarkStats().catch(() => {
     state.cpuBenchmarkStats = null;
   });
@@ -1378,11 +1611,15 @@ async function loadAdminData() {
   const establishments = [...new Set(state.devices.map((d) => d.establishment_name))];
   const os = [...new Set(state.devices.map((d) => d.os_name))];
   const models = [...new Set(state.devices.map((d) => d.model))];
+  const manufacturers = [...new Set(state.devices.map((device) =>
+    normalizeManufacturer(device.manufacturer, device.model).manufacturerName))];
   setOptions($("#filter-team"), teams, "Toutes");
   setOptions($("#filter-establishment"), establishments, "Tous");
   setOptions($("#filter-os"), os, "Tous");
   setOptions($("#filter-model"), models, "Tous");
+  setOptions($("#filter-manufacturer"), manufacturers, "Tous");
   applyFilters();
+  await organizationPromise;
 }
 
 function hydrateDatalists() {
@@ -1548,9 +1785,13 @@ function bindEvents() {
       await api(`/admin/teams/${id}`, { method: "DELETE" });
       await loadOrganization();
       resetTeamForm();
-      toast("Equipe supprimee.");
+      toast("Equipe supprimee.", "success");
     } catch (error) {
-      toast(error.message);
+      if (error.details?.code === "ENTITY_IN_USE") {
+        openReassignment("team", id, error.details.references || {});
+      } else {
+        toast(error.message, "error");
+      }
     }
   });
   $("#delete-establishment").addEventListener("click", async () => {
@@ -1568,9 +1809,42 @@ function bindEvents() {
       await api(`/admin/establishments/${id}`, { method: "DELETE" });
       await loadOrganization();
       resetEstablishmentForm();
-      toast("Etablissement supprime.");
+      toast("Etablissement supprime.", "success");
     } catch (error) {
-      toast(error.message);
+      if (error.details?.code === "ENTITY_IN_USE") {
+        openReassignment("establishment", id, error.details.references || {});
+      } else {
+        toast(error.message, "error");
+      }
+    }
+  });
+  $("#cancel-reassign").addEventListener("click", () => {
+    pendingReassignment = null;
+    $("#reassign-dialog").close();
+  });
+  $("#reassign-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!pendingReassignment) return;
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    const button = event.currentTarget.querySelector('button[type="submit"]');
+    button.disabled = true;
+    try {
+      await api("/admin/organization/reassign", {
+        method: "POST",
+        body: JSON.stringify(values),
+      });
+      const endpoint = pendingReassignment.entityType === "team" ? "teams" : "establishments";
+      await api(`/admin/${endpoint}/${pendingReassignment.sourceId}`, { method: "DELETE" });
+      $("#reassign-dialog").close();
+      pendingReassignment = null;
+      await loadAdminData();
+      resetTeamForm();
+      resetEstablishmentForm();
+      toast("Reaffectation terminee.", "success");
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      button.disabled = false;
     }
   });
   $("#team-form").addEventListener("submit", async (event) => {
@@ -1686,7 +1960,7 @@ function bindEvents() {
   });
   $("#export-enriched-csv").addEventListener("click", () => exportCsv(true));
   $("#export-csv").addEventListener("click", () => exportCsv(false));
-  ["global-search", "filter-team", "filter-establishment", "filter-os", "filter-age", "filter-model", "filter-status", "filter-cpu-score", "filter-value"].forEach((id) => {
+  ["global-search", "filter-team", "filter-establishment", "filter-os", "filter-age", "filter-model", "filter-manufacturer", "filter-status", "filter-cpu-score", "filter-value"].forEach((id) => {
     $(`#${id}`).addEventListener("input", applyFilters);
   });
 }

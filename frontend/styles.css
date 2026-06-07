@@ -22,6 +22,8 @@
   --chart-grid: rgba(223, 229, 220, 0.7);
   --nav-active: #18201b;
   --nav-active-ink: #ffffff;
+  --toast-bg: #18201b;
+  --toast-ink: #ffffff;
 }
 
 :root[data-theme="dark"] {
@@ -48,6 +50,8 @@
   --chart-grid: rgba(75, 86, 77, 0.55);
   --nav-active: #eef3ed;
   --nav-active-ink: #151915;
+  --toast-bg: #eef3ed;
+  --toast-ink: #151915;
 }
 
 * {
@@ -861,12 +865,27 @@ pre {
   fill: currentColor;
 }
 
-.os-badge:not(.windows-10):not(.windows-11) svg {
+.os-badge:not(.windows-10):not(.windows-11):not(.windows-server) svg {
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.os-badge.ubuntu {
+  background: color-mix(in srgb, #dd4814 13%, var(--surface));
+  color: color-mix(in srgb, #dd4814 80%, var(--ink));
+}
+
+.os-badge.macos {
+  background: color-mix(in srgb, #68736d 13%, var(--surface));
+  color: color-mix(in srgb, #68736d 65%, var(--ink));
+}
+
+.os-badge.linux {
+  background: color-mix(in srgb, #d7a928 14%, var(--surface));
+  color: color-mix(in srgb, #9a7210 80%, var(--ink));
 }
 
 .os-badge.windows-11 {
@@ -877,6 +896,128 @@ pre {
 .os-badge.windows-10 {
   background: color-mix(in srgb, #0078d4 9%, var(--surface));
   color: color-mix(in srgb, #0078d4 78%, var(--ink));
+}
+
+.manufacturer-badge {
+  display: inline-flex;
+  max-width: 190px;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.manufacturer-logo {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, currentColor 10%, var(--surface));
+  color: var(--oem-color, var(--muted));
+}
+
+.manufacturer-logo svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.manufacturer-logo text {
+  fill: currentColor;
+  stroke: none;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-anchor: middle;
+}
+
+.oem-dell { --oem-color: #1683c4; }
+.oem-hp { --oem-color: #1685b8; }
+.oem-lenovo { --oem-color: #d43b31; }
+.oem-asus { --oem-color: #3472a4; }
+.oem-acer { --oem-color: #6a9b25; }
+.oem-apple { --oem-color: #65706a; }
+.oem-microsoft, .oem-surface { --oem-color: #2676bd; }
+.oem-msi { --oem-color: #c63f36; }
+.oem-samsung { --oem-color: #385ab4; }
+.oem-fujitsu { --oem-color: #bd3434; }
+.oem-dynabook, .oem-toshiba { --oem-color: #b83e35; }
+.oem-huawei { --oem-color: #cc3d3d; }
+.oem-intel-nuc { --oem-color: #197aa9; }
+.oem-gigabyte { --oem-color: #4477a7; }
+.oem-framework { --oem-color: #8a6c20; }
+
+.manufacturer-cell small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  padding-left: 36px;
+}
+
+.manufacturer-hero {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 13px;
+  align-items: center;
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.manufacturer-hero .manufacturer-logo {
+  width: 52px;
+  height: 52px;
+}
+
+.manufacturer-hero .manufacturer-logo svg {
+  width: 30px;
+  height: 30px;
+}
+
+.manufacturer-hero strong,
+.manufacturer-hero span {
+  display: block;
+}
+
+.manufacturer-hero strong {
+  font-size: 18px;
+}
+
+.manufacturer-hero span {
+  margin-top: 3px;
+  color: var(--muted);
+}
+
+.assignment-form {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.assignment-form h3 {
+  margin: 0 0 12px;
+}
+
+.oem-metrics {
+  margin-top: 12px;
+}
+
+.oem-metrics .metric {
+  min-height: 78px;
+}
+
+.confirm-icon.neutral {
+  background: var(--soft);
+  color: var(--brand);
 }
 
 .confirm-dialog {
@@ -1117,17 +1258,30 @@ tbody tr.is-selected {
   max-width: 360px;
   border-radius: 8px;
   padding: 14px 16px;
-  background: var(--ink);
-  color: white;
+  overflow-wrap: anywhere;
+  background: var(--toast-bg);
+  color: var(--toast-ink);
   opacity: 0;
   transform: translateY(8px);
   transition: 0.2s ease;
   pointer-events: none;
+  box-shadow: var(--shadow);
+  z-index: 30;
 }
 
 #toast.show {
   opacity: 1;
   transform: translateY(0);
+}
+
+#toast[data-type="error"] {
+  background: #812d27;
+  color: #ffffff;
+}
+
+#toast[data-type="success"] {
+  background: #155f50;
+  color: #ffffff;
 }
 
 @media (max-width: 1100px) {

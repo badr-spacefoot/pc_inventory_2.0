@@ -614,11 +614,19 @@ async function persistScan(request: Request, user: { id: string; team_id: string
 
   const dedupe = dedupePayload({ ...body, establishmentId: user.establishment_id }, user.id);
   const collectedAt = safeString(body.collectedAt) || new Date().toISOString();
-  const { data: previousDevice } = await supabase.from("device_inventory_view").select("*").eq("dedupe_key", dedupe.dedupe_key).maybeSingle();
+  const [
+    { data: previousDevice, error: previousDeviceError },
+    { data: previousAssignment, error: previousAssignmentError },
+  ] = await Promise.all([
+    supabase.from("device_inventory_view").select("*").eq("dedupe_key", dedupe.dedupe_key).maybeSingle(),
+    supabase.from("devices").select("assigned_user_id,team_id,establishment_id").eq("dedupe_key", dedupe.dedupe_key).maybeSingle(),
+  ]);
+  if (previousDeviceError) throw previousDeviceError;
+  if (previousAssignmentError) throw previousAssignmentError;
   const deviceValues = {
-    assigned_user_id: user.id,
-    team_id: user.team_id,
-    establishment_id: user.establishment_id,
+    assigned_user_id: previousAssignment?.assigned_user_id ?? user.id,
+    team_id: previousAssignment?.team_id ?? user.team_id,
+    establishment_id: previousAssignment?.establishment_id ?? user.establishment_id,
     hostname: safeString(body.hostname, 160),
     os_name: safeString(body.osName, 80),
     os_version: safeString(body.osVersion, 160),
@@ -809,7 +817,12 @@ async function handleAdminDevices(request: Request) {
 
 async function handleAdminOrganization(request: Request) {
   if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
-  const [{ data: teams, error: teamsError }, { data: establishments, error: establishmentsError }, { data: devices, error: devicesError }] =
+  const [
+    { data: teams, error: teamsError },
+    { data: establishments, error: establishmentsError },
+    { data: devices, error: devicesError },
+    { data: users, error: usersError },
+  ] =
     await Promise.all([
       supabase.from("teams").select("id,name,description,color,active,created_at").order("name"),
       supabase
@@ -817,26 +830,42 @@ async function handleAdminOrganization(request: Request) {
         .select("id,name,establishment_type,address,postal_code,city,country,latitude,longitude,active,created_at")
         .order("name"),
       supabase.from("devices").select("team_id,establishment_id"),
+      supabase.from("users").select("id,first_name,last_name,email,service,team_id,establishment_id").order("last_name"),
     ]);
   if (teamsError) throw teamsError;
   if (establishmentsError) throw establishmentsError;
   if (devicesError) throw devicesError;
+  if (usersError) throw usersError;
 
   const teamCounts = new Map<string, number>();
   const establishmentCounts = new Map<string, number>();
+  const teamUserCounts = new Map<string, number>();
+  const establishmentUserCounts = new Map<string, number>();
   for (const device of devices ?? []) {
     if (device.team_id) teamCounts.set(device.team_id, (teamCounts.get(device.team_id) ?? 0) + 1);
     if (device.establishment_id) {
       establishmentCounts.set(device.establishment_id, (establishmentCounts.get(device.establishment_id) ?? 0) + 1);
     }
   }
+  for (const user of users ?? []) {
+    if (user.team_id) teamUserCounts.set(user.team_id, (teamUserCounts.get(user.team_id) ?? 0) + 1);
+    if (user.establishment_id) {
+      establishmentUserCounts.set(user.establishment_id, (establishmentUserCounts.get(user.establishment_id) ?? 0) + 1);
+    }
+  }
 
   return json(request, {
-    teams: (teams ?? []).map((team) => ({ ...team, device_count: teamCounts.get(team.id) ?? 0 })),
+    teams: (teams ?? []).map((team) => ({
+      ...team,
+      device_count: teamCounts.get(team.id) ?? 0,
+      user_count: teamUserCounts.get(team.id) ?? 0,
+    })),
     establishments: (establishments ?? []).map((site) => ({
       ...site,
       device_count: establishmentCounts.get(site.id) ?? 0,
+      user_count: establishmentUserCounts.get(site.id) ?? 0,
     })),
+    users: users ?? [],
     map_provider: googleMapsApiKey ? "google" : "openstreetmap",
   });
 }
@@ -875,11 +904,12 @@ async function handleAdminDeleteTeam(request: Request, id: string) {
   if (deviceError) throw deviceError;
   if (userError) throw userError;
   if ((deviceCount ?? 0) > 0 || (userCount ?? 0) > 0) {
-    return badRequest(
-      request,
-      `Cette equipe est utilisee par ${deviceCount ?? 0} machine(s) et ${userCount ?? 0} utilisateur(s). Reassignez-les avant la suppression.`,
-      409,
-    );
+    return json(request, {
+      error: `Cette equipe ne peut pas etre supprimee: ${deviceCount ?? 0} machine(s) et ${userCount ?? 0} utilisateur(s) y sont lies.`,
+      code: "ENTITY_IN_USE",
+      entityType: "team",
+      references: { devices: deviceCount ?? 0, users: userCount ?? 0, teams: 0 },
+    }, 409);
   }
   const { data, error } = await supabase.from("teams").delete().eq("id", id).select("id,name").maybeSingle();
   if (error) throw error;
@@ -934,11 +964,12 @@ async function handleAdminDeleteEstablishment(request: Request, id: string) {
   if (deviceError) throw deviceError;
   if (userError) throw userError;
   if ((deviceCount ?? 0) > 0 || (userCount ?? 0) > 0) {
-    return badRequest(
-      request,
-      `Cet etablissement est utilise par ${deviceCount ?? 0} machine(s) et ${userCount ?? 0} utilisateur(s). Reassignez-les avant la suppression.`,
-      409,
-    );
+    return json(request, {
+      error: `Cet etablissement ne peut pas etre supprime: ${deviceCount ?? 0} machine(s) et ${userCount ?? 0} utilisateur(s) y sont lies.`,
+      code: "ENTITY_IN_USE",
+      entityType: "establishment",
+      references: { devices: deviceCount ?? 0, users: userCount ?? 0, teams: 0 },
+    }, 409);
   }
   const { data, error } = await supabase.from("establishments").delete().eq("id", id).select("id,name").maybeSingle();
   if (error) throw error;
@@ -1039,8 +1070,12 @@ async function handleAdminAddressDetails(request: Request) {
 
 async function handleAdminDeviceDetail(request: Request, id: string) {
   if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
-  const { data: device, error: deviceError } = await supabase.from("device_inventory_view").select("*").eq("id", id).single();
+  const [{ data: device, error: deviceError }, { data: assignment, error: assignmentError }] = await Promise.all([
+    supabase.from("device_inventory_view").select("*").eq("id", id).single(),
+    supabase.from("devices").select("assigned_user_id,team_id,establishment_id").eq("id", id).single(),
+  ]);
   if (deviceError) throw deviceError;
+  if (assignmentError) throw assignmentError;
   const { data: scans, error: scansError } = await supabase
     .from("device_scans")
     .select("id,collected_at,os_name,os_version,script_version,payload")
@@ -1055,7 +1090,69 @@ async function handleAdminDeviceDetail(request: Request, id: string) {
     .order("collected_at", { ascending: false })
     .limit(20);
   if (priceHistoryError) throw priceHistoryError;
-  return json(request, { device, scans, priceHistory });
+  return json(request, { device: { ...device, ...assignment }, scans, priceHistory });
+}
+
+async function recordExists(table: "teams" | "establishments" | "users", id: string | null) {
+  if (!id) return true;
+  const { data, error } = await supabase.from(table).select("id").eq("id", id).maybeSingle();
+  if (error) throw error;
+  return Boolean(data);
+}
+
+async function handleAdminDeviceAssignment(request: Request, id: string) {
+  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  const body = await request.json().catch(() => ({}));
+  const teamId = safeString(body.teamId) || null;
+  const establishmentId = safeString(body.establishmentId) || null;
+  const assignedUserId = safeString(body.assignedUserId) || null;
+  const [teamValid, establishmentValid, userValid] = await Promise.all([
+    recordExists("teams", teamId),
+    recordExists("establishments", establishmentId),
+    recordExists("users", assignedUserId),
+  ]);
+  if (!teamValid) return badRequest(request, "Equipe selectionnee introuvable.", 404);
+  if (!establishmentValid) return badRequest(request, "Etablissement selectionne introuvable.", 404);
+  if (!userValid) return badRequest(request, "Utilisateur selectionne introuvable.", 404);
+
+  const values = {
+    team_id: teamId,
+    establishment_id: establishmentId,
+    assigned_user_id: assignedUserId,
+    updated_at: new Date().toISOString(),
+  };
+  const { data, error } = await supabase.from("devices").update(values).eq("id", id).select("id").maybeSingle();
+  if (error) throw error;
+  if (!data) return badRequest(request, "Machine introuvable.", 404);
+  await audit("device_assignment_updated", "device", id, values);
+  return json(request, { device: data });
+}
+
+async function handleAdminBulkReassign(request: Request) {
+  if (!(await isAdmin(request))) return badRequest(request, "Session admin invalide.", 401);
+  const body = await request.json().catch(() => ({}));
+  const entityType = safeString(body.entityType);
+  const sourceId = safeString(body.sourceId);
+  const targetId = safeString(body.targetId);
+  if (!["team", "establishment"].includes(entityType) || !sourceId || !targetId || sourceId === targetId) {
+    return badRequest(request, "Reaffectation invalide.");
+  }
+  const table = entityType === "team" ? "teams" : "establishments";
+  const column = entityType === "team" ? "team_id" : "establishment_id";
+  if (!(await recordExists(table, targetId))) return badRequest(request, "Destination introuvable.", 404);
+
+  const [{ data: devices, error: deviceError }, { data: users, error: userError }] = await Promise.all([
+    supabase.from("devices").update({ [column]: targetId, updated_at: new Date().toISOString() }).eq(column, sourceId).select("id"),
+    supabase.from("users").update({ [column]: targetId, updated_at: new Date().toISOString() }).eq(column, sourceId).select("id"),
+  ]);
+  if (deviceError) throw deviceError;
+  if (userError) throw userError;
+  await audit(`${entityType}_references_reassigned`, entityType, sourceId, {
+    target_id: targetId,
+    device_count: devices?.length ?? 0,
+    user_count: users?.length ?? 0,
+  });
+  return json(request, { devices: devices?.length ?? 0, users: users?.length ?? 0 });
 }
 
 function parseCsvLine(line: string) {
@@ -1194,6 +1291,7 @@ Deno.serve(async (request) => {
     if (request.method === "POST" && path.endsWith("/collect/legacy-scan")) return await handleLegacyScan(request);
     if (request.method === "GET" && path.endsWith("/admin/devices")) return await handleAdminDevices(request);
     if (request.method === "GET" && path.endsWith("/admin/organization")) return await handleAdminOrganization(request);
+    if (request.method === "POST" && path.endsWith("/admin/organization/reassign")) return await handleAdminBulkReassign(request);
     if (request.method === "GET" && path.endsWith("/admin/address/autocomplete")) return await handleAdminAddressAutocomplete(request);
     if (request.method === "GET" && path.endsWith("/admin/address/details")) return await handleAdminAddressDetails(request);
     if (request.method === "POST" && path.endsWith("/admin/teams")) return await handleAdminSaveTeam(request);
@@ -1219,6 +1317,8 @@ Deno.serve(async (request) => {
     if (request.method === "DELETE" && deleteTokenMatch) return await handleAdminDeleteAccessToken(request, deleteTokenMatch[1]);
     const statusMatch = path.match(/\/admin\/devices\/([0-9a-f-]+)\/status/i);
     if (request.method === "POST" && statusMatch) return await handleAdminDeviceStatus(request, statusMatch[1]);
+    const assignmentMatch = path.match(/\/admin\/devices\/([0-9a-f-]+)\/assignment/i);
+    if (request.method === "POST" && assignmentMatch) return await handleAdminDeviceAssignment(request, assignmentMatch[1]);
     const detailMatch = path.match(/\/admin\/devices\/([0-9a-f-]+)/i);
     if (request.method === "GET" && detailMatch) return await handleAdminDeviceDetail(request, detailMatch[1]);
     return badRequest(request, "Route inconnue.", 404);
