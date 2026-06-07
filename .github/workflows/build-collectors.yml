@@ -50,6 +50,7 @@ jobs:
           --name "${{ matrix.artifact }}"
           --add-data "scripts/collect-cross-platform.py${{ matrix.separator }}scripts"
           --hidden-import argparse
+          --hidden-import ctypes
           --hidden-import datetime
           --hidden-import getpass
           --hidden-import os
@@ -61,6 +62,7 @@ jobs:
           --hidden-import urllib.error
           --hidden-import urllib.request
           --hidden-import uuid
+          --hidden-import winreg
           collectors/desktop_collector/collector_app.py
 
       - name: Sign Windows collector when certificate is configured

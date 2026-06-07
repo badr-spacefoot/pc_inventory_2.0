@@ -14,12 +14,12 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-SCRIPT_VERSION = "1.1.0"
+SCRIPT_VERSION = "1.2.0"
 
 
-def run(command):
+def run(command, timeout=12):
     try:
-        result = subprocess.run(command, capture_output=True, text=True, timeout=12, check=False)
+        result = subprocess.run(command, capture_output=True, text=True, timeout=timeout, check=False)
         return result.stdout.strip() if result.returncode == 0 else ""
     except (OSError, subprocess.SubprocessError):
         return ""
@@ -116,58 +116,366 @@ def macos_info():
 
 
 def windows_shell():
-    return shutil.which("pwsh") or shutil.which("powershell") or shutil.which("powershell.exe")
+    candidates = [
+        shutil.which("pwsh"),
+        shutil.which("powershell"),
+        shutil.which("powershell.exe"),
+    ]
+    system_root = os.environ.get("SystemRoot") or os.environ.get("WINDIR") or r"C:\Windows"
+    candidates.extend(
+        [
+            str(Path(system_root) / "Sysnative" / "WindowsPowerShell" / "v1.0" / "powershell.exe"),
+            str(Path(system_root) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe"),
+        ]
+    )
+    return next((candidate for candidate in candidates if candidate and Path(candidate).exists()), "")
+
+
+def parse_json_object(raw):
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        start = raw.find("{")
+        end = raw.rfind("}")
+        if start >= 0 and end > start:
+            try:
+                return json.loads(raw[start:end + 1])
+            except json.JSONDecodeError:
+                return None
+    return None
+
+
+def windows_registry_value(path, name):
+    try:
+        import winreg
+
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, path) as key:
+            value, _ = winreg.QueryValueEx(key, name)
+            if isinstance(value, (list, tuple)):
+                return "; ".join(str(item) for item in value if item)
+            return str(value).strip() if value is not None else ""
+    except (OSError, ImportError, ValueError):
+        return ""
+
+
+def windows_memory_gb():
+    try:
+        import ctypes
+
+        class MemoryStatusEx(ctypes.Structure):
+            _fields_ = [
+                ("dwLength", ctypes.c_ulong),
+                ("dwMemoryLoad", ctypes.c_ulong),
+                ("ullTotalPhys", ctypes.c_ulonglong),
+                ("ullAvailPhys", ctypes.c_ulonglong),
+                ("ullTotalPageFile", ctypes.c_ulonglong),
+                ("ullAvailPageFile", ctypes.c_ulonglong),
+                ("ullTotalVirtual", ctypes.c_ulonglong),
+                ("ullAvailVirtual", ctypes.c_ulonglong),
+                ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+            ]
+
+        status = MemoryStatusEx()
+        status.dwLength = ctypes.sizeof(status)
+        if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
+            return bytes_to_gb(status.ullTotalPhys)
+    except (AttributeError, OSError, ValueError):
+        return None
+    return None
+
+
+def windows_logical_drives():
+    drives = []
+    try:
+        import ctypes
+
+        bitmask = ctypes.windll.kernel32.GetLogicalDrives()
+        for index in range(26):
+            if not (bitmask & (1 << index)):
+                continue
+            root = f"{chr(65 + index)}:\\"
+            drive_type = ctypes.windll.kernel32.GetDriveTypeW(root)
+            if drive_type != 3:
+                continue
+            try:
+                usage = shutil.disk_usage(root)
+            except OSError:
+                continue
+            drives.append(
+                {
+                    "name": root,
+                    "totalGb": bytes_to_gb(usage.total),
+                    "freeGb": bytes_to_gb(usage.free),
+                }
+            )
+    except (AttributeError, OSError, ValueError):
+        pass
+    return drives
+
+
+def registry_subkeys(root, path):
+    try:
+        import winreg
+
+        with winreg.OpenKey(root, path) as key:
+            index = 0
+            while True:
+                try:
+                    yield winreg.EnumKey(key, index)
+                    index += 1
+                except OSError:
+                    break
+    except (OSError, ImportError):
+        return
+
+
+def registry_values(root, path):
+    values = {}
+    try:
+        import winreg
+
+        with winreg.OpenKey(root, path) as key:
+            index = 0
+            while True:
+                try:
+                    name, value, _ = winreg.EnumValue(key, index)
+                    values[name] = value
+                    index += 1
+                except OSError:
+                    break
+    except (OSError, ImportError):
+        pass
+    return values
+
+
+def clean_device_name(value):
+    if isinstance(value, bytes):
+        for encoding in ("utf-16-le", "utf-8"):
+            try:
+                value = value.decode(encoding, errors="ignore")
+                break
+            except ValueError:
+                pass
+    text = str(value or "").strip()
+    if ";" in text:
+        text = text.split(";")[-1].strip()
+    text = text.replace("\x00", " ")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def windows_registry_gpus():
+    try:
+        import winreg
+    except ImportError:
+        return []
+    base = r"SYSTEM\CurrentControlSet\Enum\PCI"
+    devices = []
+    seen = set()
+    for vendor_key in registry_subkeys(winreg.HKEY_LOCAL_MACHINE, base):
+        vendor_path = f"{base}\\{vendor_key}"
+        for instance_key in registry_subkeys(winreg.HKEY_LOCAL_MACHINE, vendor_path):
+            values = registry_values(winreg.HKEY_LOCAL_MACHINE, f"{vendor_path}\\{instance_key}")
+            hardware_ids = values.get("HardwareID", []) or []
+            hardware_text = " ".join(str(item) for item in hardware_ids)
+            description = clean_device_name(values.get("FriendlyName") or values.get("DeviceDesc"))
+            looks_like_gpu = (
+                str(values.get("Class", "")).lower() == "display"
+                or re.search(r"CC_0300|CC_0302", hardware_text, re.I)
+                or re.search(r"\b(nvidia|geforce|quadro|rtx|gtx|radeon|intel.*graphics|uhd graphics|iris|arc)\b", description, re.I)
+            )
+            if not looks_like_gpu:
+                continue
+            name = description
+            if not name or name.lower() in seen:
+                continue
+            seen.add(name.lower())
+            devices.append(
+                {
+                    "name": name,
+                    "manufacturer": clean_device_name(values.get("Mfg")),
+                    "hardwareId": clean_device_name("; ".join(values.get("HardwareID", []) or [])),
+                }
+            )
+    video_base = r"SYSTEM\CurrentControlSet\Control\Video"
+    for adapter_key in registry_subkeys(winreg.HKEY_LOCAL_MACHINE, video_base):
+        adapter_path = f"{video_base}\\{adapter_key}"
+        for child_key in registry_subkeys(winreg.HKEY_LOCAL_MACHINE, adapter_path):
+            values = registry_values(winreg.HKEY_LOCAL_MACHINE, f"{adapter_path}\\{child_key}")
+            name = clean_device_name(values.get("DriverDesc") or values.get("HardwareInformation.AdapterString"))
+            if not name or name.lower() in seen:
+                continue
+            if not re.search(r"\b(nvidia|geforce|quadro|rtx|gtx|radeon|intel|uhd graphics|iris|arc)\b", name, re.I):
+                continue
+            seen.add(name.lower())
+            devices.append(
+                {
+                    "name": name,
+                    "manufacturer": clean_device_name(values.get("ProviderName")),
+                    "hardwareId": "",
+                }
+            )
+    return devices
+
+
+def windows_registry_disks():
+    try:
+        import winreg
+    except ImportError:
+        return []
+    roots = [
+        (r"SYSTEM\CurrentControlSet\Enum\NVME", "NVMe"),
+        (r"SYSTEM\CurrentControlSet\Enum\SCSI", "SCSI"),
+        (r"SYSTEM\CurrentControlSet\Enum\IDE", "IDE"),
+        (r"SYSTEM\CurrentControlSet\Enum\USBSTOR", "USB"),
+    ]
+    disks = []
+    seen = set()
+    def disk_dedupe_key(name):
+        return re.sub(r"^(nvme|scsi|ide)\s+", "", name.lower()).strip()
+
+    for base, bus_type in roots:
+        for model_key in registry_subkeys(winreg.HKEY_LOCAL_MACHINE, base):
+            model_path = f"{base}\\{model_key}"
+            for instance_key in registry_subkeys(winreg.HKEY_LOCAL_MACHINE, model_path):
+                values = registry_values(winreg.HKEY_LOCAL_MACHINE, f"{model_path}\\{instance_key}")
+                name = clean_device_name(values.get("FriendlyName") or values.get("DeviceDesc") or model_key.replace("&", " "))
+                if not name:
+                    continue
+                dedupe_key = disk_dedupe_key(name)
+                if dedupe_key in seen:
+                    continue
+                seen.add(dedupe_key)
+                media_type = "SSD" if bus_type == "NVMe" or re.search(r"\b(ssd|nvme)\b", name, re.I) else ""
+                disks.append(
+                    {
+                        "model": name,
+                        "mediaType": media_type,
+                        "busType": bus_type,
+                        "sizeGb": None,
+                        "serialNumber": clean_device_name(instance_key),
+                    }
+                )
+    return disks
+
+
+def windows_python_fallback():
+    disk = shutil.disk_usage(Path.home().anchor)
+    logical_drives = windows_logical_drives()
+    storage_total = sum(item["totalGb"] or 0 for item in logical_drives) if logical_drives else bytes_to_gb(disk.total)
+    storage_free = sum(item["freeGb"] or 0 for item in logical_drives) if logical_drives else bytes_to_gb(disk.free)
+    bios_path = r"HARDWARE\DESCRIPTION\System\BIOS"
+    cpu_path = r"HARDWARE\DESCRIPTION\System\CentralProcessor\0"
+    gpus = windows_registry_gpus()
+    disks = windows_registry_disks()
+    storage_types = []
+    for item in disks:
+        value = item.get("mediaType") or item.get("busType") or ""
+        if value and value not in storage_types:
+            storage_types.append(value)
+    return {
+        "osName": "Windows",
+        "osVersion": platform.platform(),
+        "manufacturer": windows_registry_value(bios_path, "SystemManufacturer"),
+        "model": windows_registry_value(bios_path, "SystemProductName") or platform.machine(),
+        "serialNumber": windows_registry_value(bios_path, "SystemSerialNumber") or windows_registry_value(bios_path, "SerialNumber"),
+        "cpu": windows_registry_value(cpu_path, "ProcessorNameString") or platform.processor(),
+        "gpu": " | ".join(item["name"] for item in gpus),
+        "gpus": gpus,
+        "ramTotalGb": windows_memory_gb(),
+        "storageTotalGb": round(storage_total, 2) if storage_total is not None else None,
+        "storageFreeGb": round(storage_free, 2) if storage_free is not None else None,
+        "storageType": " + ".join(storage_types),
+        "logicalDrives": logical_drives,
+        "physicalDisks": disks,
+        "powershellCollector": "registry-fallback",
+    }
 
 
 def windows_info():
     shell = windows_shell()
     if not shell:
-        disk = shutil.disk_usage(Path.home().anchor)
-        return {
-            "osName": "Windows",
-            "osVersion": platform.platform(),
-            "manufacturer": "",
-            "model": platform.machine(),
-            "serialNumber": "",
-            "cpu": platform.processor(),
-            "gpu": "",
-            "ramTotalGb": None,
-            "storageTotalGb": bytes_to_gb(disk.total),
-            "storageFreeGb": bytes_to_gb(disk.free),
-            "storageType": "",
-        }
+        return windows_python_fallback()
     script = r"""
-    $c=Get-CimInstance Win32_ComputerSystem
-    $b=Get-CimInstance Win32_BIOS
-    $o=Get-CimInstance Win32_OperatingSystem
-    $p=Get-CimInstance Win32_Processor|Select-Object -First 1
-    $g=Get-CimInstance Win32_VideoController|Where-Object Name -notmatch 'Microsoft Basic'|Select-Object -First 1
-    $d=Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3'
-    [pscustomobject]@{
-      osName='Windows';osVersion=($o.Caption+' '+$o.Version);manufacturer=$c.Manufacturer;model=$c.Model
-      serialNumber=$b.SerialNumber;cpu=$p.Name;gpu=$g.Name;ramTotalGb=[math]::Round($c.TotalPhysicalMemory/1GB,2)
-      storageTotalGb=[math]::Round(($d|Measure-Object Size -Sum).Sum/1GB,2)
-      storageFreeGb=[math]::Round(($d|Measure-Object FreeSpace -Sum).Sum/1GB,2)
-    }|ConvertTo-Json -Compress
-    """
-    raw = run([shell, "-NoProfile", "-Command", script])
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        disk = shutil.disk_usage(Path.home().anchor)
-        return {
-            "osName": "Windows",
-            "osVersion": platform.platform(),
-            "manufacturer": "",
-            "model": platform.machine(),
-            "serialNumber": "",
-            "cpu": platform.processor(),
-            "gpu": "",
-            "ramTotalGb": None,
-            "storageTotalGb": bytes_to_gb(disk.total),
-            "storageFreeGb": bytes_to_gb(disk.free),
-            "storageType": "",
+    $ErrorActionPreference = 'SilentlyContinue'
+    function To-Gb($value) {
+      if ($null -eq $value -or $value -eq '') { return $null }
+      return [math]::Round([double]$value / 1GB, 2)
+    }
+    function Clean($value) {
+      if ($null -eq $value) { return '' }
+      return ([string]$value).Trim()
+    }
+
+    $computer = Get-CimInstance Win32_ComputerSystem
+    $bios = Get-CimInstance Win32_BIOS
+    $os = Get-CimInstance Win32_OperatingSystem
+    $processor = Get-CimInstance Win32_Processor | Select-Object -First 1
+    $videoControllers = @(Get-CimInstance Win32_VideoController |
+      Where-Object { $_.Name -and $_.Name -notmatch 'Microsoft Basic|Remote Display|Indirect Display' })
+    $logicalDisks = @(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3')
+    $diskDrives = @(Get-CimInstance Win32_DiskDrive)
+    $physicalDisks = @(Get-PhysicalDisk)
+
+    $gpus = @($videoControllers | ForEach-Object {
+      [pscustomobject]@{
+        name = Clean $_.Name
+        adapterRamGb = To-Gb $_.AdapterRAM
+        driverVersion = Clean $_.DriverVersion
+      }
+    })
+
+    $disks = @()
+    if ($physicalDisks.Count -gt 0) {
+      $disks = @($physicalDisks | ForEach-Object {
+        [pscustomobject]@{
+          model = Clean $_.FriendlyName
+          mediaType = Clean $_.MediaType
+          busType = Clean $_.BusType
+          sizeGb = To-Gb $_.Size
+          serialNumber = Clean $_.SerialNumber
         }
+      })
+    } elseif ($diskDrives.Count -gt 0) {
+      $disks = @($diskDrives | ForEach-Object {
+        $type = if ($_.MediaType -match 'SSD|Solid') { 'SSD' } elseif ($_.Model -match 'NVMe|SSD') { 'SSD' } else { Clean $_.MediaType }
+        [pscustomobject]@{
+          model = Clean $_.Model
+          mediaType = $type
+          busType = Clean $_.InterfaceType
+          sizeGb = To-Gb $_.Size
+          serialNumber = Clean $_.SerialNumber
+        }
+      })
+    }
+
+    $storageTypes = @($disks | ForEach-Object {
+      if ($_.mediaType -and $_.mediaType -ne 'Unspecified') { $_.mediaType }
+      elseif ($_.busType) { $_.busType }
+    } | Where-Object { $_ } | Select-Object -Unique)
+
+    [pscustomobject]@{
+      osName='Windows'
+      osVersion=(Clean (($os.Caption, $os.Version) -join ' '))
+      manufacturer=Clean $computer.Manufacturer
+      model=Clean $computer.Model
+      serialNumber=Clean $bios.SerialNumber
+      cpu=Clean $processor.Name
+      gpu=Clean (($gpus | ForEach-Object { $_.name }) -join ' | ')
+      gpus=$gpus
+      ramTotalGb=To-Gb $computer.TotalPhysicalMemory
+      storageTotalGb=To-Gb (($logicalDisks | Measure-Object Size -Sum).Sum)
+      storageFreeGb=To-Gb (($logicalDisks | Measure-Object FreeSpace -Sum).Sum)
+      storageType=Clean ($storageTypes -join ' + ')
+      physicalDisks=$disks
+      powershellCollector='cim'
+    } | ConvertTo-Json -Compress -Depth 6
+    """
+    raw = run([shell, "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], timeout=30)
+    parsed = parse_json_object(raw)
+    if parsed:
+        return parsed
+    else:
+        return windows_python_fallback()
 
 
 def collect(include_mac):

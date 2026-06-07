@@ -8,6 +8,7 @@ collected payload before sending it and does not hide or obfuscate behavior.
 from __future__ import annotations
 
 import argparse
+import ctypes
 import datetime
 import getpass
 import json
@@ -24,6 +25,10 @@ from tkinter import messagebox, scrolledtext, ttk
 import urllib.error
 import urllib.request
 import uuid
+try:
+    import winreg
+except ImportError:
+    winreg = None
 
 try:
     from pathlib import Path
