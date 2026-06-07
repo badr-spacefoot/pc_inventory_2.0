@@ -964,6 +964,16 @@ pre {
   color: var(--muted);
 }
 
+.launcher-downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.launcher-downloads .action-button {
+  min-height: 42px;
+}
+
 .script-preview {
   margin-top: 14px;
 }

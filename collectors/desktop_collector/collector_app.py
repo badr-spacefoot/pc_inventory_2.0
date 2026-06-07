@@ -8,6 +8,7 @@ collected payload before sending it and does not hide or obfuscate behavior.
 from __future__ import annotations
 
 import json
+import sys
 import threading
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, ttk
@@ -18,7 +19,10 @@ try:
     from pathlib import Path
     import importlib.util
 
-    SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "collect-cross-platform.py"
+    if getattr(sys, "frozen", False):
+        SCRIPT_PATH = Path(getattr(sys, "_MEIPASS")) / "scripts" / "collect-cross-platform.py"
+    else:
+        SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "collect-cross-platform.py"
     SPEC = importlib.util.spec_from_file_location("spacefoot_cross_collector", SCRIPT_PATH)
     collector = importlib.util.module_from_spec(SPEC)
     assert SPEC and SPEC.loader

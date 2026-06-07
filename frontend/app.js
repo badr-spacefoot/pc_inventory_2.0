@@ -88,12 +88,18 @@ const englishTranslations = {
   "Methode recommandee: ouvrez l'application collecteur, collez le token, relisez les donnees collectees puis envoyez. Le fallback script reste disponible pour les admins et utilisateurs avances.": "Recommended method: open the collector app, paste the token, review collected data, then submit. Script fallback remains available for admins and advanced users.",
   "Token du collecteur": "Collector token",
   "Copier le token collecteur": "Copy collector token",
+  "Lanceurs simplifies": "Simple launchers",
+  "Telechargez le fichier adapte a votre ordinateur. Il contient le token temporaire et lance la collecte automatiquement.": "Download the file for your computer. It contains the temporary token and starts collection automatically.",
   "Application collecteur": "Collector app",
   "Version transparente Python/Tkinter pour Windows, Ubuntu/Linux et macOS. Elle affiche les donnees avant envoi.": "Transparent Python/Tkinter version for Windows, Ubuntu/Linux, and macOS. It shows data before sending.",
   "Fallback PowerShell": "PowerShell fallback",
   "Script lisible, non obfusque, a copier ou telecharger si l'application collecteur n'est pas disponible.": "Readable, non-obfuscated script to copy or download if the collector app is unavailable.",
   "Copier la commande": "Copy command",
   "Copier le script": "Copy script",
+  "Telecharger le lanceur Windows": "Download Windows launcher",
+  "Telecharger le lanceur macOS": "Download macOS launcher",
+  "Telecharger le lanceur Linux": "Download Linux launcher",
+  "Lanceur telecharge.": "Launcher downloaded.",
   "Apercu du script PowerShell": "PowerShell script preview",
   "Telecharger le script": "Download script",
   "Connexion": "Sign in",
@@ -2621,6 +2627,121 @@ function buildCommand(collectionToken) {
   return `powershell -ExecutionPolicy Bypass -NoProfile -Command "iwr '${scriptUrl}' -OutFile $env:TEMP\\collect-windows.ps1; & $env:TEMP\\collect-windows.ps1 -ApiUrl '${apiUrl}' -CollectionToken '${collectionToken}'"`;
 }
 
+function currentCollectorToken() {
+  return ($("#collector-token")?.textContent || "").trim();
+}
+
+function crossPlatformScriptUrl() {
+  const base = CONFIG.scriptUrl.replace(/\/scripts\/collect-windows\.ps1$/i, "");
+  return `${base}/scripts/collect-cross-platform.py`;
+}
+
+function downloadTextFile(filename, content, type = "text/plain;charset=utf-8") {
+  const blob = new Blob([content], { type });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+function buildWindowsLauncher(collectionToken) {
+  const apiUrl = CONFIG.apiBaseUrl.replace(/"/g, "");
+  const scriptUrl = CONFIG.scriptUrl.replace(/"/g, "");
+  return `@echo off
+setlocal
+title Spacefoot IT Collector
+set "API_URL=${apiUrl}"
+set "COLLECTION_TOKEN=${collectionToken}"
+set "SCRIPT_URL=${scriptUrl}"
+set "SCRIPT_FILE=%TEMP%\\spacefoot-collect-windows.ps1"
+
+echo Spacefoot IT Collector
+echo This launcher collects hardware inventory and sends it to Spacefoot IT.
+echo No personal files, passwords, or browser history are read.
+echo.
+echo Downloading collector...
+powershell -ExecutionPolicy Bypass -NoProfile -Command "try { Invoke-WebRequest -Uri '%SCRIPT_URL%' -OutFile '%SCRIPT_FILE%' -UseBasicParsing; exit 0 } catch { Write-Host $_; exit 1 }"
+if errorlevel 1 goto failed
+
+echo Running collector...
+powershell -ExecutionPolicy Bypass -NoProfile -File "%SCRIPT_FILE%" -ApiUrl "%API_URL%" -CollectionToken "%COLLECTION_TOKEN%"
+if errorlevel 1 goto failed
+
+echo.
+echo Inventory sent successfully.
+pause
+exit /b 0
+
+:failed
+echo.
+echo Collection failed. Please contact the IT team with this window message.
+pause
+exit /b 1
+`;
+}
+
+function buildUnixLauncher(collectionToken, platformName) {
+  const apiUrl = CONFIG.apiBaseUrl.replace(/"/g, "");
+  const scriptUrl = crossPlatformScriptUrl().replace(/"/g, "");
+  return `#!/usr/bin/env sh
+set -eu
+
+API_URL="${apiUrl}"
+COLLECTION_TOKEN="${collectionToken}"
+SCRIPT_URL="${scriptUrl}"
+SCRIPT_FILE="\${TMPDIR:-/tmp}/spacefoot-collect-cross-platform.py"
+export SCRIPT_URL SCRIPT_FILE
+
+echo "Spacefoot IT Collector (${platformName})"
+echo "This launcher collects hardware inventory and sends it to Spacefoot IT."
+echo "No personal files, passwords, or browser history are read."
+echo
+
+if command -v curl >/dev/null 2>&1; then
+  curl -fsSL "$SCRIPT_URL" -o "$SCRIPT_FILE"
+elif command -v python3 >/dev/null 2>&1; then
+  python3 - <<'PY'
+import os
+import urllib.request
+urllib.request.urlretrieve(os.environ["SCRIPT_URL"], os.environ["SCRIPT_FILE"])
+PY
+else
+  echo "curl or python3 is required to download the collector."
+  exit 1
+fi
+
+if command -v python3 >/dev/null 2>&1; then
+  PYTHON_BIN=python3
+elif command -v python >/dev/null 2>&1; then
+  PYTHON_BIN=python
+else
+  echo "Python 3 is required to run this collector."
+  exit 1
+fi
+
+"$PYTHON_BIN" "$SCRIPT_FILE" --api-url "$API_URL" --token "$COLLECTION_TOKEN"
+echo
+echo "Inventory sent successfully."
+`;
+}
+
+function downloadLauncher(osName) {
+  const token = currentCollectorToken();
+  if (!token) {
+    toast("Aucun token a copier", "warning");
+    return;
+  }
+  if (osName === "windows") {
+    downloadTextFile("spacefoot-it-collector-windows.cmd", buildWindowsLauncher(token), "application/x-msdownload");
+  } else if (osName === "macos") {
+    downloadTextFile("spacefoot-it-collector-macos.command", buildUnixLauncher(token, "macOS"));
+  } else {
+    downloadTextFile("spacefoot-it-collector-linux.sh", buildUnixLauncher(token, "Linux"));
+  }
+  toast("Lanceur telecharge.", "success");
+}
+
 async function loadScriptPreview() {
   try {
     const response = await fetch(CONFIG.scriptUrl, { cache: "no-store" });
@@ -3252,6 +3373,9 @@ function bindEvents() {
     if (!state.scriptPreviewText) await loadScriptPreview();
     await copyText(state.scriptPreviewText, "Script copie.", "Aucun script a copier");
   });
+  $("#download-windows-launcher")?.addEventListener("click", () => downloadLauncher("windows"));
+  $("#download-macos-launcher")?.addEventListener("click", () => downloadLauncher("macos"));
+  $("#download-linux-launcher")?.addEventListener("click", () => downloadLauncher("linux"));
 
   $("#admin-login-form").addEventListener("submit", async (event) => {
     event.preventDefault();

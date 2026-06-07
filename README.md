@@ -133,18 +133,32 @@ La meteo de la barre superieure utilise Open-Meteo cote navigateur. Par defaut, 
 
 Le workflow `.github/workflows/pages.yml` publie `frontend/` a la racine du site et copie aussi `scripts/` et `collectors/`, afin que le fallback PowerShell et la documentation du collecteur soient disponibles depuis GitHub Pages.
 
-## Collecteur recommande et fallback script
+## Collecteur recommande, lanceurs simples et fallback script
 
 Les navigateurs, extensions et antivirus peuvent bloquer les fichiers `.ps1` ou les flux `download script`, meme quand le script est legitime. Le projet ne cherche pas a contourner Malwarebytes, les antivirus ou les controles navigateur.
 
 La strategie recommandee est:
 
 1. Generer un token de collecteur depuis la page de collecte.
-2. Ouvrir l'application collecteur officielle.
-3. Coller le token.
-4. Collecter les donnees.
-5. Relire le JSON affiche.
-6. Envoyer seulement apres verification.
+2. Telecharger le lanceur adapte a l'ordinateur: Windows, macOS ou Linux.
+3. Ouvrir le fichier telecharge.
+4. Laisser le collecteur detecter automatiquement l'OS et envoyer l'inventaire.
+
+Les lanceurs generes par la page collecte embarquent le token temporaire retourne par l'API. Ils doivent donc etre traites comme des fichiers sensibles et ne pas etre partages au-dela de leur duree de validite.
+
+- Windows: telecharge un fichier `.cmd` double-clic. Il recupere `scripts/collect-windows.ps1`, lance PowerShell et garde la fenetre ouverte en cas d'erreur.
+- macOS: telecharge un fichier `.command` qui recupere `scripts/collect-cross-platform.py`, detecte macOS et lance Python.
+- Linux: telecharge un fichier `.sh` qui recupere `scripts/collect-cross-platform.py`, detecte Linux et lance Python.
+
+Sur macOS ou Linux, si le systeme bloque l'ouverture directe du fichier, l'utilisateur peut l'ouvrir depuis le Terminal avec `sh fichier-telecharge.sh` ou `sh fichier-telecharge.command`. Pour une experience totalement native sans Terminal, prevoir une prochaine etape de packaging avec binaires signes/notarises.
+
+Un workflow manuel GitHub Actions `Build collector apps` peut aussi produire des applications natives via PyInstaller:
+
+1. Ouvrir l'onglet GitHub `Actions`.
+2. Lancer `Build collector apps` avec `Run workflow`.
+3. Recuperer les artefacts `spacefoot-it-collector-windows`, `spacefoot-it-collector-macos` ou `spacefoot-it-collector-linux`.
+
+Ces builds embarquent le collecteur Python cross-platform. Avant une diffusion large, signer le `.exe` Windows et notariser l'application macOS pour limiter les alertes systeme/antivirus.
 
 Le prototype actuel est dans `collectors/desktop_collector/`:
 
@@ -160,7 +174,7 @@ Il utilise `scripts/collect-cross-platform.py` pour collecter avec la bibliotheq
 
 Les champs impossibles a lire sans droit suffisant restent vides. Le collecteur echoue proprement et n'installe aucun controle distant.
 
-Le script PowerShell reste disponible comme fallback avance:
+Le prototype d'application collecteur reste utile pour le mode transparent avec revue avant envoi. Il affiche les donnees collectees avant soumission. Le script PowerShell reste disponible comme fallback avance:
 
 - bouton `Copier le script`;
 - bouton `Telecharger le script`;
