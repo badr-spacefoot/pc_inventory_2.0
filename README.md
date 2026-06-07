@@ -45,7 +45,7 @@ Flux:
 - Compatibilite ancien script Google Sheets via `/collect/legacy-scan` avec les champs `pcName`, `mac`, `site`, `serial`, `os`, `ram`, `ip`.
 - Enrichissement materiel cacheable: score CPU, generation CPU, age modele, prix estime, valeur marche, confiance et recommandation.
 - Generation admin de tokens de collecte temporaires avec expiration, limite d'utilisations et revocation.
-- Centre admin `Pending changes` pour approuver, modifier, rejeter ou lier les propositions utilisateur.
+- Centre admin `Validations` pour approuver, modifier, rejeter ou lier les propositions utilisateur.
 - Reordonnancement drag-and-drop avec ligne d'insertion visible.
 - Codes internes/abreviations optionnels pour equipes et etablissements.
 - Couleurs distinctes par defaut pour equipes et etablissements, modifiables par l'admin.
@@ -257,7 +257,7 @@ Si l'utilisateur selectionne `Autre`, il doit saisir une proposition:
 
 L'API cree une ligne `pending_changes` avec le statut `PENDING` et notifie les admins. Aucune equipe/implantation officielle n'est creee tant qu'un admin n'a pas approuve.
 
-Dans `Pending changes`, un admin peut:
+Dans `Validations`, un admin peut:
 
 - approuver et creer la nouvelle valeur;
 - modifier la valeur avant approbation;
@@ -323,7 +323,7 @@ Les badges OS, OEM, equipes, lieux, statuts et notifications utilisent une palet
 Les notifications sont cliquables:
 
 - `device` ouvre le detail machine;
-- `pending_change` ouvre `Pending changes`;
+- `pending_change` ouvre `Validations`;
 - `team` ou `establishment` ouvre `Organisation`;
 - `collection_access_token` ouvre `Acces`;
 - sans cible, la notification est seulement marquee comme lue.
