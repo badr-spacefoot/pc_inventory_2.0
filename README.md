@@ -702,11 +702,13 @@ Attention aux deux types de tokens:
 - token d'enrolement temporaire admin `sfit_...`: visible sur la page web, accepte par le collecteur desktop et utilise pour creer le profil;
 - token/secret de scan retourne apres `/collect/profile`: interne, utilise uniquement par le script ou l'app pour poster `/collect/scan`, et non affiche comme token utilisateur.
 
-Le flux web ne montre plus le token interne de scan comme "token collecteur". Quand l'utilisateur remplit la page web, le front cree un brouillon temporaire via `POST /collect/prefill`, affiche le meme token d'enrolement `sfit_...` et un code de pre-remplissage. Dans le collecteur desktop, l'utilisateur peut charger ce code; les champs `API URL`, token, prenom, nom, email, equipe, etablissement, propositions, langue et theme sont pre-remplis puis restent entierement modifiables avant l'envoi.
+Le flux web ne montre plus le token interne de scan comme "token collecteur". Quand l'utilisateur remplit la page web, le front cree un brouillon temporaire via `POST /collect/prefill`, affiche le meme token d'enrolement `sfit_...` et un code de pre-remplissage. Le bouton de telechargement de l'app telecharge aussi un fichier `spacefoot-collector-prefill.json`; au demarrage, le collecteur cherche ce fichier dans le dossier Downloads et charge automatiquement le pre-remplissage. L'utilisateur n'a donc pas besoin de ressaisir le token dans l'app. Il peut aussi coller manuellement le code si necessaire.
+
+Dans le collecteur desktop, les champs `API URL`, token, prenom, nom, email, equipe, etablissement, propositions, langue et theme sont pre-remplis puis restent entierement modifiables avant l'envoi. Les listes equipe/etablissement sont rechargees depuis `/organization`; les champs `autre equipe` et `autre etablissement` ne sont visibles que si l'utilisateur choisit `Other` / `Autre`.
 
 Les brouillons de pre-remplissage expirent automatiquement, par defaut apres 24 heures maximum. Aucun executable personnalise n'est genere et aucune donnee personnelle n'est placee dans les assets GitHub Releases.
 
-La page web detecte l'OS avec `navigator.userAgentData` quand disponible, puis `navigator.userAgent` / `navigator.platform` en fallback:
+La page web detecte l'OS avec `navigator.userAgentData` quand disponible, puis `navigator.userAgent` / `navigator.platform` en fallback, et affiche un badge/logo OS sur le bouton principal:
 
 - Windows: bouton principal `Telecharger le collecteur Windows`;
 - macOS: bouton principal `Telecharger le collecteur macOS`;

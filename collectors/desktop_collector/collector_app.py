@@ -48,7 +48,7 @@ else:
 
 
 DEFAULT_API_URL = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
-COLLECTOR_VERSION = "0.1.10"
+COLLECTOR_VERSION = "0.1.11"
 COLLECTOR_BUILD_CHANNEL = "github-release"
 DRAFT_PATH = Path.home() / ".spacefoot_it_collector.json"
 DARK_COLORS = {
@@ -176,6 +176,17 @@ TRANSLATIONS = {
         "Please enter the prefill code.": "Veuillez saisir le code de pre-remplissage.",
         "Load prefill": "Charger le pre-remplissage",
         "Prefilled from the web page. You can edit before submitting.": "Pre-rempli depuis la page web. Vous pouvez modifier avant l'envoi.",
+        "Collector purpose": "Objectif du collecteur",
+        "The IT team uses this tool to keep the fleet inventory accurate. Review everything before sending.": "L'equipe IT utilise cet outil pour maintenir l'inventaire du parc a jour. Relisez tout avant l'envoi.",
+        "Collected data": "Donnees collectees",
+        "Connection settings": "Reglages de connexion",
+        "Show connection settings": "Afficher les reglages de connexion",
+        "Hide connection settings": "Masquer les reglages de connexion",
+        "Prefill file loaded automatically. You can edit before submitting.": "Fichier de pre-remplissage charge automatiquement. Vous pouvez modifier avant l'envoi.",
+        "Scan log": "Journal du scan",
+        "Hostname, OS, manufacturer, model, serial/service tag": "Hostname, OS, fabricant, modele, numero de serie/service tag",
+        "CPU, RAM, storage, GPU if available": "CPU, RAM, stockage, GPU si disponible",
+        "Local IP, MAC if authorized, logged-in OS user": "IP locale, MAC si autorisee, utilisateur OS connecte",
     }
 }
 
@@ -230,12 +241,34 @@ def money_text(value):
     return "-" if value in (None, "") else str(value)
 
 
+def downloads_dir() -> Path:
+    return Path.home() / "Downloads"
+
+
+def newest_prefill_file() -> Path | None:
+    candidates = list(downloads_dir().glob("spacefoot-collector-prefill*.json"))
+    if not candidates:
+        return None
+    return max(candidates, key=lambda path: path.stat().st_mtime)
+
+
+def os_icon_name(os_name: str) -> str:
+    text = str(os_name or "").lower()
+    if "windows" in text:
+        return "WIN"
+    if "mac" in text or "darwin" in text:
+        return "MAC"
+    if "linux" in text:
+        return "LNX"
+    return "OS"
+
+
 class CollectorApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("Spacefoot IT Collector")
-        self.geometry("1120x760")
-        self.minsize(980, 680)
+        self.geometry("1180x840")
+        self.minsize(1040, 760)
         self.configure(bg=COLORS["bg"])
         self.payload: dict = {}
         self.collection_token = ""
@@ -259,6 +292,8 @@ class CollectorApp(tk.Tk):
         self.language = tk.StringVar(value=draft.get("language") or "en")
         self.theme_preference = tk.StringVar(value=draft.get("themePreference") or "system")
         self.prefill_code = tk.StringVar(value=draft.get("prefillCode") or "")
+        self.connection_visible = tk.BooleanVar(value=bool(draft.get("connectionVisible", False)))
+        self.scan_log = tk.StringVar(value="")
         self.status = tk.StringVar(value=self.t("Ready."))
         self.connection_status = tk.StringVar(value=self.t("Not validated."))
 
@@ -266,6 +301,7 @@ class CollectorApp(tk.Tk):
         self._build_ui()
         self._bind_draft_saves()
         self.after(300, self.load_organization_background)
+        self.after(700, self.auto_load_prefill_file)
 
     def t(self, text: str) -> str:
         return TRANSLATIONS.get(self.language.get(), {}).get(text, text)
@@ -301,6 +337,7 @@ class CollectorApp(tk.Tk):
 
     def _build_ui(self) -> None:
         self.apply_theme_colors()
+        current_step = self.step_index
         for child in self.winfo_children():
             child.destroy()
         self.columnconfigure(0, weight=1)
@@ -354,11 +391,14 @@ class CollectorApp(tk.Tk):
         tk.Label(footer, text=f"{self.t('Version')} {COLLECTOR_VERSION}", fg=COLORS["muted"], bg=COLORS["bg"], font=("Segoe UI", 9, "bold")).grid(row=0, column=4, padx=(0, 8))
         self.next_button = self.button(footer, self.t("Next"), self.next_step)
         self.next_button.grid(row=0, column=5)
-        self.show_step(0)
+        if self.teams or self.establishments:
+            self.after(0, self.update_org_controls)
+        self.after(0, self.update_proposal_visibility)
+        self.show_step(current_step)
         self.after(50, self.apply_title_bar_theme)
 
     def language_label(self) -> str:
-        return "FR" if self.language.get() == "en" else "EN"
+        return "🇫🇷 FR" if self.language.get() == "en" else "🇬🇧 EN"
 
     def toggle_language(self) -> None:
         self.language.set("fr" if self.language.get() == "en" else "en")
@@ -369,9 +409,9 @@ class CollectorApp(tk.Tk):
 
     def theme_label(self) -> str:
         labels = {
-            "system": self.t("System"),
-            "dark": self.t("Dark"),
-            "light": self.t("Light"),
+            "system": f"◐ {self.t('System')}",
+            "dark": f"☾ {self.t('Dark')}",
+            "light": f"☼ {self.t('Light')}",
         }
         return f"{self.t('Theme')}: {labels.get(self.theme_preference.get(), self.theme_preference.get())}"
 
@@ -435,24 +475,48 @@ class CollectorApp(tk.Tk):
         frame = tk.Frame(self.content, bg=COLORS["bg"])
         frame.grid(row=0, column=0, sticky="nsew")
         frame.columnconfigure(0, weight=1)
-        card = self.card(frame)
-        card.grid(row=0, column=0, sticky="ew")
-        card.columnconfigure(1, weight=1)
-        self.label(card, self.t("Connection"), 17, bold=True).grid(row=0, column=0, columnspan=2, sticky="w")
-        self.label(card, self.t("Validate the API and collection access token before creating the scan token."), muted=True).grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 16))
-        self.label(card, self.t("API URL"), bold=True).grid(row=2, column=0, sticky="w", padx=(0, 12), pady=8)
-        self.entry(card, self.api_url).grid(row=2, column=1, sticky="ew", pady=8)
-        self.label(card, self.t("Collection access token"), bold=True).grid(row=3, column=0, sticky="w", padx=(0, 12), pady=8)
-        self.entry(card, self.access_token, show="*").grid(row=3, column=1, sticky="ew", pady=8)
-        self.label(card, self.t("Use an admin-generated temporary token, not the collector token shown after web collection."), muted=True).grid(row=4, column=1, sticky="w")
-        self.label(card, self.t("Prefill code"), bold=True).grid(row=5, column=0, sticky="w", padx=(0, 12), pady=8)
-        prefill_row = tk.Frame(card, bg=COLORS["panel"])
-        prefill_row.grid(row=5, column=1, sticky="ew", pady=8)
+        intro = self.card(frame)
+        intro.grid(row=0, column=0, sticky="ew")
+        intro.columnconfigure(0, weight=1)
+        self.label(intro, self.t("Collector purpose"), 17, bold=True).grid(row=0, column=0, sticky="w")
+        self.label(intro, self.t("The IT team uses this tool to keep the fleet inventory accurate. Review everything before sending."), 11, muted=True).grid(row=1, column=0, sticky="w", pady=(6, 14))
+        self.label(intro, self.t("Collected data"), 13, bold=True).grid(row=2, column=0, sticky="w")
+        lines = [
+            "Hostname, OS, manufacturer, model, serial/service tag",
+            "CPU, RAM, storage, GPU if available",
+            "Local IP, MAC if authorized, logged-in OS user",
+            "No personal files are read.",
+            "No browser history is read.",
+            "No passwords are read.",
+            "No remote control is installed.",
+            "Data is submitted only after user confirmation.",
+        ]
+        for index, line in enumerate(lines, start=3):
+            tk.Label(intro, text=f"- {self.t(line)}", fg=COLORS["muted"], bg=COLORS["panel"], font=("Segoe UI", 10)).grid(row=index, column=0, sticky="w", pady=2)
+
+        quick = self.card(frame)
+        quick.grid(row=1, column=0, sticky="ew", pady=(14, 0))
+        quick.columnconfigure(1, weight=1)
+        self.label(quick, self.t("Prefill code"), bold=True).grid(row=0, column=0, sticky="w", padx=(0, 12), pady=8)
+        prefill_row = tk.Frame(quick, bg=COLORS["panel"])
+        prefill_row.grid(row=0, column=1, sticky="ew", pady=8)
         prefill_row.columnconfigure(0, weight=1)
         self.entry(prefill_row, self.prefill_code).grid(row=0, column=0, sticky="ew", padx=(0, 8))
         self.button(prefill_row, self.t("Load prefill"), self.load_prefill, secondary=True).grid(row=0, column=1)
+        self.button(quick, self.t("Hide connection settings") if self.connection_visible.get() else self.t("Show connection settings"), self.toggle_connection_settings, secondary=True).grid(row=1, column=1, sticky="w", pady=(8, 0))
+
+        self.connection_card = self.card(frame)
+        self.connection_card.grid(row=2, column=0, sticky="ew", pady=(14, 0))
+        self.connection_card.columnconfigure(1, weight=1)
+        self.label(self.connection_card, self.t("Connection settings"), 14, bold=True).grid(row=0, column=0, columnspan=2, sticky="w")
+        self.label(self.connection_card, self.t("Validate the API and collection access token before creating the scan token."), muted=True).grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 16))
+        self.label(self.connection_card, self.t("API URL"), bold=True).grid(row=2, column=0, sticky="w", padx=(0, 12), pady=8)
+        self.entry(self.connection_card, self.api_url).grid(row=2, column=1, sticky="ew", pady=8)
+        self.label(self.connection_card, self.t("Collection access token"), bold=True).grid(row=3, column=0, sticky="w", padx=(0, 12), pady=8)
+        self.entry(self.connection_card, self.access_token, show="*").grid(row=3, column=1, sticky="ew", pady=8)
+        self.label(self.connection_card, self.t("Use an admin-generated temporary token, not the collector token shown after web collection."), muted=True).grid(row=4, column=1, sticky="w")
         tk.Checkbutton(
-            card,
+            self.connection_card,
             text=self.t("Include MAC address if authorized"),
             variable=self.include_mac,
             bg=COLORS["panel"],
@@ -460,11 +524,17 @@ class CollectorApp(tk.Tk):
             activebackground=COLORS["panel"],
             activeforeground=COLORS["text"],
             selectcolor=COLORS["input"],
-        ).grid(row=6, column=1, sticky="w", pady=(6, 12))
-        self.button(card, self.t("Validate token"), self.validate_token, secondary=True).grid(row=7, column=0, sticky="w", pady=(8, 0))
-        tk.Label(card, textvariable=self.connection_status, fg=COLORS["brand_2"], bg=COLORS["panel"], font=("Segoe UI", 10, "bold")).grid(row=7, column=1, sticky="w", padx=(10, 0), pady=(8, 0))
-        self._privacy_card(frame).grid(row=1, column=0, sticky="ew", pady=(14, 0))
+        ).grid(row=5, column=1, sticky="w", pady=(6, 12))
+        self.button(self.connection_card, self.t("Validate token"), self.validate_token, secondary=True).grid(row=6, column=0, sticky="w", pady=(8, 0))
+        tk.Label(self.connection_card, textvariable=self.connection_status, fg=COLORS["brand_2"], bg=COLORS["panel"], font=("Segoe UI", 10, "bold")).grid(row=6, column=1, sticky="w", padx=(10, 0), pady=(8, 0))
+        if not self.connection_visible.get():
+            self.connection_card.grid_remove()
         return frame
+
+    def toggle_connection_settings(self) -> None:
+        self.connection_visible.set(not self.connection_visible.get())
+        self.persist_draft()
+        self._build_ui()
 
     def _privacy_card(self, parent):
         card = self.card(parent)
@@ -500,15 +570,20 @@ class CollectorApp(tk.Tk):
         self.label(card, self.t("Team"), bold=True).grid(row=5, column=0, sticky="w", padx=(0, 12), pady=8)
         self.team_combo = self.combo(card, self.team, [])
         self.team_combo.grid(row=5, column=1, sticky="ew", pady=8)
-        self.label(card, self.t("Other team proposal"), bold=True).grid(row=6, column=0, sticky="w", padx=(0, 12), pady=8)
-        self.entry(card, self.proposed_team).grid(row=6, column=1, sticky="ew", pady=8)
+        self.other_team_label = self.label(card, self.t("Other team proposal"), bold=True)
+        self.other_team_label.grid(row=6, column=0, sticky="w", padx=(0, 12), pady=8)
+        self.other_team_entry = self.entry(card, self.proposed_team)
+        self.other_team_entry.grid(row=6, column=1, sticky="ew", pady=8)
         self.label(card, self.t("Location"), bold=True).grid(row=7, column=0, sticky="w", padx=(0, 12), pady=8)
         self.establishment_combo = self.combo(card, self.establishment, [])
         self.establishment_combo.grid(row=7, column=1, sticky="ew", pady=8)
-        self.label(card, self.t("Other location proposal"), bold=True).grid(row=8, column=0, sticky="w", padx=(0, 12), pady=8)
-        self.entry(card, self.proposed_establishment).grid(row=8, column=1, sticky="ew", pady=8)
+        self.other_site_label = self.label(card, self.t("Other location proposal"), bold=True)
+        self.other_site_label.grid(row=8, column=0, sticky="w", padx=(0, 12), pady=8)
+        self.other_site_entry = self.entry(card, self.proposed_establishment)
+        self.other_site_entry.grid(row=8, column=1, sticky="ew", pady=8)
         self.label(card, self.t("Comment"), bold=True).grid(row=9, column=0, sticky="w", padx=(0, 12), pady=8)
         self.entry(card, self.comment).grid(row=9, column=1, sticky="ew", pady=8)
+        self.update_proposal_visibility()
         return frame
 
     def _scan_step(self):
@@ -521,10 +596,22 @@ class CollectorApp(tk.Tk):
         self.label(card, self.t("Hardware scan"), 17, bold=True).grid(row=0, column=0, sticky="w")
         self.label(card, self.t("Scan this computer, then review the summary before submission."), muted=True).grid(row=1, column=0, sticky="w", pady=(4, 12))
         self.button(card, self.t("Scan this computer"), self.scan_computer).grid(row=2, column=0, sticky="w")
+        log_card = self.card(frame)
+        log_card.grid(row=1, column=0, sticky="ew", pady=(14, 0))
+        log_card.columnconfigure(0, weight=1)
+        self.label(log_card, self.t("Scan log"), 13, bold=True).grid(row=0, column=0, sticky="w")
+        self.scan_log_output = scrolledtext.ScrolledText(log_card, height=5, bg=COLORS["input"], fg=COLORS["text"], insertbackground=COLORS["text"], relief="flat")
+        self.scan_log_output.grid(row=1, column=0, sticky="ew", pady=(8, 0))
         self.summary = tk.Frame(frame, bg=COLORS["bg"])
-        self.summary.grid(row=1, column=0, sticky="nsew", pady=(14, 0))
+        self.summary.grid(row=2, column=0, sticky="nsew", pady=(14, 0))
         self.summary.columnconfigure(0, weight=1)
         return frame
+
+    def append_scan_log(self, message: str) -> None:
+        timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+        if hasattr(self, "scan_log_output"):
+            self.scan_log_output.insert(tk.END, f"[{timestamp}] {message}\n")
+            self.scan_log_output.see(tk.END)
 
     def _review_step(self):
         frame = tk.Frame(self.content, bg=COLORS["bg"])
@@ -567,6 +654,20 @@ class CollectorApp(tk.Tk):
         for variable in variables:
             variable.trace_add("write", lambda *_: self.persist_draft())
         self.include_mac.trace_add("write", lambda *_: self.persist_draft())
+        self.team.trace_add("write", lambda *_: self.update_proposal_visibility())
+        self.establishment.trace_add("write", lambda *_: self.update_proposal_visibility())
+
+    def update_proposal_visibility(self) -> None:
+        team_other = self.org_name_from_label(self.team.get().strip(), self.teams) == "Other"
+        site_other = self.org_name_from_label(self.establishment.get().strip(), self.establishments) == "Other"
+        for widget in (getattr(self, "other_team_label", None), getattr(self, "other_team_entry", None)):
+            if not widget:
+                continue
+            widget.grid() if team_other else widget.grid_remove()
+        for widget in (getattr(self, "other_site_label", None), getattr(self, "other_site_entry", None)):
+            if not widget:
+                continue
+            widget.grid() if site_other else widget.grid_remove()
 
     def persist_draft(self) -> None:
         save_draft({
@@ -584,6 +685,7 @@ class CollectorApp(tk.Tk):
             "language": self.language.get(),
             "themePreference": self.theme_preference.get(),
             "prefillCode": self.prefill_code.get().strip(),
+            "connectionVisible": self.connection_visible.get(),
         })
 
     def load_prefill(self) -> None:
@@ -592,6 +694,25 @@ class CollectorApp(tk.Tk):
             return
         self.status.set(self.t("Load prefill"))
         threading.Thread(target=self._load_prefill_background, daemon=True).start()
+
+    def auto_load_prefill_file(self) -> None:
+        if self.access_token.get().strip() or self.prefill_code.get().strip():
+            return
+        path = newest_prefill_file()
+        if not path:
+            return
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
+        code = str(data.get("prefillCode") or "").strip()
+        if not code:
+            return
+        if data.get("apiUrl"):
+            self.api_url.set(str(data.get("apiUrl")))
+        self.prefill_code.set(code)
+        self.status.set(self.t("Prefill file loaded automatically. You can edit before submitting."))
+        self.load_prefill()
 
     def _load_prefill_background(self) -> None:
         try:
@@ -715,18 +836,24 @@ class CollectorApp(tk.Tk):
             messagebox.showerror(self.t("Collector unavailable"), f"{self.t('Unable to load collector')}: {COLLECTOR_IMPORT_ERROR}")
             return
         self.status.set(self.t("Scanning hardware..."))
+        if hasattr(self, "scan_log_output"):
+            self.scan_log_output.delete("1.0", tk.END)
+        self.append_scan_log("Starting hardware inventory.")
         threading.Thread(target=self._scan_background, daemon=True).start()
 
     def _scan_background(self) -> None:
         try:
+            self.after(0, lambda: self.append_scan_log("Collecting OS, hardware, storage, GPU and network fields."))
             payload = collector.collect(self.include_mac.get())
             payload["collectorVersion"] = COLLECTOR_VERSION
             payload["collectorPlatform"] = platform.system() or "Unknown"
             payload["collectorOs"] = platform.platform()
             payload["collectorBuildChannel"] = COLLECTOR_BUILD_CHANNEL
             self.payload = payload
+            self.after(0, lambda: self.append_scan_log("Scan completed. Review the summary below."))
             self.after(0, self.render_scan_summary)
         except Exception as exc:
+            self.after(0, lambda: self.append_scan_log(f"Scan failed: {exc}"))
             self.after(0, lambda: messagebox.showerror(self.t("Scan failed"), str(exc)))
             self.after(0, lambda: self.status.set(self.t("Scan failed")))
 
@@ -751,7 +878,7 @@ class CollectorApp(tk.Tk):
         p = self.payload
         identity = p.get("hardwareIdentity") or {}
         items = [
-            (self.t("OS"), f"{p.get('osName', '')} {p.get('osVersion', '')}".strip()),
+            (self.t("OS"), f"{os_icon_name(p.get('osName'))}  {p.get('osName', '')} {p.get('osVersion', '')}".strip()),
             (self.t("Manufacturer"), p.get("manufacturer")),
             (self.t("Model"), p.get("model"), True),
             (self.t("Model number / SKU"), p.get("modelNumber") or identity.get("systemSku")),

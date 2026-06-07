@@ -34,6 +34,12 @@ Le champ `Collection access token` attend un token temporaire cree dans l'interf
 
 Depuis la page web, l'utilisateur peut generer un code de pre-remplissage temporaire. Dans l'app, saisir ce code dans `Prefill code`, cliquer `Load prefill`, puis relire/modifier les champs avant l'envoi. Le code expire automatiquement et ne cree pas d'executable personnalise.
 
+Le site telecharge aussi un fichier `spacefoot-collector-prefill.json` en meme temps que l'app lorsque le code existe. Au demarrage, le collecteur inspecte le dossier Downloads et charge automatiquement le fichier le plus recent. L'utilisateur n'a donc normalement pas a ressaisir le token dans l'application. Les reglages de connexion restent masques sur la premiere page et peuvent etre ouverts avec `Show connection settings`.
+
+Les champs `Other team proposal` et `Other location proposal` sont caches tant que l'utilisateur ne choisit pas `Other` / `Autre`. Les listes equipes et etablissements sont toujours rechargees depuis l'API publique `/organization`.
+
+L'ecran de scan contient un journal integre: aucune console Windows visible n'est requise pour suivre l'avancement.
+
 Le collecteur n'installe pas de controle a distance, ne lit aucun fichier personnel, aucun historique navigateur et aucun mot de passe. Les donnees sont envoyees seulement apres confirmation.
 
 Sous Windows, la collecte interroge CIM/WMI:

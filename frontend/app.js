@@ -145,6 +145,9 @@ const englishTranslations = {
   "Aucun token a copier": "No token to copy",
   "Code copie.": "Code copied.",
   "Aucun code a copier": "No code to copy",
+  "Telecharger le fichier de pre-remplissage": "Download prefill file",
+  "Fichier de pre-remplissage telecharge. Ouvrez le collecteur: il le detectera automatiquement.": "Prefill file downloaded. Open the collector: it will detect it automatically.",
+  "Aucun code de pre-remplissage": "No prefill code",
   "Aucun script a copier": "No script to copy",
   "Actif": "Active",
   "Desactive": "Disabled",
@@ -2695,6 +2698,38 @@ function downloadLabel(platform) {
   return translate("Telecharger le collecteur");
 }
 
+function osIconSvg(platform) {
+  if (platform === "windows") {
+    return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5.5 10.5 4v7H3V5.5Zm9-1.8L21 2v9h-9V3.7ZM3 13h7.5v7L3 18.5V13Zm9 0h9v9l-9-1.7V13Z"></path></svg>`;
+  }
+  if (platform === "macos") {
+    return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.6 13.1c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.7-1.8-3.2-1.8-1.4-.1-2.7.8-3.4.8-.7 0-1.8-.8-3-.8-1.5 0-3 .9-3.8 2.2-1.6 2.8-.4 7 1.1 9.3.8 1.1 1.7 2.4 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7c1.3 0 2.1-1.1 2.8-2.2.9-1.3 1.2-2.5 1.3-2.6 0 0-2.7-1-2.7-3.7ZM15.5 6.2c.6-.8 1.1-1.8.9-2.9-.9 0-2 .6-2.7 1.4-.6.7-1.1 1.8-.9 2.8 1 .1 2-.5 2.7-1.3Z"></path></svg>`;
+  }
+  if (platform === "linux") {
+    return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c-2.4 0-4 2-4 5.2 0 1.2-.4 2.2-1.1 3.3L4.4 15c-.9 1.6-.2 3.6 1.5 4.3 1 .4 2.1.2 2.9-.4.8.7 2 1.1 3.2 1.1s2.4-.4 3.2-1.1c.8.6 1.9.8 2.9.4 1.7-.7 2.4-2.7 1.5-4.3l-2.5-4.5C16.4 9.4 16 8.4 16 7.2 16 4 14.4 2 12 2Zm-1.4 6.1c-.5 0-.9-.5-.9-1.1s.4-1.1.9-1.1.9.5.9 1.1-.4 1.1-.9 1.1Zm2.8 0c-.5 0-.9-.5-.9-1.1s.4-1.1.9-1.1.9.5.9 1.1-.4 1.1-.9 1.1Z"></path></svg>`;
+  }
+  return `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"></rect><path d="M8 22h8M12 18v4"></path></svg>`;
+}
+
+function downloadPrefillFile() {
+  if (!state.prefillCode) {
+    toast("Aucun code de pre-remplissage", "error");
+    return;
+  }
+  const payload = {
+    apiUrl: CONFIG.apiBaseUrl,
+    prefillCode: state.prefillCode,
+    createdAt: new Date().toISOString(),
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "spacefoot-collector-prefill.json";
+  link.click();
+  URL.revokeObjectURL(link.href);
+  toast("Fichier de pre-remplissage telecharge. Ouvrez le collecteur: il le detectera automatiquement.", "success");
+}
+
 function updateCollectorDownloadUi() {
   const primary = $("#collector-download-primary");
   const releases = $("#collector-releases-link");
@@ -2708,12 +2743,14 @@ function updateCollectorDownloadUi() {
   if (asset) {
     primary.href = asset.downloadUrl;
     primary.setAttribute("download", asset.fileName || "");
-    primary.querySelector("span").textContent = downloadLabel(detected);
+    primary.querySelector("span:not(.collector-os-icon)").textContent = downloadLabel(detected);
+    $("#collector-os-icon").innerHTML = osIconSvg(detected);
     $("#collector-platform-copy").textContent = `${translate("Collecteur detecte pour")} ${platformLabel(detected)} (${asset.version || ""}).`;
   } else {
     primary.href = releasePage;
     primary.removeAttribute("download");
-    primary.querySelector("span").textContent = translate("Telecharger le collecteur");
+    primary.querySelector("span:not(.collector-os-icon)").textContent = translate("Telecharger le collecteur");
+    $("#collector-os-icon").innerHTML = osIconSvg("unknown");
     $("#collector-platform-copy").textContent = detected === "unknown"
       ? translate("Choisissez votre plateforme ci-dessous.")
       : translate("Aucun asset collecteur disponible pour cette plateforme.");
@@ -3361,6 +3398,15 @@ function bindEvents() {
   });
   $("#copy-prefill-code").addEventListener("click", async () => {
     await copyText($("#collector-prefill-code").textContent, "Code copie.", "Aucun code a copier");
+  });
+  $("#download-prefill-file").addEventListener("click", downloadPrefillFile);
+  $("#collector-download-primary").addEventListener("click", () => {
+    if (state.prefillCode) downloadPrefillFile();
+  });
+  $$("[data-platform-download]").forEach((link) => {
+    link.addEventListener("click", () => {
+      if (state.prefillCode) downloadPrefillFile();
+    });
   });
   $("#copy-script").addEventListener("click", async () => {
     if (!state.scriptPreviewText) await loadScriptPreview();

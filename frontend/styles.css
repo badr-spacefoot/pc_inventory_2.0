@@ -974,6 +974,19 @@ pre {
   min-height: 42px;
 }
 
+.collector-os-icon {
+  align-items: center;
+  display: inline-flex;
+  height: 20px;
+  justify-content: center;
+  width: 20px;
+}
+
+.collector-os-icon svg {
+  height: 20px;
+  width: 20px;
+}
+
 .platform-downloads {
   align-items: center;
   display: flex;
