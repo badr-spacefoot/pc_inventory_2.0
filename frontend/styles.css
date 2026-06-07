@@ -24,6 +24,7 @@
   --nav-active-ink: #ffffff;
   --toast-bg: #18201b;
   --toast-ink: #ffffff;
+  --workspace-sticky-top: 112px;
 }
 
 :root[data-theme="dark"] {
@@ -1428,19 +1429,32 @@ pre {
   grid-template-columns: minmax(0, 1.6fr) minmax(420px, 0.8fr);
   gap: 18px;
   margin-top: 18px;
+  align-items: start;
+}
+
+.table-panel {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - var(--workspace-sticky-top) - 24px);
+  overflow: hidden;
 }
 
 .detail-panel {
   position: sticky;
-  top: 112px;
+  top: var(--workspace-sticky-top);
   align-self: start;
-  max-height: calc(100vh - 136px);
+  max-height: calc(100vh - var(--workspace-sticky-top) - 24px);
   overflow-y: auto;
   scrollbar-gutter: stable;
 }
 
 .table-wrap {
   overflow: auto;
+}
+
+.table-panel .table-wrap {
+  flex: 1;
+  min-height: 0;
 }
 
 table {
@@ -1461,6 +1475,13 @@ th {
   color: var(--muted);
   font-size: 12px;
   text-transform: uppercase;
+}
+
+.table-panel th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface);
 }
 
 tbody tr {
@@ -1837,6 +1858,21 @@ tbody tr.is-selected {
 
   .filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .table-panel {
+    display: block;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .table-panel .table-wrap {
+    flex: initial;
+    min-height: auto;
+  }
+
+  .table-panel th {
+    position: static;
   }
 
   .detail-panel {
