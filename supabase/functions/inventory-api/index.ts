@@ -34,6 +34,10 @@ const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ?? "*").split(",").map((
 const ebayBrowseApiToken = Deno.env.get("EBAY_BROWSE_API_TOKEN") ?? "";
 const googleMapsApiKey = Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
 const enrichmentCacheDays = Number(Deno.env.get("ENRICHMENT_CACHE_DAYS") ?? 90);
+const organizationPalette = [
+  "#3b6ea8", "#21867a", "#4f8a52", "#b88325", "#b86632", "#b45c75",
+  "#7b61a8", "#4e68b0", "#2f8898", "#7a963f", "#64748b", "#b15f9a",
+];
 
 const supabase = createClient(supabaseUrl, serviceRoleKey, {
   auth: { persistSession: false },
@@ -98,6 +102,11 @@ function titleCase(value: string) {
     .trim()
     .toLowerCase()
     .replace(/\b\p{L}/gu, (char) => char.toUpperCase());
+}
+
+async function nextOrganizationColor(table: "teams" | "establishments") {
+  const { count } = await supabase.from(table).select("id", { count: "exact", head: true });
+  return organizationPalette[(count ?? 0) % organizationPalette.length];
 }
 
 function parseGigabytes(value: unknown) {
@@ -243,7 +252,7 @@ async function getOrCreateByName(table: "teams" | "establishments", name: string
   const cleanName = safeString(name, 120);
   const { data: existing } = await supabase.from(table).select("id").ilike("name", cleanName).maybeSingle();
   if (existing?.id) return existing.id;
-  const { data, error } = await supabase.from(table).insert({ name: cleanName }).select("id").single();
+  const { data, error } = await supabase.from(table).insert({ name: cleanName, color: await nextOrganizationColor(table) }).select("id").single();
   if (error) throw error;
   return data.id;
 }
@@ -1267,7 +1276,7 @@ async function handlePublicOrganization(request: Request) {
       .order("name"),
     supabase
       .from("establishments")
-      .select("id,name,abbreviation,establishment_type,discipline,city,country,sort_index")
+      .select("id,name,abbreviation,establishment_type,discipline,color,city,country,sort_index")
       .eq("active", true)
       .order("sort_index", { nullsFirst: false })
       .order("name"),
@@ -1289,7 +1298,7 @@ async function handleAdminOrganization(request: Request) {
       supabase.from("teams").select("id,name,abbreviation,description,color,active,sort_index,created_at").order("sort_index", { nullsFirst: false }).order("name"),
       supabase
         .from("establishments")
-        .select("id,name,abbreviation,establishment_type,discipline,address,postal_code,city,country,latitude,longitude,active,sort_index,created_at")
+        .select("id,name,abbreviation,establishment_type,discipline,color,address,postal_code,city,country,latitude,longitude,active,sort_index,created_at")
         .order("sort_index", { nullsFirst: false })
         .order("name"),
       supabase.from("devices").select("team_id,establishment_id"),
@@ -1435,7 +1444,7 @@ async function handleAdminSaveTeam(request: Request, id?: string) {
   const body = await request.json().catch(() => ({}));
   const name = safeString(body.name, 120);
   const abbreviation = safeString(body.abbreviation, 24).toUpperCase() || null;
-  const color = safeString(body.color, 7) || "#16735f";
+  const color = safeString(body.color, 7) || await nextOrganizationColor("teams");
   if (!name) return badRequest(request, "Nom de l'equipe requis.");
   if (!/^#[0-9a-f]{6}$/i.test(color)) return badRequest(request, "Couleur invalide.");
   const values = {
@@ -1496,13 +1505,15 @@ async function handleAdminSaveEstablishment(request: Request, id?: string) {
   const abbreviation = safeString(body.abbreviation, 24).toUpperCase() || null;
   const establishmentType = safeString(body.establishmentType, 40) || "office";
   const discipline = safeString(body.discipline, 40) || "general";
+  const color = safeString(body.color, 7) || await nextOrganizationColor("establishments");
   const allowedTypes = ["warehouse", "store", "headquarters", "research", "accounting", "office", "remote", "other"];
-  const allowedDisciplines = ["general", "bike", "racket", "football", "golf", "office", "warehouse", "headquarters", "remote", "other"];
+  const allowedDisciplines = ["general", "bike", "racket", "football", "golf", "lifestyle", "running", "office", "warehouse", "headquarters", "remote", "other"];
   const latitude = body.latitude === "" || body.latitude === null || body.latitude === undefined ? null : safeNumber(body.latitude);
   const longitude = body.longitude === "" || body.longitude === null || body.longitude === undefined ? null : safeNumber(body.longitude);
   if (!name) return badRequest(request, "Nom de l'etablissement requis.");
   if (!allowedTypes.includes(establishmentType)) return badRequest(request, "Type d'etablissement invalide.");
   if (!allowedDisciplines.includes(discipline)) return badRequest(request, "Discipline invalide.");
+  if (!/^#[0-9a-f]{6}$/i.test(color)) return badRequest(request, "Couleur invalide.");
   if (latitude !== null && (latitude < -90 || latitude > 90)) return badRequest(request, "Latitude invalide.");
   if (longitude !== null && (longitude < -180 || longitude > 180)) return badRequest(request, "Longitude invalide.");
   const values = {
@@ -1510,6 +1521,7 @@ async function handleAdminSaveEstablishment(request: Request, id?: string) {
     abbreviation,
     establishment_type: establishmentType,
     discipline,
+    color,
     address: safeString(body.address, 240) || null,
     postal_code: safeString(body.postalCode, 20) || null,
     city: safeString(body.city, 120) || null,
@@ -1525,7 +1537,7 @@ async function handleAdminSaveEstablishment(request: Request, id?: string) {
     ? await supabase.from("establishments").select("id,name").ilike("abbreviation", abbreviation).neq("id", id || "00000000-0000-0000-0000-000000000000").maybeSingle()
     : { data: null };
   const { data, error } = await query
-    .select("id,name,abbreviation,establishment_type,discipline,address,postal_code,city,country,latitude,longitude,active,created_at")
+    .select("id,name,abbreviation,establishment_type,discipline,color,address,postal_code,city,country,latitude,longitude,active,created_at")
     .single();
   if (error) {
     if (error.code === "23505") return badRequest(request, "Un etablissement porte deja ce nom.", 409);

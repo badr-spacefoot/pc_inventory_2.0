@@ -48,7 +48,8 @@ Flux:
 - Centre admin `Pending changes` pour approuver, modifier, rejeter ou lier les propositions utilisateur.
 - Reordonnancement drag-and-drop avec ligne d'insertion visible.
 - Codes internes/abreviations optionnels pour equipes et etablissements.
-- Icones equipe et discipline lieu: SAV, achat, RH, Biz Dev, IT, design, logistique, catalogue, B2C, finance, direction, marketing, velo, raquette, football, golf, bureau, entrepot, siege.
+- Couleurs distinctes par defaut pour equipes et etablissements, modifiables par l'admin.
+- Icones equipe et discipline lieu: SAV, achat, RH, Biz Dev, marketplace, advertising, IT, design, logistique, catalogue/PIM, B2C, finance, direction, marketing, velo, raquette, football, golf, lifestyle, running, bureau, entrepot, siege.
 - Notifications cliquables vers machine, proposition, equipe, etablissement ou tokens.
 
 ## Installation Supabase
@@ -278,7 +279,41 @@ Les equipes et etablissements ont un champ optionnel `abbreviation`:
 
 Si aucune abbreviation n'est stockee, l'interface genere un code court d'affichage sans l'ecrire en base. La recherche globale matche le nom complet et l'abbreviation.
 
-Les etablissements ont aussi une `discipline` optionnelle pour choisir l'icone: `bike`, `racket`, `football`, `golf`, `general`, `office`, `warehouse`, `headquarters`, `remote`, `other`.
+Les etablissements ont aussi une `discipline` optionnelle pour choisir l'icone: `bike`, `racket`, `football`, `golf`, `lifestyle`, `running`, `general`, `office`, `warehouse`, `headquarters`, `remote`, `other`.
+
+Les equipes et etablissements possedent un champ `color`. A la creation, l'API choisit une couleur dans une palette douce:
+
+`blue`, `teal`, `green`, `amber`, `orange`, `rose`, `purple`, `indigo`, `cyan`, `lime`, `slate`, `pink`.
+
+L'admin peut modifier la couleur avec le color picker ou revenir a la couleur de palette via `Couleur par defaut`. Les previews affichent le badge final avant sauvegarde. Les badges utilisent la couleur sauvegardee via une variable CSS `--badge-color`, ce qui garde une apparence coherente en light/dark mode.
+
+Mapping equipes:
+
+- `SAV`, `Service apres-vente`, `Support`: casque support.
+- `Achat`, `Procurement`, `MP`: panier.
+- `RH`, `Ressources humaines`: utilisateurs.
+- `Commerciale`, `Biz Dev`: briefcase.
+- `Marketplace`, `Marketplaces`, `Place de marche`: boutique/market grid.
+- `Publicite`, `Advertising`, `Ads`, `Acquisition`: megaphone.
+- `Catalogue`, `PIM`, `Integration produits`, `Product integration`: base de donnees/import.
+- `Tech`, `IT`, `Informatique`: terminal.
+- `Design`: plume/palette.
+- `Logistique`: camion.
+- `Finance`, `Compta`: finance.
+- `Direction`, `Management`: etoile/leadership.
+
+Disciplines etablissements:
+
+- `bike`: velo.
+- `racket`: raquette.
+- `football`: ballon.
+- `golf`: drapeau.
+- `lifestyle`: shopping bag.
+- `running`: chaussure/course.
+- `general`: trophee.
+- `office`, `warehouse`, `headquarters`, `remote`, `other`: icones structurelles.
+
+Pour ajouter une nouvelle couleur, etendre `organizationPalette` dans `frontend/app.js` et `supabase/functions/inventory-api/index.ts`. Pour ajouter une discipline, ajouter la valeur dans la contrainte SQL, dans le select admin, puis dans `locationIcon()`.
 
 Les badges OS, OEM, equipes, lieux, statuts et notifications utilisent une palette plus douce, compatible dark mode. Les logos OEM du detail machine sont centres dans un conteneur stable pour eviter les decalages visuels.
 

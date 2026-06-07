@@ -5,7 +5,7 @@ create table if not exists public.teams (
   name text not null unique,
   abbreviation text,
   description text,
-  color text not null default '#16735f',
+  color text not null default '#3b6ea8',
   active boolean not null default true,
   sort_index integer,
   created_at timestamptz not null default now()
@@ -18,7 +18,8 @@ create table if not exists public.establishments (
   establishment_type text not null default 'office'
     check (establishment_type in ('warehouse', 'store', 'headquarters', 'research', 'accounting', 'office', 'remote', 'other')),
   discipline text not null default 'general'
-    check (discipline in ('general', 'bike', 'racket', 'football', 'golf', 'office', 'warehouse', 'headquarters', 'remote', 'other')),
+    check (discipline in ('general', 'bike', 'racket', 'football', 'golf', 'lifestyle', 'running', 'office', 'warehouse', 'headquarters', 'remote', 'other')),
+  color text not null default '#5f6f7f',
   address text,
   postal_code text,
   city text,
@@ -32,13 +33,14 @@ create table if not exists public.establishments (
 
 alter table public.teams add column if not exists description text;
 alter table public.teams add column if not exists abbreviation text;
-alter table public.teams add column if not exists color text not null default '#16735f';
+alter table public.teams add column if not exists color text not null default '#3b6ea8';
 alter table public.teams add column if not exists active boolean not null default true;
 alter table public.teams add column if not exists sort_index integer;
 alter table public.establishments add column if not exists address text;
 alter table public.establishments add column if not exists abbreviation text;
 alter table public.establishments add column if not exists establishment_type text not null default 'office';
 alter table public.establishments add column if not exists discipline text not null default 'general';
+alter table public.establishments add column if not exists color text not null default '#5f6f7f';
 alter table public.establishments add column if not exists postal_code text;
 alter table public.establishments add column if not exists city text;
 alter table public.establishments add column if not exists country text not null default 'France';
@@ -381,10 +383,12 @@ select
   u.comment,
   t.name as team_name,
   t.abbreviation as team_abbreviation,
+  t.color as team_color,
   e.name as establishment_name,
   e.abbreviation as establishment_abbreviation,
   e.establishment_type,
   e.discipline as establishment_discipline,
+  e.color as establishment_color,
   d.gpu,
   d.storage_type,
   he.release_year,

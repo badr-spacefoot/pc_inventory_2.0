@@ -40,6 +40,11 @@ const originalText = new WeakMap();
 const originalAttributes = new WeakMap();
 let pendingReassignment = null;
 
+const organizationPalette = [
+  "#3b6ea8", "#21867a", "#4f8a52", "#b88325", "#b86632", "#b45c75",
+  "#7b61a8", "#4e68b0", "#2f8898", "#7a963f", "#64748b", "#b15f9a",
+];
+
 const englishTranslations = {
   "Inventaire IT": "IT Inventory",
   "Navigation principale": "Main navigation",
@@ -176,6 +181,7 @@ const englishTranslations = {
   "Sport general": "General sport",
   "Velo / cycling": "Bike / cycling",
   "Sports de raquette": "Racket sports",
+  "Couleur par defaut": "Default color",
   "Rechercher une adresse": "Search for an address",
   "Commencez a saisir une adresse...": "Start typing an address...",
   "Adresse": "Address",
@@ -622,6 +628,15 @@ function displayWithAbbreviation(name, abbreviation) {
   return abbr ? `${abbr} - ${name}` : name;
 }
 
+function defaultOrganizationColor(index = 0) {
+  return organizationPalette[Math.abs(index) % organizationPalette.length];
+}
+
+function badgeStyle(color) {
+  const safeColor = /^#[0-9a-f]{6}$/i.test(String(color || "")) ? color : "#64748b";
+  return `style="--badge-color:${escapeHtml(safeColor)}"`;
+}
+
 function teamRecordByName(name) {
   return state.teams.find((team) => team.name === name) || null;
 }
@@ -787,11 +802,13 @@ function normalizeTeamInfo(teamName, abbreviation = "") {
     ["design", /\b(design|graphisme|creative)\b/],
     ["store", /\b(store manager|responsable boutique)\b/],
     ["logistics", /\b(logistique|logistics|warehouse|log)\b/],
-    ["catalog", /\b(catalogue|catalog|data|cata)\b/],
+    ["marketplace", /\b(marketplace|marketplaces|place de marche|places de marche|market place)\b/],
+    ["catalog", /\b(catalogue|catalog|product integration|integration produits|data catalogue|pim|pimup|cata)\b/],
     ["b2c", /\bb2c\b/],
     ["finance", /\b(finance|compta|accounting|comptabilite)\b/],
     ["management", /\b(direction|management|dg|codir)\b/],
-    ["marketing", /\b(marketing|pub|communication)\b/],
+    ["ads", /\b(publicite|advertising|ads|acquisition|campaign|campagne|pub)\b/],
+    ["marketing", /\b(marketing|communication)\b/],
   ];
   const storedAbbreviation = String(abbreviation || "").trim().toUpperCase();
   const fallback = fallbackAbbreviation(rawTeamName);
@@ -817,10 +834,12 @@ function teamIcon(type) {
     design: '<path d="m12 19 7-7 3 3-7 7-3-3ZM18 13l-1.5-7.5L2 2l3.5 14.5L13 18M2 2l7.6 7.6"/><circle cx="11" cy="11" r="2"/>',
     store: '<path d="M3 9l2-5h14l2 5M5 13v7h14v-7M9 20v-6h6v6"/><path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"/>',
     logistics: '<path d="M3 6h11v11H3zM14 10h4l3 3v4h-7z"/><circle cx="7" cy="19" r="2"/><circle cx="18" cy="19" r="2"/>',
-    catalog: '<path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/>',
+    marketplace: '<path d="M3 9l2-5h14l2 5M5 13v7h14v-7"/><path d="M8 16h8M8 20v-7M16 20v-7"/><circle cx="12" cy="6" r="1"/>',
+    catalog: '<path d="M4 5c0-1 4-2 8-2s8 1 8 2-4 2-8 2-8-1-8-2Z"/><path d="M4 5v6c0 1 4 2 8 2s8-1 8-2V5M4 11v6c0 1 4 2 8 2s8-1 8-2v-6"/><path d="M12 8v8M9 13l3 3 3-3"/>',
     b2c: '<path d="M3 9l2-5h14l2 5M5 13v7h14v-7"/><circle cx="12" cy="14" r="2"/><path d="M8 20v-1a4 4 0 0 1 8 0v1"/>',
     finance: '<path d="M6 7h12M6 12h10M6 17h12"/><path d="M15 4c-5 0-8 3-8 8s3 8 8 8"/>',
     management: '<path d="m12 3 3 6 6 .5-4.5 4 1.5 6.5-6-3.5-6 3.5 1.5-6.5L3 9.5 9 9l3-6Z"/>',
+    ads: '<path d="m3 11 14-6v14L3 13v-2Z"/><path d="M7 14v5a2 2 0 0 0 2 2h1M21 9v6"/>',
     marketing: '<path d="m3 11 14-6v14L3 13v-2Z"/><path d="M7 14v5a2 2 0 0 0 2 2h1"/>',
     team: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',
   };
@@ -830,12 +849,13 @@ function teamIcon(type) {
 function renderTeamBadge(teamName) {
   const record = teamRecordByName(teamName);
   const info = normalizeTeamInfo(teamName, record?.abbreviation);
-  return `<span class="${info.badgeClass}" title="${escapeHtml(info.fullLabel)}">${teamIcon(info.iconType)}<span>${escapeHtml(info.displayLabel)}</span></span>`;
+  const color = record?.color || "#64748b";
+  return `<span class="${info.badgeClass}" ${badgeStyle(color)} title="${escapeHtml(info.fullLabel)}">${teamIcon(info.iconType)}<span>${escapeHtml(info.displayLabel)}</span></span>`;
 }
 
 function locationInfo(type, name = "", discipline = "", abbreviation = "") {
   const disciplineType = String(discipline || "").trim();
-  const normalizedType = ["bike", "racket", "football", "golf", "general", "office", "store", "warehouse", "headquarters", "remote", "other"].includes(disciplineType)
+  const normalizedType = ["bike", "racket", "football", "golf", "lifestyle", "running", "general", "office", "store", "warehouse", "headquarters", "remote", "other"].includes(disciplineType)
     ? disciplineType
     : ["office", "store", "warehouse", "headquarters", "remote", "other"].includes(type)
       ? type
@@ -856,6 +876,8 @@ function locationIcon(type) {
     racket: '<ellipse cx="9" cy="8" rx="4" ry="6" transform="rotate(-35 9 8)"/><path d="m12 13 7 7M17 18l2-2"/>',
     football: '<circle cx="12" cy="12" r="9"/><path d="m12 7 4 3-1.5 5h-5L8 10l4-3ZM5 10l3 0M16 10l3 0M9.5 15 8 19M14.5 15 16 19"/>',
     golf: '<path d="M8 21V4l10 3-10 3"/><path d="M4 21h12"/><circle cx="17" cy="18" r="1"/>',
+    lifestyle: '<path d="M6 8h12l2 12H4L6 8Z"/><path d="M9 8a3 3 0 0 1 6 0"/><path d="M8 15h8M10 12h4"/>',
+    running: '<path d="M4 16c5 0 7-4 11-4h2l3 4-2 2H9c-3 0-4-1-5-2Z"/><path d="M12 12 9 8M15 12l-1-4M6 20h12"/>',
     general: '<path d="M8 21h8M12 17v4"/><path d="M7 4h10v3a5 5 0 0 1-10 0V4Z"/><path d="M7 6H4a3 3 0 0 0 3 3M17 6h3a3 3 0 0 1-3 3"/>',
     office: '<path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M8 7h4M8 11h4M8 15h4M16 9h4v12"/>',
     store: '<path d="M3 9l2-5h14l2 5M5 13v7h14v-7"/><path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"/>',
@@ -875,7 +897,8 @@ function renderLocationBadge(device) {
     device.establishment_discipline || site?.discipline,
     device.establishment_abbreviation || site?.abbreviation,
   );
-  return `<span class="${info.badgeClass}" title="${escapeHtml(info.fullLabel)}">${locationIcon(info.iconType)}<span>${escapeHtml(info.displayLabel)}</span></span>`;
+  const color = device.establishment_color || site?.color || "#64748b";
+  return `<span class="${info.badgeClass}" ${badgeStyle(color)} title="${escapeHtml(info.fullLabel)}">${locationIcon(info.iconType)}<span>${escapeHtml(info.displayLabel)}</span></span>`;
 }
 
 function confirmAction({ title = "Confirmer la suppression", message, confirmLabel = "Supprimer" }) {
@@ -2048,7 +2071,7 @@ function renderOrganization() {
         <div class="organization-sort-row ${site.active ? "" : "is-inactive"}" draggable="${canManageLocations}" data-entity="establishment" data-id="${site.id}">
           ${canManageLocations ? `<button class="drag-handle" type="button" aria-label="Deplacer ${escapeHtml(site.name)}" title="Glisser pour reordonner">&#8942;&#8942;</button>` : ""}
           <button class="organization-item edit-establishment" type="button" data-id="${site.id}">
-            <span class="organization-icon site type-${escapeHtml(site.discipline || site.establishment_type || "office")}">${locationIcon(site.discipline || site.establishment_type || "office")}</span>
+            <span class="organization-icon site type-${escapeHtml(site.discipline || site.establishment_type || "office")}" style="--item-color:${escapeHtml(site.color || "#64748b")}">${locationIcon(site.discipline || site.establishment_type || "office")}</span>
             <span>
               <strong>${escapeHtml(displayWithAbbreviation(site.name, site.abbreviation))}</strong>
               <small>${translate(establishmentTypeLabels[site.establishment_type] || establishmentTypeLabels.office)} - ${state.language === "en" ? `${site.device_count} computer(s), ${site.user_count || 0} user(s)` : `${site.device_count} machine(s), ${site.user_count || 0} utilisateur(s)`}${location ? ` - ${escapeHtml(location)}` : ""}</small>
@@ -2150,10 +2173,11 @@ function resetTeamForm() {
   form.reset();
   form.elements.id.value = "";
   form.elements.abbreviation.value = "";
-  form.elements.color.value = "#16735f";
+  form.elements.color.value = defaultOrganizationColor(state.teams.length);
   form.elements.active.checked = true;
   $("#team-editor-title").textContent = "Nouvelle equipe";
   $("#delete-team").classList.add("is-hidden");
+  renderTeamPreview();
 }
 
 function editTeam(id) {
@@ -2164,10 +2188,18 @@ function editTeam(id) {
   form.elements.name.value = team.name || "";
   form.elements.abbreviation.value = team.abbreviation || "";
   form.elements.description.value = team.description || "";
-  form.elements.color.value = team.color || "#16735f";
+  form.elements.color.value = team.color || defaultOrganizationColor(state.teams.findIndex((item) => item.id === id));
   form.elements.active.checked = Boolean(team.active);
   $("#team-editor-title").textContent = team.name;
   $("#delete-team").classList.remove("is-hidden");
+  renderTeamPreview();
+}
+
+function renderTeamPreview() {
+  const form = $("#team-form");
+  const name = form.elements.name.value || translate("Nouvelle equipe");
+  const info = normalizeTeamInfo(name, form.elements.abbreviation.value);
+  $("#team-badge-preview").innerHTML = `<span class="${info.badgeClass}" ${badgeStyle(form.elements.color.value)}>${teamIcon(info.iconType)}<span>${escapeHtml(info.displayLabel)}</span></span>`;
 }
 
 function resetEstablishmentForm() {
@@ -2178,12 +2210,14 @@ function resetEstablishmentForm() {
   form.elements.country.value = "France";
   form.elements.establishmentType.value = "office";
   form.elements.discipline.value = "general";
+  form.elements.color.value = defaultOrganizationColor(state.establishments.length);
   form.elements.active.checked = true;
   $("#address-search").value = "";
   $("#address-search-status").textContent = "";
   hideAddressSuggestions();
   $("#establishment-editor-title").textContent = "Nouvel etablissement";
   $("#delete-establishment").classList.add("is-hidden");
+  renderEstablishmentPreview();
   renderEstablishmentMap();
 }
 
@@ -2196,6 +2230,7 @@ function editEstablishment(id) {
   form.elements.abbreviation.value = site.abbreviation || "";
   form.elements.establishmentType.value = site.establishment_type || "office";
   form.elements.discipline.value = site.discipline || "general";
+  form.elements.color.value = site.color || defaultOrganizationColor(state.establishments.findIndex((item) => item.id === id));
   form.elements.address.value = site.address || "";
   form.elements.postalCode.value = site.postal_code || "";
   form.elements.city.value = site.city || "";
@@ -2205,7 +2240,15 @@ function editEstablishment(id) {
   form.elements.active.checked = Boolean(site.active);
   $("#establishment-editor-title").textContent = site.name;
   $("#delete-establishment").classList.remove("is-hidden");
+  renderEstablishmentPreview();
   renderEstablishmentMap();
+}
+
+function renderEstablishmentPreview() {
+  const form = $("#establishment-form");
+  const name = form.elements.name.value || translate("Nouvel etablissement");
+  const info = locationInfo(form.elements.establishmentType.value, name, form.elements.discipline.value, form.elements.abbreviation.value);
+  $("#establishment-badge-preview").innerHTML = `<span class="${info.badgeClass}" ${badgeStyle(form.elements.color.value)}>${locationIcon(info.iconType)}<span>${escapeHtml(info.displayLabel)}</span></span>`;
 }
 
 function renderEstablishmentMap() {
@@ -2552,6 +2595,26 @@ function bindEvents() {
   $("#refresh-pending-changes").addEventListener("click", () => loadPendingChanges().catch((error) => toast(error.message)));
   $("#new-team").addEventListener("click", resetTeamForm);
   $("#new-establishment").addEventListener("click", resetEstablishmentForm);
+  ["name", "abbreviation", "color"].forEach((name) => {
+    $("#team-form").elements[name].addEventListener("input", renderTeamPreview);
+  });
+  $("#reset-team-color").addEventListener("click", () => {
+    const form = $("#team-form");
+    const id = form.elements.id.value;
+    const index = id ? state.teams.findIndex((team) => team.id === id) : state.teams.length;
+    form.elements.color.value = defaultOrganizationColor(index < 0 ? state.teams.length : index);
+    renderTeamPreview();
+  });
+  ["name", "abbreviation", "discipline", "establishmentType", "color"].forEach((name) => {
+    $("#establishment-form").elements[name].addEventListener("input", renderEstablishmentPreview);
+  });
+  $("#reset-establishment-color").addEventListener("click", () => {
+    const form = $("#establishment-form");
+    const id = form.elements.id.value;
+    const index = id ? state.establishments.findIndex((site) => site.id === id) : state.establishments.length;
+    form.elements.color.value = defaultOrganizationColor(index < 0 ? state.establishments.length : index);
+    renderEstablishmentPreview();
+  });
   $("#delete-team").addEventListener("click", async () => {
     const form = $("#team-form");
     const id = form.elements.id.value;
@@ -2664,6 +2727,7 @@ function bindEvents() {
       abbreviation: values.abbreviation,
       establishmentType: values.establishmentType,
       discipline: values.discipline,
+      color: values.color,
       address: values.address,
       postalCode: values.postalCode,
       city: values.city,

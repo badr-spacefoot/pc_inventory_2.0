@@ -962,6 +962,23 @@ pre {
   padding: 5px;
 }
 
+.color-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.badge-preview {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+}
+
 .switch-field {
   grid-template-columns: 20px 1fr;
   align-items: center;
@@ -1193,8 +1210,8 @@ pre {
   border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
   border-radius: 999px;
   padding: 5px 8px;
-  background: color-mix(in srgb, currentColor 8%, var(--surface));
-  color: var(--ink);
+  background: color-mix(in srgb, var(--badge-color, currentColor) 10%, var(--surface));
+  color: var(--badge-color, var(--ink));
   font-size: 12px;
   font-weight: 750;
   white-space: nowrap;
@@ -1225,11 +1242,15 @@ pre {
 .team-finance { color: #5d7d35; }
 .team-management { color: #886a22; }
 .team-marketing { color: #a0506e; }
+.team-marketplace { color: #8f6b22; }
+.team-ads { color: #a0506e; }
 .location-store, .location-general { color: #9a5971; }
 .location-bike { color: #267b68; }
 .location-racket { color: #6f63a6; }
 .location-football { color: #4f7f45; }
 .location-golf { color: #7c7530; }
+.location-lifestyle { color: #a0506e; }
+.location-running { color: #b86632; }
 .location-warehouse { color: #9a6a22; }
 .location-headquarters, .location-office { color: #406f9e; }
 .location-remote { color: #527967; }

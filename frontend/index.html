@@ -432,6 +432,10 @@
                     Couleur
                     <input name="color" type="color" value="#16735f" />
                   </label>
+                  <div class="color-tools">
+                    <button id="reset-team-color" class="secondary" type="button">Couleur par defaut</button>
+                    <div id="team-badge-preview" class="badge-preview"></div>
+                  </div>
                   <label class="switch-field">
                     <input name="active" type="checkbox" checked />
                     <span>Equipe active</span>
@@ -492,6 +496,8 @@
                       <option value="racket">Sports de raquette</option>
                       <option value="football">Football</option>
                       <option value="golf">Golf</option>
+                      <option value="lifestyle">Lifestyle</option>
+                      <option value="running">Running</option>
                       <option value="office">Bureau</option>
                       <option value="warehouse">Entrepot</option>
                       <option value="headquarters">Siege social</option>
@@ -499,6 +505,14 @@
                       <option value="other">Autre</option>
                     </select>
                   </label>
+                  <label class="color-field">
+                    Couleur
+                    <input name="color" type="color" value="#5f6f7f" />
+                  </label>
+                  <div class="color-tools wide">
+                    <button id="reset-establishment-color" class="secondary" type="button">Couleur par defaut</button>
+                    <div id="establishment-badge-preview" class="badge-preview"></div>
+                  </div>
                   <label class="wide address-search-field">
                     Rechercher une adresse
                     <span class="address-search-control">
