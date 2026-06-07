@@ -691,12 +691,29 @@ Le collecteur desktop `Spacefoot IT Collector` propose un flux en quatre etapes:
 3. scan materiel local;
 4. revue lisible puis soumission, avec JSON brut disponible dans une section avancee.
 
-L'adresse MAC est cochee par defaut dans le collecteur desktop lorsque sa collecte est autorisee. L'utilisateur peut la retirer avant le scan. Le bouton de langue en bas de fenetre bascule l'interface collecteur entre anglais et francais.
+L'adresse MAC est cochee par defaut dans le collecteur desktop lorsque sa collecte est autorisee. L'utilisateur peut la retirer avant le scan. Les boutons en bas de fenetre permettent de changer la langue (`FR`/`EN`) et le theme (`System`, `Dark`, `Light`). Ces preferences sont conservees localement.
+
+Le collecteur affiche sa version en bas de fenetre et envoie aussi `collectorVersion`, `collectorPlatform`, `collectorOs` et `collectorBuildChannel` dans le payload. L'API conserve ces informations dans le payload brut du scan et utilise `collectorVersion` comme version de script lorsque `scriptVersion` n'est pas present.
+
+Sous Windows, les commandes PowerShell/CIM lancees par l'application sont executees avec `CREATE_NO_WINDOW` afin de ne pas ouvrir de console visible. La barre de titre native est assombrie/eclaircie via DWM lorsque Windows le permet. Sur les plateformes ou la barre native ne peut pas etre stylisee par Tkinter, l'application applique le meilleur theme possible au contenu et documente cette limite.
 
 Attention aux deux types de tokens:
 
-- token temporaire admin `sfit_...`: a coller dans le collecteur desktop pour creer le profil et lancer la collecte;
-- token de scan retourne apres `/collect/profile`: utilise uniquement par le script ou l'app pour poster `/collect/scan`, et non valide dans le champ initial du collecteur.
+- token d'enrolement temporaire admin `sfit_...`: visible sur la page web, accepte par le collecteur desktop et utilise pour creer le profil;
+- token/secret de scan retourne apres `/collect/profile`: interne, utilise uniquement par le script ou l'app pour poster `/collect/scan`, et non affiche comme token utilisateur.
+
+Le flux web ne montre plus le token interne de scan comme "token collecteur". Quand l'utilisateur remplit la page web, le front cree un brouillon temporaire via `POST /collect/prefill`, affiche le meme token d'enrolement `sfit_...` et un code de pre-remplissage. Dans le collecteur desktop, l'utilisateur peut charger ce code; les champs `API URL`, token, prenom, nom, email, equipe, etablissement, propositions, langue et theme sont pre-remplis puis restent entierement modifiables avant l'envoi.
+
+Les brouillons de pre-remplissage expirent automatiquement, par defaut apres 24 heures maximum. Aucun executable personnalise n'est genere et aucune donnee personnelle n'est placee dans les assets GitHub Releases.
+
+La page web detecte l'OS avec `navigator.userAgentData` quand disponible, puis `navigator.userAgent` / `navigator.platform` en fallback:
+
+- Windows: bouton principal `Telecharger le collecteur Windows`;
+- macOS: bouton principal `Telecharger le collecteur macOS`;
+- Linux: bouton principal `Telecharger le collecteur Linux`;
+- inconnu: bouton generique et choix manuel Windows/macOS/Linux.
+
+Les URLs de telechargement viennent de `frontend/collector-releases.json`, qui contient la version, l'asset et le lien de release. Le lien `Autres versions` ouvre la page GitHub Releases complete.
 
 Le collecteur affiche explicitement que seuls les champs d'inventaire sont lus: aucun fichier personnel, aucun historique navigateur, aucun mot de passe, aucun controle a distance. Les donnees sont envoyees via le meme contrat API que le web app: `/collect/profile` cree le jeton de scan, puis `/collect/scan` enregistre la machine. Les nouveaux champs `model_number`, `service_tag` et `hardware_identity` sont persistes dans `devices`, `device_scans` et exposes par `device_inventory_view`.
 

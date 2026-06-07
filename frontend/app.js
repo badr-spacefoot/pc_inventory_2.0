@@ -1,6 +1,7 @@
 const CONFIG = {
   apiBaseUrl: window.IT_INVENTORY_API_URL || "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api",
   scriptUrl: window.IT_INVENTORY_SCRIPT_URL || "https://badr-spacefoot.github.io/pc_inventory_2.0/scripts/collect-windows.ps1",
+  collectorReleaseConfigUrl: window.IT_INVENTORY_COLLECTOR_RELEASES_URL || "./collector-releases.json",
   staleDays: Number(window.IT_INVENTORY_STALE_DAYS || 30),
   weatherLatitude: Number(window.IT_INVENTORY_WEATHER_LATITUDE || 48.8932),
   weatherLongitude: Number(window.IT_INVENTORY_WEATHER_LONGITUDE || 2.2879),
@@ -32,6 +33,9 @@ const state = {
   pendingChanges: [],
   collectionDraft: JSON.parse(localStorage.getItem("it_inventory_collection_draft") || "{}"),
   scriptPreviewText: "",
+  collectorReleases: null,
+  detectedPlatform: "unknown",
+  prefillCode: "",
   mapProvider: "openstreetmap",
 };
 let pendingRetirement = null;
@@ -86,13 +90,26 @@ const englishTranslations = {
   "Aucun fichier personnel, historique navigateur, mot de passe ou outil de controle distant n'est lu ou installe.": "No personal files, browser history, passwords, or remote-control tool are read or installed.",
   "Commentaire optionnel": "Optional comment",
   "Generer la commande": "Generate command",
-  "Remplissez le formulaire pour obtenir un token de collecteur et les options de lancement.": "Complete the form to get a collector token and launch options.",
-  "Methode recommandee: ouvrez l'application collecteur, collez le token, relisez les donnees collectees puis envoyez. Le fallback script reste disponible pour les admins et utilisateurs avances.": "Recommended method: open the collector app, paste the token, review collected data, then submit. Script fallback remains available for admins and advanced users.",
-  "Token du collecteur": "Collector token",
+  "Preparer le collecteur": "Prepare collector",
+  "Remplissez le formulaire pour preparer le collecteur et pre-remplir l'application.": "Complete the form to prepare the collector and prefill the app.",
+  "Methode recommandee: telechargez l'application adaptee a votre systeme, chargez le code de pre-remplissage, relisez les donnees collectees puis envoyez.": "Recommended method: download the app for your system, load the prefill code, review the collected data, then submit.",
+  "Token temporaire a utiliser dans l'application": "Temporary token to use in the app",
+  "Code de pre-remplissage": "Prefill code",
+  "Copier le code de pre-remplissage": "Copy prefill code",
   "Copier le token collecteur": "Copy collector token",
   "Application native recommandee": "Recommended native app",
-  "Telechargez l'application officielle Windows, macOS ou Linux, puis collez le token temporaire dans l'application.": "Download the official Windows, macOS, or Linux app, then paste the temporary token into the app.",
-  "Telecharger l'application": "Download app",
+  "Detection du systeme en cours...": "Detecting system...",
+  "Telecharger le collecteur": "Download collector",
+  "Autres versions": "Other versions",
+  "Autre plateforme": "Other platform",
+  "Telecharger le collecteur Windows": "Download Windows Collector",
+  "Telecharger le collecteur macOS": "Download macOS Collector",
+  "Telecharger le collecteur Linux": "Download Linux Collector",
+  "Telecharger le collecteur": "Download Collector",
+  "Collecteur detecte pour": "Collector detected for",
+  "Choisissez votre plateforme ci-dessous.": "Choose your platform below.",
+  "Aucun asset collecteur disponible pour cette plateforme.": "No collector asset is available for this platform.",
+  "Code cree. Telechargez le collecteur puis chargez le code de pre-remplissage.": "Code created. Download the collector, then load the prefill code.",
   "Application collecteur": "Collector app",
   "Version transparente Python/Tkinter pour Windows, Ubuntu/Linux et macOS. Elle affiche les donnees avant envoi.": "Transparent Python/Tkinter version for Windows, Ubuntu/Linux, and macOS. It shows data before sending.",
   "Fallback PowerShell": "PowerShell fallback",
@@ -126,6 +143,8 @@ const englishTranslations = {
   "Copie impossible.": "Copy failed.",
   "Aucune commande a copier": "No command to copy",
   "Aucun token a copier": "No token to copy",
+  "Code copie.": "Code copied.",
+  "Aucun code a copier": "No code to copy",
   "Aucun script a copier": "No script to copy",
   "Actif": "Active",
   "Desactive": "Disabled",
@@ -629,6 +648,7 @@ function applyLanguage(language, persist = true) {
   if (state.selectedDetail) renderDetail(state.selectedDetail, state.selectedScans, state.selectedHistory);
   translateElement(document.body);
   updateTimeFormatButton();
+  updateCollectorDownloadUi();
   setTheme(document.documentElement.dataset.theme || "light");
 }
 
@@ -2635,6 +2655,78 @@ function buildCommand(collectionToken) {
   return `powershell -ExecutionPolicy Bypass -NoProfile -Command "iwr '${scriptUrl}' -OutFile $env:TEMP\\collect-windows.ps1; & $env:TEMP\\collect-windows.ps1 -ApiUrl '${apiUrl}' -CollectionToken '${collectionToken}'"`;
 }
 
+function detectClientPlatform() {
+  const uaPlatform = navigator.userAgentData?.platform || navigator.platform || "";
+  const ua = navigator.userAgent || "";
+  const text = `${uaPlatform} ${ua}`.toLowerCase();
+  if (text.includes("win")) return "windows";
+  if (text.includes("mac")) return "macos";
+  if (text.includes("linux") || text.includes("x11")) return "linux";
+  return "unknown";
+}
+
+async function loadCollectorReleases() {
+  state.detectedPlatform = detectClientPlatform();
+  try {
+    const response = await fetch(CONFIG.collectorReleaseConfigUrl, { cache: "no-store" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    state.collectorReleases = await response.json();
+  } catch {
+    state.collectorReleases = {
+      fallbackReleasePageUrl: "https://github.com/badr-spacefoot/pc_inventory_2.0/releases",
+      assets: {},
+    };
+  }
+  updateCollectorDownloadUi();
+}
+
+function collectorAsset(platform = state.detectedPlatform) {
+  return state.collectorReleases?.assets?.[platform] || null;
+}
+
+function platformLabel(platform) {
+  return { windows: "Windows", macos: "macOS", linux: "Linux" }[platform] || "";
+}
+
+function downloadLabel(platform) {
+  if (platform === "windows") return translate("Telecharger le collecteur Windows");
+  if (platform === "macos") return translate("Telecharger le collecteur macOS");
+  if (platform === "linux") return translate("Telecharger le collecteur Linux");
+  return translate("Telecharger le collecteur");
+}
+
+function updateCollectorDownloadUi() {
+  const primary = $("#collector-download-primary");
+  const releases = $("#collector-releases-link");
+  if (!primary || !releases) return;
+  const releasePage = state.collectorReleases?.releasePageUrl
+    || state.collectorReleases?.fallbackReleasePageUrl
+    || "https://github.com/badr-spacefoot/pc_inventory_2.0/releases";
+  releases.href = state.collectorReleases?.fallbackReleasePageUrl || "https://github.com/badr-spacefoot/pc_inventory_2.0/releases";
+  const detected = state.detectedPlatform;
+  const asset = collectorAsset(detected);
+  if (asset) {
+    primary.href = asset.downloadUrl;
+    primary.setAttribute("download", asset.fileName || "");
+    primary.querySelector("span").textContent = downloadLabel(detected);
+    $("#collector-platform-copy").textContent = `${translate("Collecteur detecte pour")} ${platformLabel(detected)} (${asset.version || ""}).`;
+  } else {
+    primary.href = releasePage;
+    primary.removeAttribute("download");
+    primary.querySelector("span").textContent = translate("Telecharger le collecteur");
+    $("#collector-platform-copy").textContent = detected === "unknown"
+      ? translate("Choisissez votre plateforme ci-dessous.")
+      : translate("Aucun asset collecteur disponible pour cette plateforme.");
+  }
+  $$("[data-platform-download]").forEach((link) => {
+    const platform = link.dataset.platformDownload;
+    const item = collectorAsset(platform);
+    link.href = item?.downloadUrl || releasePage;
+    if (item?.fileName) link.setAttribute("download", item.fileName);
+    else link.removeAttribute("download");
+  });
+}
+
 async function loadScriptPreview() {
   try {
     const response = await fetch(CONFIG.scriptUrl, { cache: "no-store" });
@@ -3168,6 +3260,7 @@ async function importCpuBenchmarkFile(file) {
 
 function bindEvents() {
   $("#download-script").href = CONFIG.scriptUrl;
+  loadCollectorReleases().catch(() => updateCollectorDownloadUi());
   setTheme(document.documentElement.dataset.theme || "light");
   $("#theme-toggle").addEventListener("click", () => {
     setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
@@ -3235,21 +3328,25 @@ function bindEvents() {
     const payload = { ...form };
     if (payload.team === "__other__") payload.team = "";
     if (payload.establishment === "__other__") payload.establishment = "";
+    payload.apiUrl = CONFIG.apiBaseUrl;
+    payload.language = state.language;
+    payload.theme = document.documentElement.dataset.theme || "light";
     try {
-      const result = await api("/collect/profile", {
+      const result = await api("/collect/prefill", {
         method: "POST",
         headers: { "X-Collection-Access-Token": form.accessToken },
         body: JSON.stringify(payload),
       });
       $("#command-empty").classList.add("is-hidden");
       $("#command-result").classList.remove("is-hidden");
-      $("#collector-token").textContent = result.collectionToken;
-      $("#powershell-command").textContent = buildCommand(result.collectionToken);
-      if (result.pendingChanges?.length) {
-        toast("Commande generee. Proposition envoyee a l'admin.", "success");
-      } else {
-        toast("Commande generee.", "success");
-      }
+      $("#collector-token").textContent = form.accessToken;
+      $("#collector-prefill-code").textContent = result.prefillCode || "";
+      state.prefillCode = result.prefillCode || "";
+      $("#powershell-command").textContent = state.language === "en"
+        ? "Use the native collector app and load the prefill code shown above. The fallback script uses an internal scan token and is reserved for IT support."
+        : "Utilisez l'application collecteur native et chargez le code de pre-remplissage ci-dessus. Le script fallback utilise un token de scan interne reserve au support IT.";
+      updateCollectorDownloadUi();
+      toast(translate("Code cree. Telechargez le collecteur puis chargez le code de pre-remplissage."), "success");
     } catch (error) {
       saveCollectionDraft();
       toast(error.message, "error");
@@ -3261,6 +3358,9 @@ function bindEvents() {
   });
   $("#copy-collector-token").addEventListener("click", async () => {
     await copyText($("#collector-token").textContent, "Token copie.", "Aucun token a copier");
+  });
+  $("#copy-prefill-code").addEventListener("click", async () => {
+    await copyText($("#collector-prefill-code").textContent, "Code copie.", "Aucun code a copier");
   });
   $("#copy-script").addEventListener("click", async () => {
     if (!state.scriptPreviewText) await loadScriptPreview();

@@ -158,7 +158,7 @@ function normalizeScanPayload(body: Json): Json {
     localIp: firstPresent(body, "localIp", "ip"),
     windowsUser: firstPresent(body, "windowsUser", "osUser", "user"),
     collectedAt: firstPresent(body, "collectedAt", "timestamp") || new Date().toISOString(),
-    scriptVersion: firstPresent(body, "scriptVersion"),
+    scriptVersion: firstPresent(body, "scriptVersion", "collectorVersion"),
     hardwareIdentity,
   };
 }
@@ -656,6 +656,74 @@ async function handleProfile(request: Request) {
     pending_changes: pendingChanges.filter(Boolean).map((item) => (item as Json).id),
   });
   return json(request, { collectionToken: token, pendingChanges: pendingChanges.filter(Boolean) });
+}
+
+function prefillPayload(body: Json) {
+  const team = firstPresent(body, "team", "teamName");
+  const establishment = firstPresent(body, "establishment", "location", "locationName", "site");
+  return {
+    apiUrl: safeString(body.apiUrl, 500),
+    firstName: safeString(body.firstName, 120),
+    lastName: safeString(body.lastName, 120),
+    email: safeString(body.email, 255).toLowerCase(),
+    team,
+    establishment,
+    proposedTeam: firstPresent(body, "proposedTeam", "proposed_team"),
+    proposedEstablishment: firstPresent(body, "proposedEstablishment", "proposed_establishment", "proposedLocation"),
+    comment: safeString(body.comment, 1000),
+    language: safeString(body.language, 10),
+    theme: safeString(body.theme, 20),
+  };
+}
+
+async function handleCreateCollectionPrefill(request: Request) {
+  const accessToken = request.headers.get("x-collection-access-token") ?? "";
+  const token = await validateCollectionAccessTokenValue(accessToken);
+  if (!token || safeString(token.invalid_reason)) {
+    return badRequest(request, "Token temporaire invalide, expire, revoque ou epuise.", 401);
+  }
+  const body = await request.json().catch(() => ({}));
+  const payload = prefillPayload(body);
+  if (payload.email) {
+    const emailError = emailValidationError(payload.email);
+    if (emailError) return badRequest(request, emailError);
+  }
+  const ttlMinutes = Math.max(5, Math.min(Number(body.ttlMinutes || 1440), 1440));
+  const prefillCode = base64Url(crypto.getRandomValues(new Uint8Array(9)));
+  const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000).toISOString();
+  const { error } = await supabase.from("collection_prefills").insert({
+    prefill_code: prefillCode,
+    collection_access_token: safeString(accessToken, 500),
+    payload,
+    expires_at: expiresAt,
+  });
+  if (error) throw error;
+  return json(request, {
+    prefillCode,
+    expiresAt,
+    launchUrl: `spacefoot-collector://collect?prefillCode=${encodeURIComponent(prefillCode)}`,
+  }, 201);
+}
+
+async function handleGetCollectionPrefill(request: Request, code: string) {
+  const prefillCode = safeString(code, 80);
+  if (!prefillCode) return badRequest(request, "Code de pre-remplissage requis.", 400);
+  const { data, error } = await supabase
+    .from("collection_prefills")
+    .select("id,prefill_code,collection_access_token,payload,expires_at")
+    .eq("prefill_code", prefillCode)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data || new Date(safeString(data.expires_at)).getTime() <= Date.now()) {
+    return badRequest(request, "Code de pre-remplissage invalide ou expire.", 404);
+  }
+  await supabase.from("collection_prefills").update({ used_at: new Date().toISOString() }).eq("id", data.id);
+  return json(request, {
+    prefillCode: data.prefill_code,
+    accessToken: data.collection_access_token,
+    expiresAt: data.expires_at,
+    ...((data.payload && typeof data.payload === "object") ? (data.payload as Json) : {}),
+  });
 }
 
 async function handleValidateCollectionAccessToken(request: Request) {
@@ -2388,6 +2456,9 @@ Deno.serve(async (request) => {
       return await handlePublicOrganization(request);
     }
     if (request.method === "POST" && path.endsWith("/collect/access-token/validate")) return await handleValidateCollectionAccessToken(request);
+    if (request.method === "POST" && path.endsWith("/collect/prefill")) return await handleCreateCollectionPrefill(request);
+    const prefillMatch = path.match(/\/collect\/prefill\/([A-Za-z0-9_-]+)$/);
+    if (request.method === "GET" && prefillMatch) return await handleGetCollectionPrefill(request, prefillMatch[1]);
     if (request.method === "POST" && path.endsWith("/collect/profile")) return await handleProfile(request);
     if (request.method === "POST" && path.endsWith("/collect/scan")) return await handleScan(request);
     if (request.method === "POST" && path.endsWith("/collect/legacy-scan")) return await handleLegacyScan(request);

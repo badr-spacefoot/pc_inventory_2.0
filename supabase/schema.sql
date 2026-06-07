@@ -145,6 +145,16 @@ create table if not exists public.collection_access_tokens (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.collection_prefills (
+  id uuid primary key default gen_random_uuid(),
+  prefill_code text not null unique,
+  collection_access_token text not null,
+  payload jsonb not null default '{}'::jsonb,
+  expires_at timestamptz not null,
+  used_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.audit_logs (
   id uuid primary key default gen_random_uuid(),
   actor_user_id uuid references public.users(id),
@@ -318,6 +328,8 @@ create index if not exists idx_pending_changes_type_value on public.pending_chan
 create index if not exists idx_collection_tokens_hash on public.collection_tokens(token_hash);
 create index if not exists idx_collection_access_tokens_hash on public.collection_access_tokens(token_hash);
 create index if not exists idx_collection_access_tokens_expiry on public.collection_access_tokens(expires_at desc);
+create index if not exists idx_collection_prefills_code on public.collection_prefills(prefill_code);
+create index if not exists idx_collection_prefills_expiry on public.collection_prefills(expires_at desc);
 create index if not exists idx_hardware_enrichment_recommendation on public.hardware_enrichment(recommendation);
 create index if not exists idx_hardware_enrichment_cpu_score on public.hardware_enrichment(cpu_score);
 create index if not exists idx_hardware_enrichment_priority on public.hardware_enrichment(replacement_priority desc);

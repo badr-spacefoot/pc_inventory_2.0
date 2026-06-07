@@ -48,8 +48,10 @@ else:
 
 
 DEFAULT_API_URL = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
+COLLECTOR_VERSION = "0.1.10"
+COLLECTOR_BUILD_CHANNEL = "github-release"
 DRAFT_PATH = Path.home() / ".spacefoot_it_collector.json"
-COLORS = {
+DARK_COLORS = {
     "bg": "#1d241f",
     "panel": "#252d28",
     "panel_2": "#2d3831",
@@ -63,6 +65,21 @@ COLORS = {
     "success": "#22c55e",
     "input": "#1a211d",
 }
+LIGHT_COLORS = {
+    "bg": "#eef1ed",
+    "panel": "#ffffff",
+    "panel_2": "#e4ebe5",
+    "line": "#cbd5ce",
+    "text": "#202a24",
+    "muted": "#5f6f66",
+    "brand": "#1f8a70",
+    "brand_2": "#087966",
+    "danger": "#dc2626",
+    "warning": "#b7791f",
+    "success": "#15803d",
+    "input": "#f7faf8",
+}
+COLORS = DARK_COLORS.copy()
 
 TRANSLATIONS = {
     "fr": {
@@ -150,6 +167,15 @@ TRANSLATIONS = {
         "Inventory submitted successfully.": "Inventaire envoye avec succes.",
         "Submission successful. Device": "Envoi reussi. Machine",
         "Submission failed": "Echec de l'envoi",
+        "Theme": "Theme",
+        "System": "Systeme",
+        "Dark": "Sombre",
+        "Light": "Clair",
+        "Version": "Version",
+        "Prefill code": "Code de pre-remplissage",
+        "Please enter the prefill code.": "Veuillez saisir le code de pre-remplissage.",
+        "Load prefill": "Charger le pre-remplissage",
+        "Prefilled from the web page. You can edit before submitting.": "Pre-rempli depuis la page web. Vous pouvez modifier avant l'envoi.",
     }
 }
 
@@ -231,9 +257,12 @@ class CollectorApp(tk.Tk):
         self.comment = tk.StringVar(value=draft.get("comment") or "")
         self.include_mac = tk.BooleanVar(value=bool(draft.get("includeMac", True)))
         self.language = tk.StringVar(value=draft.get("language") or "en")
+        self.theme_preference = tk.StringVar(value=draft.get("themePreference") or "system")
+        self.prefill_code = tk.StringVar(value=draft.get("prefillCode") or "")
         self.status = tk.StringVar(value=self.t("Ready."))
         self.connection_status = tk.StringVar(value=self.t("Not validated."))
 
+        self.apply_theme_colors()
         self._build_ui()
         self._bind_draft_saves()
         self.after(300, self.load_organization_background)
@@ -241,7 +270,37 @@ class CollectorApp(tk.Tk):
     def t(self, text: str) -> str:
         return TRANSLATIONS.get(self.language.get(), {}).get(text, text)
 
+    def system_theme(self) -> str:
+        if platform.system() == "Windows" and winreg:
+            try:
+                key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")
+                light = winreg.QueryValueEx(key, "AppsUseLightTheme")[0]
+                return "light" if int(light) else "dark"
+            except OSError:
+                return "dark"
+        return "dark"
+
+    def active_theme(self) -> str:
+        preference = self.theme_preference.get()
+        return self.system_theme() if preference == "system" else preference
+
+    def apply_theme_colors(self) -> None:
+        global COLORS
+        COLORS = (LIGHT_COLORS if self.active_theme() == "light" else DARK_COLORS).copy()
+
+    def apply_title_bar_theme(self) -> None:
+        if platform.system() != "Windows":
+            return
+        try:
+            hwnd = ctypes.windll.user32.GetParent(self.winfo_id()) or self.winfo_id()
+            value = ctypes.c_int(1 if self.active_theme() == "dark" else 0)
+            for attribute in (20, 19):
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, attribute, ctypes.byref(value), ctypes.sizeof(value))
+        except Exception:
+            pass
+
     def _build_ui(self) -> None:
+        self.apply_theme_colors()
         for child in self.winfo_children():
             child.destroy()
         self.columnconfigure(0, weight=1)
@@ -290,9 +349,13 @@ class CollectorApp(tk.Tk):
         tk.Label(footer, textvariable=self.status, fg=COLORS["muted"], bg=COLORS["bg"], font=("Segoe UI", 10)).grid(row=0, column=1, sticky="w")
         self.language_button = self.button(footer, self.language_label(), self.toggle_language, secondary=True)
         self.language_button.grid(row=0, column=2, padx=(8, 8))
+        self.theme_button = self.button(footer, self.theme_label(), self.toggle_theme, secondary=True)
+        self.theme_button.grid(row=0, column=3, padx=(0, 8))
+        tk.Label(footer, text=f"{self.t('Version')} {COLLECTOR_VERSION}", fg=COLORS["muted"], bg=COLORS["bg"], font=("Segoe UI", 9, "bold")).grid(row=0, column=4, padx=(0, 8))
         self.next_button = self.button(footer, self.t("Next"), self.next_step)
-        self.next_button.grid(row=0, column=3)
+        self.next_button.grid(row=0, column=5)
         self.show_step(0)
+        self.after(50, self.apply_title_bar_theme)
 
     def language_label(self) -> str:
         return "FR" if self.language.get() == "en" else "EN"
@@ -302,6 +365,21 @@ class CollectorApp(tk.Tk):
         self.persist_draft()
         self.status.set(self.t("Ready."))
         self.connection_status.set(self.t("Not validated."))
+        self._build_ui()
+
+    def theme_label(self) -> str:
+        labels = {
+            "system": self.t("System"),
+            "dark": self.t("Dark"),
+            "light": self.t("Light"),
+        }
+        return f"{self.t('Theme')}: {labels.get(self.theme_preference.get(), self.theme_preference.get())}"
+
+    def toggle_theme(self) -> None:
+        order = ["system", "dark", "light"]
+        current = self.theme_preference.get()
+        self.theme_preference.set(order[(order.index(current) + 1) % len(order)] if current in order else "system")
+        self.persist_draft()
         self._build_ui()
 
     def card(self, parent) -> tk.Frame:
@@ -367,6 +445,12 @@ class CollectorApp(tk.Tk):
         self.label(card, self.t("Collection access token"), bold=True).grid(row=3, column=0, sticky="w", padx=(0, 12), pady=8)
         self.entry(card, self.access_token, show="*").grid(row=3, column=1, sticky="ew", pady=8)
         self.label(card, self.t("Use an admin-generated temporary token, not the collector token shown after web collection."), muted=True).grid(row=4, column=1, sticky="w")
+        self.label(card, self.t("Prefill code"), bold=True).grid(row=5, column=0, sticky="w", padx=(0, 12), pady=8)
+        prefill_row = tk.Frame(card, bg=COLORS["panel"])
+        prefill_row.grid(row=5, column=1, sticky="ew", pady=8)
+        prefill_row.columnconfigure(0, weight=1)
+        self.entry(prefill_row, self.prefill_code).grid(row=0, column=0, sticky="ew", padx=(0, 8))
+        self.button(prefill_row, self.t("Load prefill"), self.load_prefill, secondary=True).grid(row=0, column=1)
         tk.Checkbutton(
             card,
             text=self.t("Include MAC address if authorized"),
@@ -376,9 +460,9 @@ class CollectorApp(tk.Tk):
             activebackground=COLORS["panel"],
             activeforeground=COLORS["text"],
             selectcolor=COLORS["input"],
-        ).grid(row=5, column=1, sticky="w", pady=(6, 12))
-        self.button(card, self.t("Validate token"), self.validate_token, secondary=True).grid(row=6, column=0, sticky="w", pady=(8, 0))
-        tk.Label(card, textvariable=self.connection_status, fg=COLORS["brand_2"], bg=COLORS["panel"], font=("Segoe UI", 10, "bold")).grid(row=6, column=1, sticky="w", padx=(10, 0), pady=(8, 0))
+        ).grid(row=6, column=1, sticky="w", pady=(6, 12))
+        self.button(card, self.t("Validate token"), self.validate_token, secondary=True).grid(row=7, column=0, sticky="w", pady=(8, 0))
+        tk.Label(card, textvariable=self.connection_status, fg=COLORS["brand_2"], bg=COLORS["panel"], font=("Segoe UI", 10, "bold")).grid(row=7, column=1, sticky="w", padx=(10, 0), pady=(8, 0))
         self._privacy_card(frame).grid(row=1, column=0, sticky="ew", pady=(14, 0))
         return frame
 
@@ -478,7 +562,7 @@ class CollectorApp(tk.Tk):
     def _bind_draft_saves(self) -> None:
         variables = [
             self.api_url, self.access_token, self.first_name, self.last_name, self.email, self.team,
-            self.establishment, self.proposed_team, self.proposed_establishment, self.comment,
+            self.establishment, self.proposed_team, self.proposed_establishment, self.comment, self.prefill_code,
         ]
         for variable in variables:
             variable.trace_add("write", lambda *_: self.persist_draft())
@@ -498,7 +582,52 @@ class CollectorApp(tk.Tk):
             "comment": self.comment.get().strip(),
             "includeMac": self.include_mac.get(),
             "language": self.language.get(),
+            "themePreference": self.theme_preference.get(),
+            "prefillCode": self.prefill_code.get().strip(),
         })
+
+    def load_prefill(self) -> None:
+        if not self.prefill_code.get().strip():
+            messagebox.showwarning(self.t("Prefill code"), self.t("Please enter the prefill code."))
+            return
+        self.status.set(self.t("Load prefill"))
+        threading.Thread(target=self._load_prefill_background, daemon=True).start()
+
+    def _load_prefill_background(self) -> None:
+        try:
+            data = api_request(
+                self.api_url.get().strip(),
+                f"/collect/prefill/{urllib.parse.quote(self.prefill_code.get().strip())}",
+                timeout=15,
+            )
+            self.after(0, lambda: self.apply_prefill(data))
+        except Exception as exc:
+            self.after(0, lambda: self.status.set(api_error_message(exc)))
+
+    def apply_prefill(self, data: dict) -> None:
+        if data.get("apiUrl"):
+            self.api_url.set(data.get("apiUrl"))
+        if data.get("accessToken"):
+            self.access_token.set(data.get("accessToken"))
+        for key, variable in [
+            ("firstName", self.first_name),
+            ("lastName", self.last_name),
+            ("email", self.email),
+            ("team", self.team),
+            ("establishment", self.establishment),
+            ("proposedTeam", self.proposed_team),
+            ("proposedEstablishment", self.proposed_establishment),
+            ("comment", self.comment),
+        ]:
+            if data.get(key) is not None:
+                variable.set(str(data.get(key) or ""))
+        if data.get("language") in ("fr", "en"):
+            self.language.set(data.get("language"))
+        if data.get("theme") in ("dark", "light", "system"):
+            self.theme_preference.set(data.get("theme"))
+        self.persist_draft()
+        self.status.set(self.t("Prefilled from the web page. You can edit before submitting."))
+        self._build_ui()
 
     def show_step(self, index: int) -> None:
         self.step_index = max(0, min(index, len(self.step_frames) - 1))
@@ -591,6 +720,10 @@ class CollectorApp(tk.Tk):
     def _scan_background(self) -> None:
         try:
             payload = collector.collect(self.include_mac.get())
+            payload["collectorVersion"] = COLLECTOR_VERSION
+            payload["collectorPlatform"] = platform.system() or "Unknown"
+            payload["collectorOs"] = platform.platform()
+            payload["collectorBuildChannel"] = COLLECTOR_BUILD_CHANNEL
             self.payload = payload
             self.after(0, self.render_scan_summary)
         except Exception as exc:

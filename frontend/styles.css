@@ -974,6 +974,38 @@ pre {
   min-height: 42px;
 }
 
+.platform-downloads {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.platform-downloads span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.platform-downloads a {
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 800;
+  padding: 7px 10px;
+  text-decoration: none;
+}
+
+.platform-downloads a:hover,
+.platform-downloads a:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .script-preview {
   margin-top: 14px;
 }

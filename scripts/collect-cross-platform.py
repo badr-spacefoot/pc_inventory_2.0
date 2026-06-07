@@ -14,7 +14,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-SCRIPT_VERSION = "1.3.0"
+SCRIPT_VERSION = "1.4.0"
 
 PLACEHOLDER_VALUES = {
     "",
@@ -35,7 +35,14 @@ PLACEHOLDER_VALUES = {
 
 def run(command, timeout=12):
     try:
-        result = subprocess.run(command, capture_output=True, text=True, timeout=timeout, check=False)
+        kwargs = {}
+        if platform.system() == "Windows":
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = 0
+            kwargs["startupinfo"] = startupinfo
+            kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        result = subprocess.run(command, capture_output=True, text=True, timeout=timeout, check=False, **kwargs)
         return result.stdout.strip() if result.returncode == 0 else ""
     except (OSError, subprocess.SubprocessError):
         return ""
@@ -592,6 +599,10 @@ def collect(include_mac):
         "windowsUser": os_user,
         "collectedAt": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
         "scriptVersion": SCRIPT_VERSION,
+        "collectorVersion": SCRIPT_VERSION,
+        "collectorPlatform": system or "Unknown",
+        "collectorOs": platform.platform(),
+        "collectorBuildChannel": "script",
     }
 
 

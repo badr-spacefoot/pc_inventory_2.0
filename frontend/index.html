@@ -117,7 +117,7 @@
                 Commentaire optionnel
                 <textarea name="comment" rows="4"></textarea>
               </label>
-              <button type="submit" class="primary">Generer la commande</button>
+              <button type="submit" class="primary">Preparer le collecteur</button>
             </form>
             <div class="collector-privacy">
               <h3>Collecte transparente</h3>
@@ -137,17 +137,27 @@
               <h2>Collecte locale</h2>
             </div>
             <div id="command-empty" class="empty-state">
-              Remplissez le formulaire pour obtenir un token de collecteur et les options de lancement.
+              Remplissez le formulaire pour preparer le collecteur et pre-remplir l'application.
             </div>
             <div id="command-result" class="is-hidden">
               <p class="helper">
-                Methode recommandee: ouvrez l'application collecteur, collez le token, relisez les donnees collectees puis envoyez.
-                Le fallback script reste disponible pour les admins et utilisateurs avances.
+                Methode recommandee: telechargez l'application adaptee a votre systeme, chargez le code de pre-remplissage,
+                relisez les donnees collectees puis envoyez.
               </p>
               <div class="collector-token-box">
-                <span>Token du collecteur</span>
+                <span>Token temporaire a utiliser dans l'application</span>
                 <code id="collector-token"></code>
                 <button id="copy-collector-token" class="token-copy-button" type="button" aria-label="Copier le token collecteur" title="Copier le token collecteur">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <rect width="14" height="14" x="8" y="8" rx="2"></rect>
+                    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
+                  </svg>
+                </button>
+              </div>
+              <div class="collector-token-box">
+                <span>Code de pre-remplissage</span>
+                <code id="collector-prefill-code"></code>
+                <button id="copy-prefill-code" class="token-copy-button" type="button" aria-label="Copier le code de pre-remplissage" title="Copier le code de pre-remplissage">
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <rect width="14" height="14" x="8" y="8" rx="2"></rect>
                     <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
@@ -157,12 +167,19 @@
               <div class="collector-options">
                 <article>
                   <h3>Application native recommandee</h3>
-                  <p>Telechargez l'application officielle Windows, macOS ou Linux, puis collez le token temporaire dans l'application.</p>
+                  <p id="collector-platform-copy">Detection du systeme en cours...</p>
                   <div class="launcher-downloads">
-                    <a id="collector-releases-link" class="secondary action-button" href="https://github.com/badr-spacefoot/pc_inventory_2.0/releases/latest" target="_blank" rel="noopener">
+                    <a id="collector-download-primary" class="primary action-button" href="https://github.com/badr-spacefoot/pc_inventory_2.0/releases" rel="noopener">
                       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="M7 10l5 5 5-5"></path><path d="M12 15V3"></path></svg>
-                      <span>Telecharger l'application</span>
+                      <span>Telecharger le collecteur</span>
                     </a>
+                    <a id="collector-releases-link" class="secondary action-button" href="https://github.com/badr-spacefoot/pc_inventory_2.0/releases" target="_blank" rel="noopener">Autres versions</a>
+                  </div>
+                  <div class="platform-downloads" aria-label="Telecharger pour une autre plateforme">
+                    <span>Autre plateforme</span>
+                    <a data-platform-download="windows" href="#">Windows</a>
+                    <a data-platform-download="macos" href="#">macOS</a>
+                    <a data-platform-download="linux" href="#">Linux</a>
                   </div>
                 </article>
                 <article>
