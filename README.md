@@ -170,6 +170,55 @@ Secrets optionnels pour signature:
 - `MACOS_CODESIGN_IDENTITY`: identite de signature Apple Developer ID.
 - `MACOS_NOTARY_APPLE_ID`, `MACOS_NOTARY_TEAM_ID`, `MACOS_NOTARY_PASSWORD`: notarisation Apple.
 
+### Distribution et signature low-cost
+
+Chaque release collecteur contient:
+
+- builds Windows, macOS et Linux;
+- `SHA256SUMS.txt` pour verifier l'integrite des fichiers;
+- `spacefoot-it-collector-internal-test.cer` lorsque Windows est signe avec le certificat self-signed interne de test.
+
+Verifier un fichier Windows:
+
+```powershell
+Get-FileHash .\spacefoot-it-collector-windows.exe -Algorithm SHA256
+Get-AuthenticodeSignature .\spacefoot-it-collector-windows.exe
+```
+
+Verifier un fichier Linux/macOS:
+
+```bash
+sha256sum -c SHA256SUMS.txt
+```
+
+Windows:
+
+- Si `WINDOWS_CODESIGN_PFX_BASE64` est configure, le workflow signe avec ce certificat officiel.
+- Sinon, le workflow genere un certificat self-signed `Spacefoot IT Collector Internal Testing` et signe l'exe pour les tests internes.
+- Le certificat self-signed ne donne pas de reputation publique SmartScreen. Pour eviter les alertes en interne, deployer le certificat `.cer` dans `Trusted Root Certification Authorities` et `Trusted Publishers` via GPO, Intune ou outil MDM.
+- Pour une diffusion externe, utiliser un certificat Code Signing OV/IV ou EV.
+
+Linux:
+
+- Aucun signing global n'est obligatoire.
+- Utiliser le binaire/AppImage ou futur `.deb`.
+- Verifier `SHA256SUMS.txt`; ajouter une signature GPG ou un depot APT signe plus tard si necessaire.
+
+macOS:
+
+- Sans Apple Developer ID + notarisation, Gatekeeper peut bloquer ou avertir l'utilisateur.
+- Phase 1: installation manuelle/interne avec documentation.
+- Phase future: Apple Developer Program, certificat Developer ID Application, `codesign`, `notarytool`, puis stapling.
+
+Regles de securite du collecteur:
+
+- pas d'obfuscation;
+- pas de PowerShell encode;
+- pas d'execution cachee;
+- aucune cle secrete embarquee;
+- ecran transparent affichant les donnees avant envoi;
+- releases versionnees et checksums publies.
+
 Le prototype actuel est dans `collectors/desktop_collector/`:
 
 ```powershell

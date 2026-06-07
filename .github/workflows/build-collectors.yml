@@ -65,20 +65,33 @@ jobs:
           --hidden-import winreg
           collectors/desktop_collector/collector_app.py
 
-      - name: Sign Windows collector when certificate is configured
+      - name: Sign Windows collector
         if: matrix.name == 'windows'
         shell: pwsh
         env:
           WINDOWS_CODESIGN_PFX_BASE64: ${{ secrets.WINDOWS_CODESIGN_PFX_BASE64 }}
           WINDOWS_CODESIGN_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_PASSWORD }}
         run: |
-          if (-not $env:WINDOWS_CODESIGN_PFX_BASE64) {
-            Write-Host "No Windows signing certificate configured. Skipping signing."
-            exit 0
+          $target = "dist/${{ matrix.artifact }}.exe"
+          if ($env:WINDOWS_CODESIGN_PFX_BASE64) {
+            $certPath = Join-Path $env:RUNNER_TEMP "spacefoot-codesign.pfx"
+            [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_CODESIGN_PFX_BASE64))
+            & signtool sign /f $certPath /p $env:WINDOWS_CODESIGN_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $target
+            exit $LASTEXITCODE
           }
-          $certPath = Join-Path $env:RUNNER_TEMP "spacefoot-codesign.pfx"
-          [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_CODESIGN_PFX_BASE64))
-          & signtool sign /f $certPath /p $env:WINDOWS_CODESIGN_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 "dist/${{ matrix.artifact }}.exe"
+          Write-Host "No official Windows signing certificate configured. Creating a self-signed internal testing certificate."
+          $cert = New-SelfSignedCertificate `
+            -Type CodeSigningCert `
+            -Subject "CN=Spacefoot IT Collector Internal Testing" `
+            -FriendlyName "Spacefoot IT Collector Internal Testing" `
+            -CertStoreLocation "Cert:\CurrentUser\My" `
+            -KeyAlgorithm RSA `
+            -KeyLength 3072 `
+            -HashAlgorithm SHA256 `
+            -NotAfter (Get-Date).AddYears(2)
+          Export-Certificate -Cert $cert -FilePath "dist/spacefoot-it-collector-internal-test.cer" | Out-Null
+          & signtool sign /sha1 $cert.Thumbprint /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $target
+          exit $LASTEXITCODE
 
       - name: Sign and notarize macOS collector when credentials are configured
         if: matrix.name == 'macos'
@@ -140,6 +153,7 @@ jobs:
             name="$(basename "$app")"
             (cd "$(dirname "$app")" && zip -qry "$GITHUB_WORKSPACE/release-upload/${name}.zip" "$name")
           done
+          (cd release-upload && sha256sum * > SHA256SUMS.txt)
 
       - name: Create release
         env:
@@ -150,4 +164,4 @@ jobs:
           gh release create "$TAG_NAME" release-upload/* \
             --repo "$REPOSITORY" \
             --title "Spacefoot IT Collector $TAG_NAME" \
-            --notes "Native collector builds for Windows, macOS and Linux. These builds are published for internal testing. Sign Windows and notarize macOS before broad distribution when certificates are configured."
+            --notes "Native collector builds for Windows, macOS and Linux. Verify downloads with SHA256SUMS.txt. Windows builds use an internal self-signed testing certificate when no official code-signing certificate is configured. Sign Windows with a trusted certificate and notarize macOS before broad distribution."
