@@ -672,7 +672,12 @@ function canPerformAction(action) {
 
 function applyPermissions() {
   $$("[data-permission]").forEach((node) => {
-    node.classList.toggle("is-hidden", !canPerformAction(node.dataset.permission));
+    const allowed = canPerformAction(node.dataset.permission);
+    if (node.classList.contains("admin-section-view")) {
+      node.classList.toggle("permission-hidden", !allowed);
+    } else {
+      node.classList.toggle("is-hidden", !allowed);
+    }
   });
   const editable = canPerformAction("DEVICE_EDIT");
   ["#enrich-admin", "#valuation-enrich-all", "#valuation-recalculate", "#import-cpu-benchmarks"].forEach((selector) => {

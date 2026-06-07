@@ -197,6 +197,21 @@ powershell -ExecutionPolicy Bypass -NoProfile -File .\scripts\import-legacy-csv.
 
 Comme l'ancien export ne contient pas d'email ni de service, l'import genere un email technique par defaut et renseigne un service par defaut. Ces valeurs peuvent ensuite etre corrigees dans la base ou enrichies via une vraie table RH.
 
+### Import de l'ancien historique Google Sheets
+
+Le fichier `Historique` de l'ancien Apps Script peut etre importe avec `scripts/import-legacy-history-csv.ps1`.
+L'import ajoute des evenements dans `device_history` avec la source `IMPORT`; il ne remplace pas l'etat actuel des machines.
+Le rapprochement se fait d'abord par adresse MAC, puis par hostname si la MAC est absente.
+
+```powershell
+powershell -ExecutionPolicy Bypass -NoProfile -File .\scripts\import-legacy-history-csv.ps1 `
+  -CsvPath "C:\Users\roobi\Downloads\Inventaire_pc_auto_2026 - Historique.csv" `
+  -ApiUrl "https://YOUR_PROJECT.supabase.co/functions/v1/inventory-api" `
+  -Username "codex"
+```
+
+Le mot de passe admin est demande de maniere masquee si `-Password` n'est pas fourni. Le script importe par lots, ignore les doublons deja presents pour le meme device/timestamp, et affiche les lignes sans correspondance machine.
+
 ## Variables d'environnement
 
 Voir `.env.example`.

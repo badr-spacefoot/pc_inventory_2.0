@@ -404,6 +404,10 @@ main {
   display: none !important;
 }
 
+.permission-hidden {
+  display: none !important;
+}
+
 .view.is-active {
   display: block !important;
 }

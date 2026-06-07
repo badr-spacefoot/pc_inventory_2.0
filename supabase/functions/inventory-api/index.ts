@@ -1350,6 +1350,119 @@ async function handleAdminDevices(request: Request) {
   return json(request, { devices: data });
 }
 
+function normalizeMac(value: unknown) {
+  return safeString(value, 80).toLowerCase().replace(/[^a-f0-9]/g, "");
+}
+
+function normalizeHostname(value: unknown) {
+  return safeString(value, 255).toUpperCase();
+}
+
+function legacyHistoryEventType(action: string) {
+  const normalized = safeString(action, 40).toUpperCase();
+  if (normalized === "CREATION") return "DEVICE_CREATED";
+  if (normalized === "MISE_A_JOUR" || normalized === "MISE À JOUR" || normalized === "MISE_À_JOUR") return "IMPORT_UPDATE";
+  return "IMPORT_UPDATE";
+}
+
+async function handleAdminImportLegacyHistory(request: Request) {
+  const auth = await requireAction(request, "VIEW_HISTORY");
+  if (auth.response) return auth.response;
+  const body = await request.json().catch(() => ({}));
+  const rows = Array.isArray(body.rows) ? body.rows as Json[] : [];
+  if (rows.length === 0) return badRequest(request, "Aucune ligne historique a importer.");
+  if (rows.length > 1000) return badRequest(request, "Import limite a 1000 lignes par appel.");
+
+  const { data: devices, error: devicesError } = await supabase
+    .from("devices")
+    .select("id,hostname,mac_address");
+  if (devicesError) throw devicesError;
+
+  const byMac = new Map<string, Json>();
+  const byHostname = new Map<string, Json>();
+  for (const device of devices ?? []) {
+    const mac = normalizeMac(device.mac_address);
+    const hostname = normalizeHostname(device.hostname);
+    if (mac) byMac.set(mac, device);
+    if (hostname) byHostname.set(hostname, device);
+  }
+
+  const historyRows: Json[] = [];
+  const unmatched: Json[] = [];
+  const skippedDuplicates: Json[] = [];
+
+  for (const row of rows) {
+    const mac = normalizeMac(row.mac);
+    const hostname = normalizeHostname(row.hostname);
+    const device = (mac ? byMac.get(mac) : null) || (hostname ? byHostname.get(hostname) : null);
+    if (!device) {
+      unmatched.push({ hostname, mac: safeString(row.mac), timestamp: safeString(row.timestamp), action: safeString(row.action) });
+      continue;
+    }
+    const deviceId = safeString(device.id);
+    if (!deviceId) {
+      unmatched.push({ hostname, mac: safeString(row.mac), timestamp: safeString(row.timestamp), action: safeString(row.action) });
+      continue;
+    }
+    const changedAt = safeString(row.timestamp) || new Date().toISOString();
+    const { data: existing, error: existingError } = await supabase
+      .from("device_history")
+      .select("id")
+      .eq("device_id", deviceId)
+      .eq("source", "IMPORT")
+      .eq("field_name", "legacy_google_sheets_history")
+      .eq("changed_at", changedAt)
+      .limit(1)
+      .maybeSingle();
+    if (existingError) throw existingError;
+    if (existing) {
+      skippedDuplicates.push({ hostname, mac: safeString(row.mac), timestamp: changedAt });
+      continue;
+    }
+
+    const previous = {
+      firstName: safeString(row.previousFirstName, 120),
+      lastName: safeString(row.previousLastName, 120),
+      team: safeString(row.previousTeam, 120),
+      establishment: safeString(row.previousEstablishment, 180),
+    };
+    const current = {
+      firstName: safeString(row.firstName, 120),
+      lastName: safeString(row.lastName, 120),
+      team: safeString(row.team, 120),
+      establishment: safeString(row.establishment, 180),
+      osUser: safeString(row.osUser, 120),
+      osType: safeString(row.osType, 80),
+      hostname,
+      mac: safeString(row.mac, 80),
+    };
+
+    historyRows.push({
+      device_id: deviceId,
+      event_type: legacyHistoryEventType(safeString(row.action)),
+      field_name: "legacy_google_sheets_history",
+      old_value: historyValue(previous),
+      new_value: historyValue(current),
+      changed_by: auth.session?.username || "admin",
+      source: "IMPORT",
+      notes: `Import historique Google Sheets: ${safeString(row.action) || "historique"}`,
+      changed_at: changedAt,
+    });
+  }
+
+  await appendDeviceHistory(historyRows);
+  await audit("legacy_history_imported", "device_history", null, {
+    imported: historyRows.length,
+    unmatched: unmatched.length,
+    skippedDuplicates: skippedDuplicates.length,
+  });
+  return json(request, {
+    imported: historyRows.length,
+    unmatched,
+    skippedDuplicates: skippedDuplicates.length,
+  });
+}
+
 async function handlePublicOrganization(request: Request) {
   const [{ data: teams, error: teamsError }, { data: establishments, error: establishmentsError }] = await Promise.all([
     supabase
@@ -2203,6 +2316,7 @@ Deno.serve(async (request) => {
     if (request.method === "POST" && path.endsWith("/collect/scan")) return await handleScan(request);
     if (request.method === "POST" && path.endsWith("/collect/legacy-scan")) return await handleLegacyScan(request);
     if (request.method === "GET" && path.endsWith("/admin/devices")) return await handleAdminDevices(request);
+    if (request.method === "POST" && path.endsWith("/admin/legacy-history/import")) return await handleAdminImportLegacyHistory(request);
     if (request.method === "GET" && path.endsWith("/admin/organization")) return await handleAdminOrganization(request);
     if (request.method === "GET" && path.endsWith("/admin/users")) return await handleAdminListUsers(request);
     if (request.method === "POST" && path.endsWith("/admin/users")) return await handleAdminSaveUser(request);
