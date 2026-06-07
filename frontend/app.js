@@ -79,6 +79,8 @@ const englishTranslations = {
   "Collecte transparente": "Transparent collection",
   "Ce collecteur recupere uniquement les informations d'inventaire utiles a l'equipe IT.": "This collector only gathers inventory information needed by the IT team.",
   "hostname, OS, fabricant, modele et numero de serie": "hostname, OS, manufacturer, model, and serial number",
+  "Numero modele / SKU": "Model number / SKU",
+  "Etiquette service": "Service tag",
   "CPU, RAM, stockage, GPU si disponible": "CPU, RAM, storage, GPU if available",
   "IP locale, MAC si autorisee, utilisateur OS connecte": "Local IP, MAC if allowed, logged-in OS user",
   "Aucun fichier personnel, historique navigateur, mot de passe ou outil de controle distant n'est lu ou installe.": "No personal files, browser history, passwords, or remote-control tool are read or installed.",
@@ -1970,12 +1972,12 @@ function renderDevices() {
       const userEmail = device.status === "retired" ? translate("Sorti du parc") : (device.email || "");
       return `
         <tr data-id="${device.id}" class="${device.id === state.selectedDeviceId ? "is-selected" : ""}">
-          <td><strong class="cell-primary">${escapeHtml(device.hostname || "-")}</strong><small class="cell-secondary">${escapeHtml(device.serial_number || "")}</small></td>
+          <td><strong class="cell-primary">${escapeHtml(device.hostname || "-")}</strong><small class="cell-secondary">${escapeHtml(device.serial_number || device.service_tag || "")}</small></td>
           <td><strong class="cell-primary">${escapeHtml(userName)}</strong><small class="cell-secondary">${escapeHtml(userEmail)}</small></td>
           <td>${renderTeamBadge(device.team_name, device.team_id, device.team_color)}</td>
           <td>${renderLocationBadge(device)}</td>
           <td>${renderOsBadge(device)}</td>
-          <td class="manufacturer-cell">${renderManufacturerBadge(device)}<small>${escapeHtml(device.model || "-")}</small></td>
+          <td class="manufacturer-cell">${renderManufacturerBadge(device)}<small>${escapeHtml([device.model, device.model_number].filter(Boolean).join(" / ") || "-")}</small></td>
           <td>${formatDate(device.last_seen_at)}</td>
           <td><span class="${statusClass(device.status)}">${labels[device.status] || device.status || "Actif"}</span></td>
         </tr>
@@ -2033,6 +2035,8 @@ function historyFieldLabel(fieldName) {
     os_version: "Version OS",
     manufacturer: "Fabricant",
     model: "Modele",
+    model_number: "Numero modele / SKU",
+    service_tag: "Etiquette service",
     serial_number: "Numero de serie",
     cpu: "CPU",
     gpu: "GPU",
@@ -2263,7 +2267,7 @@ function renderDetail(device, scans, history = []) {
       <span class="manufacturer-logo ${manufacturer.colorClass}">${renderManufacturerLogo(manufacturer)}</span>
       <span>
         <strong>${escapeHtml(manufacturer.manufacturerName)}${family ? ` ${escapeHtml(family)}` : ""}</strong>
-        <span>${escapeHtml(device.model || translate("Non renseigne"))}</span>
+        <span>${escapeHtml([device.model, device.model_number].filter(Boolean).join(" / ") || translate("Non renseigne"))}</span>
       </span>
     </div>
     <nav class="detail-tabs" aria-label="${escapeHtml(translate("Sections machine"))}">
@@ -2281,6 +2285,8 @@ function renderDetail(device, scans, history = []) {
         ["Fabricant", manufacturer.manufacturerName],
         ["Famille", family],
         ["Modele", device.model],
+        ["Numero modele / SKU", device.model_number],
+        ["Etiquette service", device.service_tag],
         ["Derniere remontee", formatDate(device.last_seen_at)],
         ["Utilisateur", currentUserLabel],
         ["Equipe", displayWithAbbreviation(device.team_name || "", device.team_abbreviation)],
@@ -2294,7 +2300,8 @@ function renderDetail(device, scans, history = []) {
     </section>
     <section class="detail-tab-panel" data-detail-panel="hardware">
       ${detailRows([
-        ["Serial", device.serial_number], ["CPU", device.cpu], ["GPU", device.gpu],
+        ["Serial", device.serial_number], ["Etiquette service", device.service_tag], ["Numero modele / SKU", device.model_number],
+        ["CPU", device.cpu], ["GPU", device.gpu],
         ["RAM", device.ram_total_gb ? `${device.ram_total_gb} Go` : ""],
         ["Stockage", `${device.storage_total_gb || "-"} Go total / ${device.storage_free_gb || "-"} Go libres`],
         ["Type stockage", device.storage_type], ["Score CPU", device.cpu_benchmark_score || device.cpu_score],
@@ -2581,6 +2588,8 @@ function exportCsv(enrichedExport = false) {
     "os_version",
     "manufacturer",
     "model",
+    "model_number",
+    "service_tag",
     "serial_number",
     "cpu",
     "gpu",

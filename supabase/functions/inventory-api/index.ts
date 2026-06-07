@@ -136,13 +136,18 @@ function normalizeMac(value: unknown) {
 }
 
 function normalizeScanPayload(body: Json): Json {
+  const hardwareIdentity = (body.hardwareIdentity && typeof body.hardwareIdentity === "object" ? body.hardwareIdentity : {}) as Json;
   return {
     hostname: firstPresent(body, "hostname", "pcName"),
     osName: firstPresent(body, "osName", "osType"),
     osVersion: firstPresent(body, "osVersion", "os"),
-    manufacturer: firstPresent(body, "manufacturer"),
-    model: firstPresent(body, "model"),
-    serialNumber: firstPresent(body, "serialNumber", "serial"),
+    manufacturer: firstPresent(body, "manufacturer") || firstPresent(hardwareIdentity, "manufacturer"),
+    model: firstPresent(body, "model") || firstPresent(hardwareIdentity, "model", "productName"),
+    modelNumber: firstPresent(body, "modelNumber") || firstPresent(hardwareIdentity, "systemSku", "productNumber", "baseboardProduct"),
+    serviceTag: firstPresent(body, "serviceTag")
+      || firstPresent(hardwareIdentity, "serviceTag", "biosSerialNumber", "chassisSerialNumber"),
+    serialNumber: firstPresent(body, "serialNumber", "serial")
+      || firstPresent(hardwareIdentity, "serviceTag", "biosSerialNumber", "chassisSerialNumber"),
     cpu: firstPresent(body, "cpu"),
     gpu: firstPresent(body, "gpu"),
     ramTotalGb: safeNumber(body.ramTotalGb) ?? parseGigabytes(body.ram),
@@ -154,6 +159,7 @@ function normalizeScanPayload(body: Json): Json {
     windowsUser: firstPresent(body, "windowsUser", "osUser", "user"),
     collectedAt: firstPresent(body, "collectedAt", "timestamp") || new Date().toISOString(),
     scriptVersion: firstPresent(body, "scriptVersion"),
+    hardwareIdentity,
   };
 }
 
@@ -161,6 +167,42 @@ async function sha256(input: string) {
   const bytes = new TextEncoder().encode(input);
   const hash = await crypto.subtle.digest("SHA-256", bytes);
   return Array.from(new Uint8Array(hash)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function validateCollectionAccessTokenValue(token: string) {
+  const plainToken = safeString(token, 500);
+  if (!plainToken) return null;
+  if (collectionAccessToken && plainToken === collectionAccessToken) {
+    return {
+      id: "legacy-static-token",
+      label: "Legacy collection token",
+      token_prefix: "legacy",
+      expires_at: null,
+      max_uses: null,
+      use_count: 0,
+      last_used_at: null,
+      invalid_reason: "",
+    };
+  }
+
+  const tokenHash = await sha256(plainToken);
+  const { data, error } = await supabase
+    .from("collection_access_tokens")
+    .select("id,label,token_prefix,expires_at,max_uses,use_count,last_used_at,revoked_at")
+    .eq("token_hash", tokenHash)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  const expiresAt = safeString(data.expires_at);
+  const maxUses = data.max_uses === null || data.max_uses === undefined ? null : Number(data.max_uses);
+  const useCount = Number(data.use_count ?? 0);
+  let invalidReason = "";
+  if (data.revoked_at) invalidReason = "revoked";
+  else if (expiresAt && new Date(expiresAt).getTime() <= Date.now()) invalidReason = "expired";
+  else if (maxUses !== null && useCount >= maxUses) invalidReason = "exhausted";
+
+  return { ...data, invalid_reason: invalidReason };
 }
 
 async function hmac(input: string) {
@@ -322,6 +364,8 @@ const deviceHistoryFields: Array<{ field: string; eventType: string }> = [
   { field: "os_version", eventType: "OS_CHANGED" },
   { field: "manufacturer", eventType: "HARDWARE_CHANGED" },
   { field: "model", eventType: "HARDWARE_CHANGED" },
+  { field: "model_number", eventType: "HARDWARE_CHANGED" },
+  { field: "service_tag", eventType: "HARDWARE_CHANGED" },
   { field: "serial_number", eventType: "HARDWARE_CHANGED" },
   { field: "cpu", eventType: "HARDWARE_CHANGED" },
   { field: "gpu", eventType: "HARDWARE_CHANGED" },
@@ -612,6 +656,31 @@ async function handleProfile(request: Request) {
     pending_changes: pendingChanges.filter(Boolean).map((item) => (item as Json).id),
   });
   return json(request, { collectionToken: token, pendingChanges: pendingChanges.filter(Boolean) });
+}
+
+async function handleValidateCollectionAccessToken(request: Request) {
+  const accessToken = request.headers.get("x-collection-access-token") ?? "";
+  const token = await validateCollectionAccessTokenValue(accessToken);
+  if (!token) return badRequest(request, "Token de collecte invalide.", 401);
+  const invalidReason = safeString(token.invalid_reason, 40);
+  if (invalidReason) {
+    const labels: Record<string, string> = {
+      revoked: "Token de collecte revoque.",
+      expired: "Token de collecte expire.",
+      exhausted: "Token de collecte epuise.",
+    };
+    return badRequest(request, labels[invalidReason] || "Token de collecte invalide.", 401);
+  }
+  return json(request, {
+    valid: true,
+    id: safeString(token.id),
+    label: safeString(token.label) || "Token de collecte",
+    tokenPrefix: safeString(token.token_prefix),
+    expiresAt: token.expires_at ?? null,
+    maxUses: token.max_uses ?? null,
+    useCount: token.use_count ?? null,
+    lastUsedAt: token.last_used_at ?? null,
+  });
 }
 
 function dedupePayload(body: Json, userId: string) {
@@ -1020,6 +1089,9 @@ async function persistScan(request: Request, user: { id: string; team_id: string
     os_version: safeString(body.osVersion, 160),
     manufacturer: safeString(body.manufacturer, 160),
     model: safeString(body.model, 160),
+    model_number: safeString(body.modelNumber, 160) || null,
+    service_tag: safeString(body.serviceTag, 160) || null,
+    hardware_identity: (body.hardwareIdentity && typeof body.hardwareIdentity === "object") ? body.hardwareIdentity : {},
     serial_number: safeString(body.serialNumber, 160) || null,
     cpu: safeString(body.cpu, 260),
     gpu: safeString(body.gpu, 260) || null,
@@ -1053,6 +1125,9 @@ async function persistScan(request: Request, user: { id: string; team_id: string
     os_version: deviceValues.os_version,
     manufacturer: deviceValues.manufacturer,
     model: deviceValues.model,
+    model_number: deviceValues.model_number,
+    service_tag: deviceValues.service_tag,
+    hardware_identity: deviceValues.hardware_identity,
     serial_number: deviceValues.serial_number,
     cpu: deviceValues.cpu,
     gpu: deviceValues.gpu,
@@ -2312,6 +2387,7 @@ Deno.serve(async (request) => {
     if (request.method === "GET" && path.endsWith("/organization") && !path.includes("/admin/")) {
       return await handlePublicOrganization(request);
     }
+    if (request.method === "POST" && path.endsWith("/collect/access-token/validate")) return await handleValidateCollectionAccessToken(request);
     if (request.method === "POST" && path.endsWith("/collect/profile")) return await handleProfile(request);
     if (request.method === "POST" && path.endsWith("/collect/scan")) return await handleScan(request);
     if (request.method === "POST" && path.endsWith("/collect/legacy-scan")) return await handleLegacyScan(request);

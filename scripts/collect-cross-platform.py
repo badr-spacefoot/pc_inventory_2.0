@@ -14,7 +14,23 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-SCRIPT_VERSION = "1.2.0"
+SCRIPT_VERSION = "1.3.0"
+
+PLACEHOLDER_VALUES = {
+    "",
+    "none",
+    "null",
+    "n/a",
+    "na",
+    "default string",
+    "system serial number",
+    "system product name",
+    "system manufacturer",
+    "to be filled by o.e.m.",
+    "to be filled by oem",
+    "not specified",
+    "unknown",
+}
 
 
 def run(command, timeout=12):
@@ -30,6 +46,31 @@ def read_text(path):
         return Path(path).read_text(encoding="utf-8", errors="ignore").strip()
     except OSError:
         return ""
+
+
+def clean_identifier(value):
+    if isinstance(value, bytes):
+        for encoding in ("utf-16-le", "utf-8"):
+            try:
+                value = value.decode(encoding, errors="ignore")
+                break
+            except ValueError:
+                pass
+    if isinstance(value, (list, tuple)):
+        value = " ".join(str(item) for item in value if item)
+    text = str(value or "").replace("\x00", " ").strip()
+    if ";" in text and text.startswith("@"):
+        text = text.split(";")[-1].strip()
+    text = re.sub(r"\s+", " ", text).strip()
+    return "" if text.lower() in PLACEHOLDER_VALUES else text
+
+
+def first_clean(*values):
+    for value in values:
+        cleaned = clean_identifier(value)
+        if cleaned:
+            return cleaned
+    return ""
 
 
 def bytes_to_gb(value):
@@ -249,18 +290,7 @@ def registry_values(root, path):
 
 
 def clean_device_name(value):
-    if isinstance(value, bytes):
-        for encoding in ("utf-16-le", "utf-8"):
-            try:
-                value = value.decode(encoding, errors="ignore")
-                break
-            except ValueError:
-                pass
-    text = str(value or "").strip()
-    if ";" in text:
-        text = text.split(";")[-1].strip()
-    text = text.replace("\x00", " ")
-    return re.sub(r"\s+", " ", text).strip()
+    return clean_identifier(value)
 
 
 def windows_registry_gpus():
@@ -372,12 +402,33 @@ def windows_python_fallback():
         value = item.get("mediaType") or item.get("busType") or ""
         if value and value not in storage_types:
             storage_types.append(value)
+    hardware_identity = {
+        "manufacturer": windows_registry_value(bios_path, "SystemManufacturer"),
+        "model": windows_registry_value(bios_path, "SystemProductName"),
+        "systemFamily": windows_registry_value(bios_path, "SystemFamily"),
+        "systemSku": windows_registry_value(bios_path, "SystemSKU"),
+        "productName": windows_registry_value(bios_path, "BaseBoardProduct"),
+        "productNumber": "",
+        "baseboardProduct": windows_registry_value(bios_path, "BaseBoardProduct"),
+        "baseboardManufacturer": windows_registry_value(bios_path, "BaseBoardManufacturer"),
+        "biosSerialNumber": windows_registry_value(bios_path, "SystemSerialNumber") or windows_registry_value(bios_path, "SerialNumber"),
+        "chassisSerialNumber": "",
+        "assetTag": "",
+        "serviceTag": windows_registry_value(bios_path, "SystemSerialNumber") or windows_registry_value(bios_path, "SerialNumber"),
+        "uuid": "",
+    }
+    for key, value in list(hardware_identity.items()):
+        hardware_identity[key] = clean_identifier(value)
+    model_number = first_clean(hardware_identity.get("systemSku"), hardware_identity.get("productNumber"), hardware_identity.get("baseboardProduct"))
+    serial_number = first_clean(hardware_identity.get("serviceTag"), hardware_identity.get("biosSerialNumber"), hardware_identity.get("chassisSerialNumber"))
     return {
         "osName": "Windows",
         "osVersion": platform.platform(),
-        "manufacturer": windows_registry_value(bios_path, "SystemManufacturer"),
-        "model": windows_registry_value(bios_path, "SystemProductName") or platform.machine(),
-        "serialNumber": windows_registry_value(bios_path, "SystemSerialNumber") or windows_registry_value(bios_path, "SerialNumber"),
+        "manufacturer": hardware_identity.get("manufacturer"),
+        "model": first_clean(hardware_identity.get("model"), hardware_identity.get("productName"), platform.machine()),
+        "modelNumber": model_number,
+        "serialNumber": serial_number,
+        "serviceTag": hardware_identity.get("serviceTag"),
         "cpu": windows_registry_value(cpu_path, "ProcessorNameString") or platform.processor(),
         "gpu": " | ".join(item["name"] for item in gpus),
         "gpus": gpus,
@@ -387,6 +438,7 @@ def windows_python_fallback():
         "storageType": " + ".join(storage_types),
         "logicalDrives": logical_drives,
         "physicalDisks": disks,
+        "hardwareIdentity": hardware_identity,
         "powershellCollector": "registry-fallback",
     }
 
@@ -397,17 +449,31 @@ def windows_info():
         return windows_python_fallback()
     script = r"""
     $ErrorActionPreference = 'SilentlyContinue'
+    $placeholderValues = @('', 'none', 'null', 'n/a', 'na', 'default string', 'system serial number', 'system product name', 'system manufacturer', 'to be filled by o.e.m.', 'to be filled by oem', 'not specified', 'unknown')
     function To-Gb($value) {
       if ($null -eq $value -or $value -eq '') { return $null }
       return [math]::Round([double]$value / 1GB, 2)
     }
     function Clean($value) {
       if ($null -eq $value) { return '' }
-      return ([string]$value).Trim()
+      $clean = ([string]$value).Trim()
+      if ($placeholderValues -contains $clean.ToLowerInvariant()) { return '' }
+      return $clean
+    }
+    function FirstClean($values) {
+      foreach ($value in $values) {
+        $clean = Clean $value
+        if ($clean) { return $clean }
+      }
+      return ''
     }
 
     $computer = Get-CimInstance Win32_ComputerSystem
+    $computerProduct = Get-CimInstance Win32_ComputerSystemProduct
     $bios = Get-CimInstance Win32_BIOS
+    $baseboard = Get-CimInstance Win32_BaseBoard
+    $enclosure = Get-CimInstance Win32_SystemEnclosure | Select-Object -First 1
+    $msSystem = Get-CimInstance -Namespace root\wmi -ClassName MS_SystemInformation | Select-Object -First 1
     $os = Get-CimInstance Win32_OperatingSystem
     $processor = Get-CimInstance Win32_Processor | Select-Object -First 1
     $videoControllers = @(Get-CimInstance Win32_VideoController |
@@ -453,12 +519,40 @@ def windows_info():
       elseif ($_.busType) { $_.busType }
     } | Where-Object { $_ } | Select-Object -Unique)
 
+    $logicalDrives = @($logicalDisks | ForEach-Object {
+      [pscustomobject]@{
+        name = Clean $_.DeviceID
+        totalGb = To-Gb $_.Size
+        freeGb = To-Gb $_.FreeSpace
+      }
+    })
+
+    $hardwareIdentity = [pscustomobject]@{
+      manufacturer = FirstClean @($computer.Manufacturer, $computerProduct.Vendor)
+      model = FirstClean @($computer.Model, $computerProduct.Name)
+      systemFamily = Clean $computer.SystemFamily
+      systemSku = FirstClean @($computer.SystemSKUNumber, $msSystem.SystemSku)
+      productName = Clean $computerProduct.Name
+      productNumber = FirstClean @($computerProduct.Version, $computer.SystemSKUNumber)
+      baseboardProduct = FirstClean @($baseboard.Product, $msSystem.BaseBoardProduct)
+      baseboardManufacturer = Clean $baseboard.Manufacturer
+      biosSerialNumber = Clean $bios.SerialNumber
+      chassisSerialNumber = Clean $enclosure.SerialNumber
+      assetTag = Clean $enclosure.SMBIOSAssetTag
+      serviceTag = FirstClean @($bios.SerialNumber, $computerProduct.IdentifyingNumber, $enclosure.SerialNumber)
+      uuid = Clean $computerProduct.UUID
+    }
+    $modelNumber = FirstClean @($hardwareIdentity.systemSku, $hardwareIdentity.productNumber, $hardwareIdentity.baseboardProduct)
+    $serialNumber = FirstClean @($hardwareIdentity.serviceTag, $hardwareIdentity.biosSerialNumber, $computerProduct.IdentifyingNumber, $hardwareIdentity.chassisSerialNumber)
+
     [pscustomobject]@{
       osName='Windows'
       osVersion=(Clean (($os.Caption, $os.Version) -join ' '))
-      manufacturer=Clean $computer.Manufacturer
-      model=Clean $computer.Model
-      serialNumber=Clean $bios.SerialNumber
+      manufacturer=$hardwareIdentity.manufacturer
+      model=FirstClean @($hardwareIdentity.model, $hardwareIdentity.productName)
+      modelNumber=$modelNumber
+      serialNumber=$serialNumber
+      serviceTag=$hardwareIdentity.serviceTag
       cpu=Clean $processor.Name
       gpu=Clean (($gpus | ForEach-Object { $_.name }) -join ' | ')
       gpus=$gpus
@@ -466,7 +560,9 @@ def windows_info():
       storageTotalGb=To-Gb (($logicalDisks | Measure-Object Size -Sum).Sum)
       storageFreeGb=To-Gb (($logicalDisks | Measure-Object FreeSpace -Sum).Sum)
       storageType=Clean ($storageTypes -join ' + ')
+      logicalDrives=$logicalDrives
       physicalDisks=$disks
+      hardwareIdentity=$hardwareIdentity
       powershellCollector='cim'
     } | ConvertTo-Json -Compress -Depth 6
     """

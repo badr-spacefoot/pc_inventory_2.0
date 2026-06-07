@@ -645,9 +645,64 @@ Ajouter `--include-mac` uniquement lorsque la collecte de l'adresse MAC est auto
 - Linux lit `/etc/os-release`, `/proc`, `/sys/class/dmi/id`, `lsblk` et `lspci` lorsqu'ils sont disponibles.
 - `dmidecode` n'est utilise que si la commande existe et que le script est execute avec les droits necessaires.
 - macOS utilise `system_profiler`, `sw_vers`, `sysctl` et les informations de stockage locales.
-- Windows utilise CIM via PowerShell et revient a des informations generiques si CIM est indisponible.
+- Windows utilise CIM via PowerShell et revient au registre Windows si CIM est indisponible.
+
+Le collecteur Windows enrichit l'identite materielle avec plusieurs sources:
+
+- `Win32_ComputerSystem`: `Manufacturer`, `Model`, `SystemFamily`, `SystemSKUNumber`;
+- `Win32_ComputerSystemProduct`: `Name`, `Vendor`, `Version`, `IdentifyingNumber`, `UUID`;
+- `Win32_BIOS`: `SerialNumber`, `SMBIOSBIOSVersion`;
+- `Win32_BaseBoard`: `Manufacturer`, `Product`, `SerialNumber`;
+- `Win32_SystemEnclosure`: `SerialNumber`, `SMBIOSAssetTag`, `ChassisTypes`;
+- `MS_SystemInformation` si disponible.
+
+Le JSON garde les champs existants (`manufacturer`, `model`, `serialNumber`) et ajoute:
+
+```json
+{
+  "modelNumber": "SKU ou product number",
+  "serviceTag": "serial/service tag si disponible",
+  "hardwareIdentity": {
+    "manufacturer": "Dell Inc.",
+    "model": "Dell G16 7630",
+    "systemFamily": "GSeries",
+    "systemSku": "SKU",
+    "productName": "Dell G16 7630",
+    "productNumber": "Product number",
+    "baseboardProduct": "Baseboard product",
+    "baseboardManufacturer": "Dell Inc.",
+    "biosSerialNumber": "Service tag",
+    "chassisSerialNumber": "Chassis serial",
+    "assetTag": "Asset tag",
+    "serviceTag": "Service tag",
+    "uuid": "System UUID"
+  }
+}
+```
+
+Les valeurs placeholder (`To be filled by O.E.M.`, `Default string`, `System Serial Number`, `None`, vide) sont ignorees. La priorite est: `systemSku` pour `modelNumber`, puis product/baseboard; `serviceTag`/BIOS serial pour `serialNumber`, puis identifiant produit/chassis.
 
 Une permission manquante produit un champ vide; elle ne doit pas interrompre l'envoi de l'inventaire.
+
+Le collecteur desktop `Spacefoot IT Collector` propose un flux en quatre etapes:
+
+1. connexion API et validation du token temporaire;
+2. affectation utilisateur avec equipes/etablissements charges depuis l'admin;
+3. scan materiel local;
+4. revue lisible puis soumission, avec JSON brut disponible dans une section avancee.
+
+Le collecteur affiche explicitement que seuls les champs d'inventaire sont lus: aucun fichier personnel, aucun historique navigateur, aucun mot de passe, aucun controle a distance. Les donnees sont envoyees via le meme contrat API que le web app: `/collect/profile` cree le jeton de scan, puis `/collect/scan` enregistre la machine. Les nouveaux champs `model_number`, `service_tag` et `hardware_identity` sont persistes dans `devices`, `device_scans` et exposes par `device_inventory_view`.
+
+Si `modelNumber`, `serviceTag` ou `serialNumber` restent vides, verifier dans PowerShell:
+
+```powershell
+Get-CimInstance Win32_ComputerSystem | Select Manufacturer,Model,SystemFamily,SystemSKUNumber
+Get-CimInstance Win32_ComputerSystemProduct | Select Name,Vendor,Version,IdentifyingNumber,UUID
+Get-CimInstance Win32_BIOS | Select SerialNumber,SMBIOSBIOSVersion
+Get-CimInstance Win32_SystemEnclosure | Select SerialNumber,SMBIOSAssetTag
+```
+
+Certains BIOS masquent ou remplacent ces valeurs par des placeholders; le collecteur les ignore volontairement pour eviter de polluer la base.
 
 Les prix marche sont approximatifs: le dashboard affiche donc un score de confiance. Plus il y a de signaux recents et concordants, plus la confiance augmente.
 
