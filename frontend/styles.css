@@ -1432,9 +1432,9 @@ pre {
 
 .detail-panel {
   position: sticky;
-  top: 18px;
+  top: 112px;
   align-self: start;
-  max-height: calc(100vh - 36px);
+  max-height: calc(100vh - 136px);
   overflow-y: auto;
   scrollbar-gutter: stable;
 }
