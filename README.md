@@ -567,7 +567,16 @@ L'ancien mode sans identifiant continue de fonctionner avec `ADMIN_PASSWORD` pou
 
 La page `Users & roles` permet a un `ADMIN` de creer, modifier, desactiver, supprimer un compte et reinitialiser son mot de passe. La liste et le panneau d'edition affichent aussi la date de creation du compte. Les actions sensibles creent des entrees dans `audit_logs` et des notifications.
 
+Le champ mot de passe inclut deux actions rapides:
+
+- generer un mot de passe fort avec `crypto.getRandomValues`, au moins 16 caracteres, majuscules, minuscules, chiffres et symboles;
+- copier le mot de passe genere ou saisi, avec retour visuel en cas de succes ou champ vide.
+
+L'etat `Compte actif` est affiche sous forme d'interrupteur: vert/actif pour un compte autorise, gris/desactive pour un compte bloque. Les comptes desactives ne peuvent pas se connecter.
+
 Le header admin affiche le nom connecte avec une icone et un libelle de role compact (`ADMIN`, `MANAGER`, `VIEWER` / `READ_ONLY`, `COLLECTOR_USER`), compatible dark mode et mobile.
+
+Les actions globales du header (`Actualiser`, `Enrichir`, `Export CSV`, `Deconnexion`) et `Nouveau compte` utilisent des boutons avec icones, labels courts, `aria-label` et tooltips.
 
 ## Validation email et proprietaire machine
 

@@ -98,9 +98,17 @@ const englishTranslations = {
   "Nouveau compte": "New account",
   "Enregistrer le compte": "Save account",
   "Compte actif": "Active account",
-  "Desactive": "Disabled",
   "Derniere connexion": "Last login",
   "Creation": "Created",
+  "Password copied": "Password copied",
+  "No password to copy": "No password to copy",
+  "Mot de passe genere.": "Password generated.",
+  "Copie impossible.": "Copy failed.",
+  "Aucune commande a copier": "No command to copy",
+  "Aucun token a copier": "No token to copy",
+  "Aucun script a copier": "No script to copy",
+  "Actif": "Active",
+  "Desactive": "Disabled",
   "Centre de notifications": "Notification center",
   "Validation": "Validation",
   "Pending changes": "Pending changes",
@@ -1064,6 +1072,50 @@ function copyIcon() {
   `;
 }
 
+function generateStrongPassword(length = 18) {
+  const groups = [
+    "ABCDEFGHJKLMNPQRSTUVWXYZ",
+    "abcdefghijkmnopqrstuvwxyz",
+    "23456789",
+    "!@#$%^&*_-+=?",
+  ];
+  const all = groups.join("");
+  const bytes = new Uint32Array(length);
+  crypto.getRandomValues(bytes);
+  const chars = groups.map((group, index) => group[bytes[index] % group.length]);
+  for (let index = groups.length; index < length; index += 1) {
+    chars.push(all[bytes[index] % all.length]);
+  }
+  for (let index = chars.length - 1; index > 0; index -= 1) {
+    const swapIndex = bytes[index] % (index + 1);
+    [chars[index], chars[swapIndex]] = [chars[swapIndex], chars[index]];
+  }
+  return chars.join("");
+}
+
+async function copyText(value, successMessage, emptyMessage) {
+  const text = String(value || "");
+  if (!text) {
+    toast(emptyMessage, "warning");
+    return false;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(successMessage, "success");
+    return true;
+  } catch {
+    toast("Copie impossible.", "error");
+    return false;
+  }
+}
+
+function syncAdminUserActiveLabel() {
+  const form = $("#admin-user-form");
+  const active = form?.elements.isActive.checked;
+  const label = $("#admin-user-active-label");
+  if (label) label.textContent = active ? translate("Actif") : translate("Desactive");
+}
+
 function renderAccessTokens() {
   $("#tokens-table").innerHTML = state.accessTokens
     .map((token) => {
@@ -1113,9 +1165,7 @@ function renderAccessTokens() {
   $$(".copy-access-token").forEach((button) => {
     button.addEventListener("click", async () => {
       const token = state.rawAccessTokens[button.dataset.id];
-      if (!token) return;
-      await navigator.clipboard.writeText(token);
-      toast("Token copie.");
+      await copyText(token, "Token copie.", "Token complet indisponible apres rechargement");
     });
   });
 
@@ -1188,7 +1238,9 @@ function resetAdminUserForm() {
   form.elements.id.value = "";
   form.elements.role.value = "VIEWER";
   form.elements.isActive.checked = true;
+  form.elements.password.type = "password";
   $("#admin-user-created-at").textContent = `${translate("Creation")}: -`;
+  syncAdminUserActiveLabel();
   $("#delete-admin-user").classList.add("is-hidden");
 }
 
@@ -1202,8 +1254,10 @@ function editAdminUser(id) {
   form.elements.email.value = user.email || "";
   form.elements.role.value = user.role || "VIEWER";
   form.elements.password.value = "";
+  form.elements.password.type = "password";
   form.elements.isActive.checked = user.isActive !== false;
   $("#admin-user-created-at").textContent = `${translate("Creation")}: ${formatDate(user.createdAt)}`;
+  syncAdminUserActiveLabel();
   $("#delete-admin-user").classList.toggle("is-hidden", user.id === state.currentAdmin?.id);
 }
 
@@ -2612,17 +2666,14 @@ function bindEvents() {
   });
 
   $("#copy-command").addEventListener("click", async () => {
-    await navigator.clipboard.writeText($("#powershell-command").textContent);
-    toast("Commande copiee.");
+    await copyText($("#powershell-command").textContent, "Commande copiee.", "Aucune commande a copier");
   });
   $("#copy-collector-token").addEventListener("click", async () => {
-    await navigator.clipboard.writeText($("#collector-token").textContent);
-    toast("Token copie.");
+    await copyText($("#collector-token").textContent, "Token copie.", "Aucun token a copier");
   });
   $("#copy-script").addEventListener("click", async () => {
     if (!state.scriptPreviewText) await loadScriptPreview();
-    await navigator.clipboard.writeText(state.scriptPreviewText);
-    toast("Script copie.");
+    await copyText(state.scriptPreviewText, "Script copie.", "Aucun script a copier");
   });
 
   $("#admin-login-form").addEventListener("submit", async (event) => {
@@ -2849,10 +2900,21 @@ function bindEvents() {
     }
   });
   $("#copy-token").addEventListener("click", async () => {
-    await navigator.clipboard.writeText($("#generated-token").textContent);
-    toast("Token copie.");
+    await copyText($("#generated-token").textContent, "Token copie.", "Aucun token a copier");
   });
   $("#new-admin-user").addEventListener("click", resetAdminUserForm);
+  $("#generate-admin-password").addEventListener("click", () => {
+    const passwordInput = $("#admin-user-form").elements.password;
+    passwordInput.value = generateStrongPassword();
+    passwordInput.type = "text";
+    passwordInput.focus();
+    passwordInput.select();
+    toast("Mot de passe genere.", "success");
+  });
+  $("#copy-admin-password").addEventListener("click", async () => {
+    await copyText($("#admin-user-form").elements.password.value, "Password copied", "No password to copy");
+  });
+  $("#admin-user-form").elements.isActive.addEventListener("change", syncAdminUserActiveLabel);
   $("#admin-user-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget;

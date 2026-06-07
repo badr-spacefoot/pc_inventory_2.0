@@ -199,10 +199,22 @@
                 <span id="notification-count" class="notification-count is-hidden">0</span>
               </button>
               <span id="admin-session-label" class="session-label"></span>
-              <button id="refresh-admin" class="secondary" type="button">Actualiser</button>
-              <button id="enrich-admin" class="secondary" type="button">Enrichir les donnees</button>
-              <button id="export-csv" class="primary" type="button">Export CSV</button>
-              <button id="logout-admin" class="secondary" type="button">Deconnexion</button>
+              <button id="refresh-admin" class="secondary action-button" type="button" aria-label="Actualiser" title="Actualiser">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.3 6.4"></path><path d="M3 12a9 9 0 0 1 15.3-6.4"></path><path d="M18 2v4h-4"></path><path d="M6 22v-4h4"></path></svg>
+                <span>Actualiser</span>
+              </button>
+              <button id="enrich-admin" class="secondary action-button" type="button" aria-label="Enrichir les donnees" title="Enrichir les donnees">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4"></path><path d="M12 17v4"></path><path d="M3 12h4"></path><path d="M17 12h4"></path><path d="m5.6 5.6 2.8 2.8"></path><path d="m15.6 15.6 2.8 2.8"></path><path d="m18.4 5.6-2.8 2.8"></path><path d="m8.4 15.6-2.8 2.8"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                <span>Enrichir</span>
+              </button>
+              <button id="export-csv" class="primary action-button" type="button" aria-label="Exporter CSV" title="Exporter CSV">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"></path><path d="M14 2v6h6"></path><path d="M12 18v-6"></path><path d="m9 15 3 3 3-3"></path></svg>
+                <span>CSV</span>
+              </button>
+              <button id="logout-admin" class="secondary action-button" type="button" aria-label="Deconnexion" title="Deconnexion">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="m16 17 5-5-5-5"></path><path d="M21 12H9"></path></svg>
+                <span>Sortir</span>
+              </button>
             </div>
           </div>
 
@@ -339,7 +351,10 @@
                 <p class="eyebrow">Securite</p>
                 <h3>Utilisateurs & roles</h3>
               </div>
-              <button id="new-admin-user" class="secondary" type="button">Nouveau compte</button>
+              <button id="new-admin-user" class="secondary action-button" type="button" aria-label="Nouveau compte" title="Nouveau compte">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M19 8v6"></path><path d="M22 11h-6"></path></svg>
+                <span>Nouveau compte</span>
+              </button>
             </div>
             <form id="admin-user-form" class="form-grid">
               <input name="id" type="hidden" />
@@ -354,8 +369,30 @@
                   <option value="READ_ONLY">READ_ONLY</option>
                 </select>
               </label>
-              <label>Mot de passe<input name="password" type="password" minlength="10" autocomplete="new-password" placeholder="Vide = inchange" /></label>
-              <label class="checkbox-label"><input name="isActive" type="checkbox" checked /> Compte actif</label>
+              <label class="password-field">Mot de passe
+                <span class="password-input-row">
+                  <input name="password" type="password" minlength="10" autocomplete="new-password" placeholder="Vide = inchange" />
+                  <button id="generate-admin-password" class="secondary icon-button password-action" type="button" aria-label="Generer un mot de passe" title="Generer un mot de passe">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4"></path><path d="M12 17v4"></path><path d="M3 12h4"></path><path d="M17 12h4"></path><path d="m5.6 5.6 2.8 2.8"></path><path d="m15.6 15.6 2.8 2.8"></path><path d="m18.4 5.6-2.8 2.8"></path><path d="m8.4 15.6-2.8 2.8"></path></svg>
+                  </button>
+                  <button id="copy-admin-password" class="secondary icon-button password-action" type="button" aria-label="Copier le mot de passe" title="Copier le mot de passe">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
+                  </button>
+                </span>
+              </label>
+              <label class="switch-field">
+                <input name="isActive" type="checkbox" checked />
+                <span class="account-switch" aria-hidden="true">
+                  <span class="switch-knob">
+                    <svg class="switch-icon-on" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"></path></svg>
+                    <svg class="switch-icon-off" viewBox="0 0 24 24"><path d="M6 6l12 12"></path><path d="M18 6 6 18"></path></svg>
+                  </span>
+                </span>
+                <span class="switch-copy">
+                  <strong id="admin-user-active-label">Actif</strong>
+                  <small>Compte utilisateur</small>
+                </span>
+              </label>
               <span id="admin-user-created-at" class="helper">Creation: -</span>
               <button class="primary" type="submit">Enregistrer le compte</button>
               <button id="delete-admin-user" class="danger-button is-hidden" type="button">Supprimer</button>
