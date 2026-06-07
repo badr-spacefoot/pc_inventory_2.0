@@ -64,6 +64,95 @@ COLORS = {
     "input": "#1a211d",
 }
 
+TRANSLATIONS = {
+    "fr": {
+        "IT Collector": "Collecteur IT",
+        "This collector gathers only inventory information needed by the IT team.": "Ce collecteur recupere uniquement les informations d'inventaire utiles a l'equipe IT.",
+        "Connection": "Connexion",
+        "Assignment": "Affectation",
+        "Hardware scan": "Scan materiel",
+        "Review & submit": "Relecture & envoi",
+        "Validate the API and collection access token before creating the scan token.": "Validez l'API et le token temporaire avant de creer le token de scan.",
+        "API URL": "URL API",
+        "Collection access token": "Token temporaire de collecte",
+        "Use an admin-generated temporary token, not the collector token shown after web collection.": "Utilisez un token temporaire genere dans l'admin, pas le token collecteur affiche apres la collecte web.",
+        "Include MAC address if authorized": "Inclure l'adresse MAC si autorisee",
+        "Validate token": "Valider le token",
+        "Token required": "Token requis",
+        "Please enter the collection access token.": "Veuillez saisir le token temporaire de collecte.",
+        "Validating...": "Validation...",
+        "Token valid": "Token valide",
+        "Invalid collection access token. Generate a temporary token in Admin > Collection tokens.": "Token temporaire invalide. Generez un token dans Admin > Tokens temporaires.",
+        "Data transparency": "Transparence des donnees",
+        "No personal files are read.": "Aucun fichier personnel n'est lu.",
+        "No browser history is read.": "Aucun historique navigateur n'est lu.",
+        "No passwords are read.": "Aucun mot de passe n'est lu.",
+        "No remote control is installed.": "Aucun controle a distance n'est installe.",
+        "Data is submitted only after user confirmation.": "Les donnees sont envoyees uniquement apres confirmation.",
+        "User assignment": "Affectation utilisateur",
+        "Teams and locations are loaded from the admin-managed values.": "Les equipes et etablissements sont charges depuis les valeurs admin.",
+        "First name": "Prenom",
+        "Last name": "Nom",
+        "Email": "Email",
+        "Team": "Equipe",
+        "Other team proposal": "Proposition autre equipe",
+        "Location": "Etablissement",
+        "Other location proposal": "Proposition autre etablissement",
+        "Comment": "Commentaire",
+        "Other": "Autre",
+        "Scan this computer, then review the summary before submission.": "Scannez cet ordinateur, puis relisez le resume avant envoi.",
+        "Scan this computer": "Scanner cet ordinateur",
+        "Review & submit": "Relecture & envoi",
+        "Create the collection profile, then submit the reviewed scan.": "Creez le profil de collecte, puis envoyez le scan relu.",
+        "Submit inventory": "Envoyer l'inventaire",
+        "Show Advanced / Raw JSON": "Afficher avance / JSON brut",
+        "Hide Advanced / Raw JSON": "Masquer avance / JSON brut",
+        "Advanced / Raw JSON": "Avance / JSON brut",
+        "Ready.": "Pret.",
+        "Not validated.": "Non valide.",
+        "Back": "Retour",
+        "Next": "Suivant",
+        "Done": "Termine",
+        "API URL required": "URL API requise",
+        "Please enter the API URL.": "Veuillez saisir l'URL API.",
+        "Loaded": "Charge",
+        "teams and": "equipes et",
+        "locations.": "etablissements.",
+        "Collector unavailable": "Collecteur indisponible",
+        "Unable to load collector": "Impossible de charger le collecteur",
+        "Scanning hardware...": "Scan materiel...",
+        "Scan failed": "Scan echoue",
+        "OS": "OS",
+        "Manufacturer": "Fabricant",
+        "Model": "Modele",
+        "Model number / SKU": "Numero modele / SKU",
+        "Serial / Service tag": "Serie / Service tag",
+        "CPU": "CPU",
+        "RAM": "RAM",
+        "Storage": "Stockage",
+        "GPU": "GPU",
+        "Network": "Reseau",
+        "total": "total",
+        "free": "libres",
+        "IP": "IP",
+        "MAC": "MAC",
+        "Scan completed.": "Scan termine.",
+        "Scan completed with unavailable fields": "Scan termine avec champs indisponibles",
+        "No scan": "Aucun scan",
+        "Scan this computer before submitting.": "Scannez cet ordinateur avant l'envoi.",
+        "Missing fields": "Champs manquants",
+        "Please complete": "Veuillez completer",
+        "team or other team proposal": "equipe ou proposition autre equipe",
+        "location or other location proposal": "etablissement ou proposition autre etablissement",
+        "Creating collection profile...": "Creation du profil de collecte...",
+        "API did not return a collection token.": "L'API n'a pas retourne de token de scan.",
+        "Success": "Succes",
+        "Inventory submitted successfully.": "Inventaire envoye avec succes.",
+        "Submission successful. Device": "Envoi reussi. Machine",
+        "Submission failed": "Echec de l'envoi",
+    }
+}
+
 
 def load_draft() -> dict:
     try:
@@ -140,15 +229,21 @@ class CollectorApp(tk.Tk):
         self.proposed_team = tk.StringVar(value=draft.get("proposedTeam") or "")
         self.proposed_establishment = tk.StringVar(value=draft.get("proposedEstablishment") or "")
         self.comment = tk.StringVar(value=draft.get("comment") or "")
-        self.include_mac = tk.BooleanVar(value=bool(draft.get("includeMac", False)))
-        self.status = tk.StringVar(value="Ready.")
-        self.connection_status = tk.StringVar(value="Not validated.")
+        self.include_mac = tk.BooleanVar(value=bool(draft.get("includeMac", True)))
+        self.language = tk.StringVar(value=draft.get("language") or "en")
+        self.status = tk.StringVar(value=self.t("Ready."))
+        self.connection_status = tk.StringVar(value=self.t("Not validated."))
 
         self._build_ui()
         self._bind_draft_saves()
         self.after(300, self.load_organization_background)
 
+    def t(self, text: str) -> str:
+        return TRANSLATIONS.get(self.language.get(), {}).get(text, text)
+
     def _build_ui(self) -> None:
+        for child in self.winfo_children():
+            child.destroy()
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
         shell = tk.Frame(self, bg=COLORS["bg"], padx=24, pady=20)
@@ -160,10 +255,10 @@ class CollectorApp(tk.Tk):
         header.grid(row=0, column=0, sticky="ew")
         header.columnconfigure(0, weight=1)
         tk.Label(header, text="SPACEFOOT", fg=COLORS["brand_2"], bg=COLORS["bg"], font=("Segoe UI", 9, "bold")).grid(row=0, column=0, sticky="w")
-        tk.Label(header, text="IT Collector", fg=COLORS["text"], bg=COLORS["bg"], font=("Segoe UI", 26, "bold")).grid(row=1, column=0, sticky="w")
+        tk.Label(header, text=self.t("IT Collector"), fg=COLORS["text"], bg=COLORS["bg"], font=("Segoe UI", 26, "bold")).grid(row=1, column=0, sticky="w")
         tk.Label(
             header,
-            text="This collector gathers only inventory information needed by the IT team.",
+            text=self.t("This collector gathers only inventory information needed by the IT team."),
             fg=COLORS["muted"],
             bg=COLORS["bg"],
             font=("Segoe UI", 10),
@@ -172,7 +267,7 @@ class CollectorApp(tk.Tk):
         self.step_nav = tk.Frame(shell, bg=COLORS["bg"])
         self.step_nav.grid(row=1, column=0, sticky="ew", pady=(18, 14))
         for index, label in enumerate(["Connection", "Assignment", "Hardware scan", "Review & submit"]):
-            chip = tk.Label(self.step_nav, text=f"{index + 1}. {label}", padx=14, pady=8, font=("Segoe UI", 10, "bold"))
+            chip = tk.Label(self.step_nav, text=f"{index + 1}. {self.t(label)}", padx=14, pady=8, font=("Segoe UI", 10, "bold"))
             chip.grid(row=0, column=index, sticky="w", padx=(0, 8))
             setattr(self, f"step_chip_{index}", chip)
 
@@ -190,12 +285,24 @@ class CollectorApp(tk.Tk):
         footer = tk.Frame(shell, bg=COLORS["bg"])
         footer.grid(row=3, column=0, sticky="ew", pady=(14, 0))
         footer.columnconfigure(1, weight=1)
-        self.back_button = self.button(footer, "Back", self.previous_step, secondary=True)
+        self.back_button = self.button(footer, self.t("Back"), self.previous_step, secondary=True)
         self.back_button.grid(row=0, column=0, padx=(0, 8))
         tk.Label(footer, textvariable=self.status, fg=COLORS["muted"], bg=COLORS["bg"], font=("Segoe UI", 10)).grid(row=0, column=1, sticky="w")
-        self.next_button = self.button(footer, "Next", self.next_step)
-        self.next_button.grid(row=0, column=2)
+        self.language_button = self.button(footer, self.language_label(), self.toggle_language, secondary=True)
+        self.language_button.grid(row=0, column=2, padx=(8, 8))
+        self.next_button = self.button(footer, self.t("Next"), self.next_step)
+        self.next_button.grid(row=0, column=3)
         self.show_step(0)
+
+    def language_label(self) -> str:
+        return "FR" if self.language.get() == "en" else "EN"
+
+    def toggle_language(self) -> None:
+        self.language.set("fr" if self.language.get() == "en" else "en")
+        self.persist_draft()
+        self.status.set(self.t("Ready."))
+        self.connection_status.set(self.t("Not validated."))
+        self._build_ui()
 
     def card(self, parent) -> tk.Frame:
         frame = tk.Frame(parent, bg=COLORS["panel"], padx=18, pady=16, highlightbackground=COLORS["line"], highlightthickness=1)
@@ -253,30 +360,31 @@ class CollectorApp(tk.Tk):
         card = self.card(frame)
         card.grid(row=0, column=0, sticky="ew")
         card.columnconfigure(1, weight=1)
-        self.label(card, "Connection", 17, bold=True).grid(row=0, column=0, columnspan=2, sticky="w")
-        self.label(card, "Validate the API and collection access token before creating the scan token.", muted=True).grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 16))
-        self.label(card, "API URL", bold=True).grid(row=2, column=0, sticky="w", padx=(0, 12), pady=8)
+        self.label(card, self.t("Connection"), 17, bold=True).grid(row=0, column=0, columnspan=2, sticky="w")
+        self.label(card, self.t("Validate the API and collection access token before creating the scan token."), muted=True).grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 16))
+        self.label(card, self.t("API URL"), bold=True).grid(row=2, column=0, sticky="w", padx=(0, 12), pady=8)
         self.entry(card, self.api_url).grid(row=2, column=1, sticky="ew", pady=8)
-        self.label(card, "Collection access token", bold=True).grid(row=3, column=0, sticky="w", padx=(0, 12), pady=8)
+        self.label(card, self.t("Collection access token"), bold=True).grid(row=3, column=0, sticky="w", padx=(0, 12), pady=8)
         self.entry(card, self.access_token, show="*").grid(row=3, column=1, sticky="ew", pady=8)
+        self.label(card, self.t("Use an admin-generated temporary token, not the collector token shown after web collection."), muted=True).grid(row=4, column=1, sticky="w")
         tk.Checkbutton(
             card,
-            text="Include MAC address if authorized",
+            text=self.t("Include MAC address if authorized"),
             variable=self.include_mac,
             bg=COLORS["panel"],
             fg=COLORS["text"],
             activebackground=COLORS["panel"],
             activeforeground=COLORS["text"],
             selectcolor=COLORS["input"],
-        ).grid(row=4, column=1, sticky="w", pady=(6, 12))
-        self.button(card, "Validate token", self.validate_token, secondary=True).grid(row=5, column=0, sticky="w", pady=(8, 0))
-        tk.Label(card, textvariable=self.connection_status, fg=COLORS["brand_2"], bg=COLORS["panel"], font=("Segoe UI", 10, "bold")).grid(row=5, column=1, sticky="w", padx=(10, 0), pady=(8, 0))
+        ).grid(row=5, column=1, sticky="w", pady=(6, 12))
+        self.button(card, self.t("Validate token"), self.validate_token, secondary=True).grid(row=6, column=0, sticky="w", pady=(8, 0))
+        tk.Label(card, textvariable=self.connection_status, fg=COLORS["brand_2"], bg=COLORS["panel"], font=("Segoe UI", 10, "bold")).grid(row=6, column=1, sticky="w", padx=(10, 0), pady=(8, 0))
         self._privacy_card(frame).grid(row=1, column=0, sticky="ew", pady=(14, 0))
         return frame
 
     def _privacy_card(self, parent):
         card = self.card(parent)
-        self.label(card, "Data transparency", 14, bold=True).grid(row=0, column=0, sticky="w")
+        self.label(card, self.t("Data transparency"), 14, bold=True).grid(row=0, column=0, sticky="w")
         lines = [
             "No personal files are read.",
             "No browser history is read.",
@@ -285,7 +393,7 @@ class CollectorApp(tk.Tk):
             "Data is submitted only after user confirmation.",
         ]
         for index, line in enumerate(lines, start=1):
-            tk.Label(card, text=f"- {line}", fg=COLORS["muted"], bg=COLORS["panel"], font=("Segoe UI", 10)).grid(row=index, column=0, sticky="w", pady=2)
+            tk.Label(card, text=f"- {self.t(line)}", fg=COLORS["muted"], bg=COLORS["panel"], font=("Segoe UI", 10)).grid(row=index, column=0, sticky="w", pady=2)
         return card
 
     def _assignment_step(self):
@@ -295,27 +403,27 @@ class CollectorApp(tk.Tk):
         card = self.card(frame)
         card.grid(row=0, column=0, sticky="ew")
         card.columnconfigure(1, weight=1)
-        self.label(card, "User assignment", 17, bold=True).grid(row=0, column=0, columnspan=2, sticky="w")
-        self.label(card, "Teams and locations are loaded from the admin-managed values.", muted=True).grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 16))
+        self.label(card, self.t("User assignment"), 17, bold=True).grid(row=0, column=0, columnspan=2, sticky="w")
+        self.label(card, self.t("Teams and locations are loaded from the admin-managed values."), muted=True).grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 16))
         fields = [
             ("First name", self.first_name),
             ("Last name", self.last_name),
             ("Email", self.email),
         ]
         for row, (label, variable) in enumerate(fields, start=2):
-            self.label(card, label, bold=True).grid(row=row, column=0, sticky="w", padx=(0, 12), pady=8)
+            self.label(card, self.t(label), bold=True).grid(row=row, column=0, sticky="w", padx=(0, 12), pady=8)
             self.entry(card, variable).grid(row=row, column=1, sticky="ew", pady=8)
-        self.label(card, "Team", bold=True).grid(row=5, column=0, sticky="w", padx=(0, 12), pady=8)
+        self.label(card, self.t("Team"), bold=True).grid(row=5, column=0, sticky="w", padx=(0, 12), pady=8)
         self.team_combo = self.combo(card, self.team, [])
         self.team_combo.grid(row=5, column=1, sticky="ew", pady=8)
-        self.label(card, "Other team proposal", bold=True).grid(row=6, column=0, sticky="w", padx=(0, 12), pady=8)
+        self.label(card, self.t("Other team proposal"), bold=True).grid(row=6, column=0, sticky="w", padx=(0, 12), pady=8)
         self.entry(card, self.proposed_team).grid(row=6, column=1, sticky="ew", pady=8)
-        self.label(card, "Location", bold=True).grid(row=7, column=0, sticky="w", padx=(0, 12), pady=8)
+        self.label(card, self.t("Location"), bold=True).grid(row=7, column=0, sticky="w", padx=(0, 12), pady=8)
         self.establishment_combo = self.combo(card, self.establishment, [])
         self.establishment_combo.grid(row=7, column=1, sticky="ew", pady=8)
-        self.label(card, "Other location proposal", bold=True).grid(row=8, column=0, sticky="w", padx=(0, 12), pady=8)
+        self.label(card, self.t("Other location proposal"), bold=True).grid(row=8, column=0, sticky="w", padx=(0, 12), pady=8)
         self.entry(card, self.proposed_establishment).grid(row=8, column=1, sticky="ew", pady=8)
-        self.label(card, "Comment", bold=True).grid(row=9, column=0, sticky="w", padx=(0, 12), pady=8)
+        self.label(card, self.t("Comment"), bold=True).grid(row=9, column=0, sticky="w", padx=(0, 12), pady=8)
         self.entry(card, self.comment).grid(row=9, column=1, sticky="ew", pady=8)
         return frame
 
@@ -326,9 +434,9 @@ class CollectorApp(tk.Tk):
         frame.rowconfigure(1, weight=1)
         card = self.card(frame)
         card.grid(row=0, column=0, sticky="ew")
-        self.label(card, "Hardware scan", 17, bold=True).grid(row=0, column=0, sticky="w")
-        self.label(card, "Scan this computer, then review the summary before submission.", muted=True).grid(row=1, column=0, sticky="w", pady=(4, 12))
-        self.button(card, "Scan this computer", self.scan_computer).grid(row=2, column=0, sticky="w")
+        self.label(card, self.t("Hardware scan"), 17, bold=True).grid(row=0, column=0, sticky="w")
+        self.label(card, self.t("Scan this computer, then review the summary before submission."), muted=True).grid(row=1, column=0, sticky="w", pady=(4, 12))
+        self.button(card, self.t("Scan this computer"), self.scan_computer).grid(row=2, column=0, sticky="w")
         self.summary = tk.Frame(frame, bg=COLORS["bg"])
         self.summary.grid(row=1, column=0, sticky="nsew", pady=(14, 0))
         self.summary.columnconfigure(0, weight=1)
@@ -341,18 +449,18 @@ class CollectorApp(tk.Tk):
         frame.rowconfigure(1, weight=1)
         card = self.card(frame)
         card.grid(row=0, column=0, sticky="ew")
-        self.label(card, "Review & submit", 17, bold=True).grid(row=0, column=0, sticky="w")
-        self.label(card, "Create the collection profile, then submit the reviewed scan.", muted=True).grid(row=1, column=0, sticky="w", pady=(4, 12))
-        self.button(card, "Submit inventory", self.submit_inventory).grid(row=2, column=0, sticky="w")
+        self.label(card, self.t("Review & submit"), 17, bold=True).grid(row=0, column=0, sticky="w")
+        self.label(card, self.t("Create the collection profile, then submit the reviewed scan."), muted=True).grid(row=1, column=0, sticky="w", pady=(4, 12))
+        self.button(card, self.t("Submit inventory"), self.submit_inventory).grid(row=2, column=0, sticky="w")
         self.raw_visible = tk.BooleanVar(value=False)
-        self.raw_toggle = self.button(frame, "Show Advanced / Raw JSON", self.toggle_raw_json, secondary=True)
+        self.raw_toggle = self.button(frame, self.t("Show Advanced / Raw JSON"), self.toggle_raw_json, secondary=True)
         self.raw_toggle.grid(row=1, column=0, sticky="w", pady=(14, 0))
         self.raw_card = self.card(frame)
         self.raw_card.grid(row=2, column=0, sticky="nsew", pady=(10, 0))
         self.raw_card.grid_remove()
         self.raw_card.columnconfigure(0, weight=1)
         self.raw_card.rowconfigure(1, weight=1)
-        self.label(self.raw_card, "Advanced / Raw JSON", 14, bold=True).grid(row=0, column=0, sticky="w")
+        self.label(self.raw_card, self.t("Advanced / Raw JSON"), 14, bold=True).grid(row=0, column=0, sticky="w")
         self.raw_output = scrolledtext.ScrolledText(self.raw_card, height=18, bg=COLORS["input"], fg=COLORS["text"], insertbackground=COLORS["text"], relief="flat")
         self.raw_output.grid(row=1, column=0, sticky="nsew", pady=(10, 0))
         return frame
@@ -362,10 +470,10 @@ class CollectorApp(tk.Tk):
         self.raw_visible.set(visible)
         if visible:
             self.raw_card.grid()
-            self.raw_toggle.configure(text="Hide Advanced / Raw JSON")
+            self.raw_toggle.configure(text=self.t("Hide Advanced / Raw JSON"))
         else:
             self.raw_card.grid_remove()
-            self.raw_toggle.configure(text="Show Advanced / Raw JSON")
+            self.raw_toggle.configure(text=self.t("Show Advanced / Raw JSON"))
 
     def _bind_draft_saves(self) -> None:
         variables = [
@@ -389,6 +497,7 @@ class CollectorApp(tk.Tk):
             "proposedEstablishment": self.proposed_establishment.get().strip(),
             "comment": self.comment.get().strip(),
             "includeMac": self.include_mac.get(),
+            "language": self.language.get(),
         })
 
     def show_step(self, index: int) -> None:
@@ -400,11 +509,11 @@ class CollectorApp(tk.Tk):
             active = index == self.step_index
             chip.configure(bg=COLORS["brand"] if active else COLORS["panel"], fg=COLORS["text"] if active else COLORS["muted"])
         self.back_button.configure(state="normal" if self.step_index > 0 else "disabled")
-        self.next_button.configure(text="Next" if self.step_index < 3 else "Done", state="normal" if self.step_index < 3 else "disabled")
+        self.next_button.configure(text=self.t("Next") if self.step_index < 3 else self.t("Done"), state="normal" if self.step_index < 3 else "disabled")
 
     def next_step(self) -> None:
         if self.step_index == 0 and not self.api_url.get().strip():
-            messagebox.showwarning("API URL required", "Please enter the API URL.")
+            messagebox.showwarning(self.t("API URL required"), self.t("Please enter the API URL."))
             return
         self.show_step(self.step_index + 1)
 
@@ -424,11 +533,11 @@ class CollectorApp(tk.Tk):
             self.after(0, lambda: self.status.set(api_error_message(exc)))
 
     def update_org_controls(self) -> None:
-        team_values = [self.org_label(item) for item in self.teams if item.get("name")] + ["Other"]
-        site_values = [self.org_label(item) for item in self.establishments if item.get("name")] + ["Other"]
+        team_values = [self.org_label(item) for item in self.teams if item.get("name")] + [self.t("Other")]
+        site_values = [self.org_label(item) for item in self.establishments if item.get("name")] + [self.t("Other")]
         self.team_combo.configure(values=team_values)
         self.establishment_combo.configure(values=site_values)
-        self.status.set(f"Loaded {len(self.teams)} teams and {len(self.establishments)} locations.")
+        self.status.set(f"{self.t('Loaded')} {len(self.teams)} {self.t('teams and')} {len(self.establishments)} {self.t('locations.')}")
 
     def org_label(self, item: dict) -> str:
         name = item.get("name", "")
@@ -436,8 +545,8 @@ class CollectorApp(tk.Tk):
         return f"{abbreviation} - {name}" if abbreviation else name
 
     def org_name_from_label(self, value: str, items: list[dict]) -> str:
-        if value == "Other":
-            return value
+        if value in ("Other", self.t("Other")):
+            return "Other"
         for item in items:
             if value == item.get("name") or value == self.org_label(item):
                 return item.get("name", "")
@@ -445,9 +554,9 @@ class CollectorApp(tk.Tk):
 
     def validate_token(self) -> None:
         if not self.access_token.get().strip():
-            messagebox.showwarning("Token required", "Please enter the collection access token.")
+            messagebox.showwarning(self.t("Token required"), self.t("Please enter the collection access token."))
             return
-        self.connection_status.set("Validating...")
+        self.connection_status.set(self.t("Validating..."))
         threading.Thread(target=self._validate_token, daemon=True).start()
 
     def _validate_token(self) -> None:
@@ -460,16 +569,23 @@ class CollectorApp(tk.Tk):
                 body={},
             )
             label = data.get("label") or "collection token"
-            self.after(0, lambda: self.connection_status.set(f"Token valid: {label}"))
+            self.after(0, lambda: self.connection_status.set(f"{self.t('Token valid')}: {label}"))
             self._load_organization()
         except Exception as exc:
-            self.after(0, lambda: self.connection_status.set(api_error_message(exc)))
+            self.after(0, lambda: self.connection_status.set(self.friendly_token_error(exc)))
+
+    def friendly_token_error(self, exc: Exception) -> str:
+        message = api_error_message(exc)
+        lowered = message.lower()
+        if "token de collecte" in lowered or "collection" in lowered or "token" in lowered:
+            return self.t("Invalid collection access token. Generate a temporary token in Admin > Collection tokens.")
+        return message
 
     def scan_computer(self) -> None:
         if collector is None:
-            messagebox.showerror("Collector unavailable", f"Unable to load collector: {COLLECTOR_IMPORT_ERROR}")
+            messagebox.showerror(self.t("Collector unavailable"), f"{self.t('Unable to load collector')}: {COLLECTOR_IMPORT_ERROR}")
             return
-        self.status.set("Scanning hardware...")
+        self.status.set(self.t("Scanning hardware..."))
         threading.Thread(target=self._scan_background, daemon=True).start()
 
     def _scan_background(self) -> None:
@@ -478,8 +594,8 @@ class CollectorApp(tk.Tk):
             self.payload = payload
             self.after(0, self.render_scan_summary)
         except Exception as exc:
-            self.after(0, lambda: messagebox.showerror("Scan failed", str(exc)))
-            self.after(0, lambda: self.status.set("Scan failed."))
+            self.after(0, lambda: messagebox.showerror(self.t("Scan failed"), str(exc)))
+            self.after(0, lambda: self.status.set(self.t("Scan failed")))
 
     def value_card(self, parent, row, column, title, value, accent=False):
         card = self.card(parent)
@@ -502,25 +618,25 @@ class CollectorApp(tk.Tk):
         p = self.payload
         identity = p.get("hardwareIdentity") or {}
         items = [
-            ("OS", f"{p.get('osName', '')} {p.get('osVersion', '')}".strip()),
-            ("Manufacturer", p.get("manufacturer")),
-            ("Model", p.get("model"), True),
-            ("Model number / SKU", p.get("modelNumber") or identity.get("systemSku")),
-            ("Serial / Service tag", p.get("serialNumber") or p.get("serviceTag") or identity.get("serviceTag")),
-            ("CPU", p.get("cpu")),
-            ("RAM", f"{p.get('ramTotalGb')} GB" if p.get("ramTotalGb") else ""),
-            ("Storage", f"{p.get('storageTotalGb')} GB total / {p.get('storageFreeGb')} GB free"),
-            ("GPU", p.get("gpu")),
-            ("Network", f"IP {p.get('localIp') or '-'} / MAC {p.get('macAddress') or '-'}"),
+            (self.t("OS"), f"{p.get('osName', '')} {p.get('osVersion', '')}".strip()),
+            (self.t("Manufacturer"), p.get("manufacturer")),
+            (self.t("Model"), p.get("model"), True),
+            (self.t("Model number / SKU"), p.get("modelNumber") or identity.get("systemSku")),
+            (self.t("Serial / Service tag"), p.get("serialNumber") or p.get("serviceTag") or identity.get("serviceTag")),
+            (self.t("CPU"), p.get("cpu")),
+            (self.t("RAM"), f"{p.get('ramTotalGb')} GB" if p.get("ramTotalGb") else ""),
+            (self.t("Storage"), f"{p.get('storageTotalGb')} GB {self.t('total')} / {p.get('storageFreeGb')} GB {self.t('free')}"),
+            (self.t("GPU"), p.get("gpu")),
+            (self.t("Network"), f"{self.t('IP')} {p.get('localIp') or '-'} / {self.t('MAC')} {p.get('macAddress') or '-'}"),
         ]
         for index, item in enumerate(items):
             title, value, *rest = item
             self.value_card(self.summary, index // 2, index % 2, title, value, bool(rest and rest[0]))
         missing = [title for title, value, *_ in items if not value or value == "-"]
         if missing:
-            self.status.set(f"Scan completed with unavailable fields: {', '.join(missing)}.")
+            self.status.set(f"{self.t('Scan completed with unavailable fields')}: {', '.join(missing)}.")
         else:
-            self.status.set("Scan completed.")
+            self.status.set(self.t("Scan completed."))
         self.raw_output.delete("1.0", tk.END)
         self.raw_output.insert(tk.END, json.dumps(self.payload, indent=2, ensure_ascii=False))
 
@@ -540,18 +656,18 @@ class CollectorApp(tk.Tk):
 
     def submit_inventory(self) -> None:
         if not self.payload:
-            messagebox.showwarning("No scan", "Scan this computer before submitting.")
+            messagebox.showwarning(self.t("No scan"), self.t("Scan this computer before submitting."))
             return
         body = self.profile_body()
         missing = [field for field in ["firstName", "lastName", "email"] if not body[field]]
         if not body["team"] and not body["proposedTeam"]:
-            missing.append("team or other team proposal")
+            missing.append(self.t("team or other team proposal"))
         if not body["establishment"] and not body["proposedEstablishment"]:
-            missing.append("location or other location proposal")
+            missing.append(self.t("location or other location proposal"))
         if missing:
-            messagebox.showwarning("Missing fields", f"Please complete: {', '.join(missing)}")
+            messagebox.showwarning(self.t("Missing fields"), f"{self.t('Please complete')}: {', '.join(missing)}")
             return
-        self.status.set("Creating collection profile...")
+        self.status.set(self.t("Creating collection profile..."))
         threading.Thread(target=self._submit_background, daemon=True).start()
 
     def _submit_background(self) -> None:
@@ -565,7 +681,7 @@ class CollectorApp(tk.Tk):
             )
             token = profile.get("collectionToken")
             if not token:
-                raise RuntimeError("API did not return a collection token.")
+                raise RuntimeError(self.t("API did not return a collection token."))
             request_body = json.dumps(self.payload).encode("utf-8")
             request = urllib.request.Request(
                 f"{self.api_url.get().rstrip('/')}/collect/scan",
@@ -576,11 +692,11 @@ class CollectorApp(tk.Tk):
             with urllib.request.urlopen(request, timeout=25) as response:
                 result = json.loads(response.read().decode("utf-8"))
             clear_sensitive_draft()
-            self.after(0, lambda: self.status.set(f"Submission successful. Device: {result.get('deviceId', 'unknown')}"))
-            self.after(0, lambda: messagebox.showinfo("Success", "Inventory submitted successfully."))
+            self.after(0, lambda: self.status.set(f"{self.t('Submission successful. Device')}: {result.get('deviceId', 'unknown')}"))
+            self.after(0, lambda: messagebox.showinfo(self.t("Success"), self.t("Inventory submitted successfully.")))
         except Exception as exc:
-            self.after(0, lambda: self.status.set(f"Submission failed: {api_error_message(exc)}"))
-            self.after(0, lambda: messagebox.showerror("Submission failed", api_error_message(exc)))
+            self.after(0, lambda: self.status.set(f"{self.t('Submission failed')}: {api_error_message(exc)}"))
+            self.after(0, lambda: messagebox.showerror(self.t("Submission failed"), api_error_message(exc)))
 
 
 if __name__ == "__main__":

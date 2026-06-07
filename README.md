@@ -691,6 +691,13 @@ Le collecteur desktop `Spacefoot IT Collector` propose un flux en quatre etapes:
 3. scan materiel local;
 4. revue lisible puis soumission, avec JSON brut disponible dans une section avancee.
 
+L'adresse MAC est cochee par defaut dans le collecteur desktop lorsque sa collecte est autorisee. L'utilisateur peut la retirer avant le scan. Le bouton de langue en bas de fenetre bascule l'interface collecteur entre anglais et francais.
+
+Attention aux deux types de tokens:
+
+- token temporaire admin `sfit_...`: a coller dans le collecteur desktop pour creer le profil et lancer la collecte;
+- token de scan retourne apres `/collect/profile`: utilise uniquement par le script ou l'app pour poster `/collect/scan`, et non valide dans le champ initial du collecteur.
+
 Le collecteur affiche explicitement que seuls les champs d'inventaire sont lus: aucun fichier personnel, aucun historique navigateur, aucun mot de passe, aucun controle a distance. Les donnees sont envoyees via le meme contrat API que le web app: `/collect/profile` cree le jeton de scan, puis `/collect/scan` enregistre la machine. Les nouveaux champs `model_number`, `service_tag` et `hardware_identity` sont persistes dans `devices`, `device_scans` et exposes par `device_inventory_view`.
 
 Si `modelNumber`, `serviceTag` ou `serialNumber` restent vides, verifier dans PowerShell:

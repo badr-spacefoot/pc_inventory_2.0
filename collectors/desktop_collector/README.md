@@ -17,6 +17,12 @@ Flux utilisateur:
 3. `Hardware scan`: collecte locale et resume materiel lisible.
 4. `Review & submit`: confirmation, puis envoi a l'API.
 
+L'adresse MAC est incluse par defaut lorsque l'organisation l'autorise. L'utilisateur peut la decocher avant le scan.
+
+Le switch de langue en bas de fenetre permet de basculer entre anglais et francais. La preference est conservee dans le brouillon local.
+
+Le champ `Collection access token` attend un token temporaire cree dans l'interface admin `Tokens temporaires` (`sfit_...`). Il ne faut pas y coller le token de scan affiche apres une collecte web: ce second token sert uniquement a envoyer `/collect/scan`.
+
 Le collecteur n'installe pas de controle a distance, ne lit aucun fichier personnel, aucun historique navigateur et aucun mot de passe. Les donnees sont envoyees seulement apres confirmation.
 
 Sous Windows, la collecte interroge CIM/WMI:
