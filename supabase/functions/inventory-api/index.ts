@@ -1261,13 +1261,13 @@ async function handlePublicOrganization(request: Request) {
   const [{ data: teams, error: teamsError }, { data: establishments, error: establishmentsError }] = await Promise.all([
     supabase
       .from("teams")
-      .select("id,name,description,color,sort_index")
+      .select("id,name,abbreviation,description,color,sort_index")
       .eq("active", true)
       .order("sort_index", { nullsFirst: false })
       .order("name"),
     supabase
       .from("establishments")
-      .select("id,name,establishment_type,city,country,sort_index")
+      .select("id,name,abbreviation,establishment_type,discipline,city,country,sort_index")
       .eq("active", true)
       .order("sort_index", { nullsFirst: false })
       .order("name"),
@@ -1286,10 +1286,10 @@ async function handleAdminOrganization(request: Request) {
     { data: users, error: usersError },
   ] =
     await Promise.all([
-      supabase.from("teams").select("id,name,description,color,active,sort_index,created_at").order("sort_index", { nullsFirst: false }).order("name"),
+      supabase.from("teams").select("id,name,abbreviation,description,color,active,sort_index,created_at").order("sort_index", { nullsFirst: false }).order("name"),
       supabase
         .from("establishments")
-        .select("id,name,establishment_type,address,postal_code,city,country,latitude,longitude,active,sort_index,created_at")
+        .select("id,name,abbreviation,establishment_type,discipline,address,postal_code,city,country,latitude,longitude,active,sort_index,created_at")
         .order("sort_index", { nullsFirst: false })
         .order("name"),
       supabase.from("devices").select("team_id,establishment_id"),
@@ -1434,25 +1434,30 @@ async function handleAdminSaveTeam(request: Request, id?: string) {
   if (!(await isAdmin(request, "TEAM_MANAGE"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
   const body = await request.json().catch(() => ({}));
   const name = safeString(body.name, 120);
+  const abbreviation = safeString(body.abbreviation, 24).toUpperCase() || null;
   const color = safeString(body.color, 7) || "#16735f";
   if (!name) return badRequest(request, "Nom de l'equipe requis.");
   if (!/^#[0-9a-f]{6}$/i.test(color)) return badRequest(request, "Couleur invalide.");
   const values = {
     name,
+    abbreviation,
     description: safeString(body.description, 500) || null,
     color,
     active: body.active !== false,
   };
+  const duplicateAbbreviation = abbreviation
+    ? await supabase.from("teams").select("id,name").ilike("abbreviation", abbreviation).neq("id", id || "00000000-0000-0000-0000-000000000000").maybeSingle()
+    : { data: null };
   const query = id
     ? supabase.from("teams").update(values).eq("id", id)
     : supabase.from("teams").insert(values);
-  const { data, error } = await query.select("id,name,description,color,active,created_at").single();
+  const { data, error } = await query.select("id,name,abbreviation,description,color,active,created_at").single();
   if (error) {
     if (error.code === "23505") return badRequest(request, "Une equipe porte deja ce nom.", 409);
     throw error;
   }
   await audit(id ? "team_updated" : "team_created", "team", data.id, values);
-  return json(request, { team: data }, id ? 200 : 201);
+  return json(request, { team: data, duplicateAbbreviation: duplicateAbbreviation.data ?? null }, id ? 200 : 201);
 }
 
 async function handleAdminDeleteTeam(request: Request, id: string) {
@@ -1488,17 +1493,23 @@ async function handleAdminSaveEstablishment(request: Request, id?: string) {
   if (!(await isAdmin(request, "LOCATION_MANAGE"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
   const body = await request.json().catch(() => ({}));
   const name = safeString(body.name, 120);
+  const abbreviation = safeString(body.abbreviation, 24).toUpperCase() || null;
   const establishmentType = safeString(body.establishmentType, 40) || "office";
+  const discipline = safeString(body.discipline, 40) || "general";
   const allowedTypes = ["warehouse", "store", "headquarters", "research", "accounting", "office", "remote", "other"];
+  const allowedDisciplines = ["general", "bike", "racket", "football", "golf", "office", "warehouse", "headquarters", "remote", "other"];
   const latitude = body.latitude === "" || body.latitude === null || body.latitude === undefined ? null : safeNumber(body.latitude);
   const longitude = body.longitude === "" || body.longitude === null || body.longitude === undefined ? null : safeNumber(body.longitude);
   if (!name) return badRequest(request, "Nom de l'etablissement requis.");
   if (!allowedTypes.includes(establishmentType)) return badRequest(request, "Type d'etablissement invalide.");
+  if (!allowedDisciplines.includes(discipline)) return badRequest(request, "Discipline invalide.");
   if (latitude !== null && (latitude < -90 || latitude > 90)) return badRequest(request, "Latitude invalide.");
   if (longitude !== null && (longitude < -180 || longitude > 180)) return badRequest(request, "Longitude invalide.");
   const values = {
     name,
+    abbreviation,
     establishment_type: establishmentType,
+    discipline,
     address: safeString(body.address, 240) || null,
     postal_code: safeString(body.postalCode, 20) || null,
     city: safeString(body.city, 120) || null,
@@ -1510,15 +1521,18 @@ async function handleAdminSaveEstablishment(request: Request, id?: string) {
   const query = id
     ? supabase.from("establishments").update(values).eq("id", id)
     : supabase.from("establishments").insert(values);
+  const duplicateAbbreviation = abbreviation
+    ? await supabase.from("establishments").select("id,name").ilike("abbreviation", abbreviation).neq("id", id || "00000000-0000-0000-0000-000000000000").maybeSingle()
+    : { data: null };
   const { data, error } = await query
-    .select("id,name,establishment_type,address,postal_code,city,country,latitude,longitude,active,created_at")
+    .select("id,name,abbreviation,establishment_type,discipline,address,postal_code,city,country,latitude,longitude,active,created_at")
     .single();
   if (error) {
     if (error.code === "23505") return badRequest(request, "Un etablissement porte deja ce nom.", 409);
     throw error;
   }
   await audit(id ? "establishment_updated" : "establishment_created", "establishment", data.id, values);
-  return json(request, { establishment: data }, id ? 200 : 201);
+  return json(request, { establishment: data, duplicateAbbreviation: duplicateAbbreviation.data ?? null }, id ? 200 : 201);
 }
 
 async function handleAdminDeleteEstablishment(request: Request, id: string) {

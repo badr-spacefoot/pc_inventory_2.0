@@ -3,6 +3,7 @@ create extension if not exists pgcrypto;
 create table if not exists public.teams (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
+  abbreviation text,
   description text,
   color text not null default '#16735f',
   active boolean not null default true,
@@ -13,8 +14,11 @@ create table if not exists public.teams (
 create table if not exists public.establishments (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
+  abbreviation text,
   establishment_type text not null default 'office'
     check (establishment_type in ('warehouse', 'store', 'headquarters', 'research', 'accounting', 'office', 'remote', 'other')),
+  discipline text not null default 'general'
+    check (discipline in ('general', 'bike', 'racket', 'football', 'golf', 'office', 'warehouse', 'headquarters', 'remote', 'other')),
   address text,
   postal_code text,
   city text,
@@ -27,11 +31,14 @@ create table if not exists public.establishments (
 );
 
 alter table public.teams add column if not exists description text;
+alter table public.teams add column if not exists abbreviation text;
 alter table public.teams add column if not exists color text not null default '#16735f';
 alter table public.teams add column if not exists active boolean not null default true;
 alter table public.teams add column if not exists sort_index integer;
 alter table public.establishments add column if not exists address text;
+alter table public.establishments add column if not exists abbreviation text;
 alter table public.establishments add column if not exists establishment_type text not null default 'office';
+alter table public.establishments add column if not exists discipline text not null default 'general';
 alter table public.establishments add column if not exists postal_code text;
 alter table public.establishments add column if not exists city text;
 alter table public.establishments add column if not exists country text not null default 'France';
@@ -267,6 +274,8 @@ create index if not exists idx_device_scans_device_collected on public.device_sc
 create index if not exists idx_device_history_device_changed on public.device_history(device_id, changed_at desc);
 create index if not exists idx_teams_sort_index on public.teams(sort_index, name);
 create index if not exists idx_establishments_sort_index on public.establishments(sort_index, name);
+create index if not exists idx_teams_abbreviation on public.teams(lower(abbreviation));
+create index if not exists idx_establishments_abbreviation on public.establishments(lower(abbreviation));
 create index if not exists idx_admin_users_username on public.admin_users(username);
 create index if not exists idx_admin_users_role_active on public.admin_users(role, is_active);
 create index if not exists idx_notifications_created on public.notifications(created_at desc);
@@ -371,7 +380,11 @@ select
   u.service,
   u.comment,
   t.name as team_name,
+  t.abbreviation as team_abbreviation,
   e.name as establishment_name,
+  e.abbreviation as establishment_abbreviation,
+  e.establishment_type,
+  e.discipline as establishment_discipline,
   d.gpu,
   d.storage_type,
   he.release_year,

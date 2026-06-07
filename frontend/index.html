@@ -56,42 +56,50 @@
               Une page web seule ne peut pas lire le numero de serie, le CPU, la RAM ou le stockage complet.
               La collecte materielle passe donc par un script local lance volontairement par l'utilisateur.
             </p>
-            <form id="collect-form" class="form-grid">
+            <form id="collect-form" class="form-grid" novalidate>
               <label>
-                Token de collecte
+                Token de collecte <span class="required-marker" aria-hidden="true">*</span>
                 <input name="accessToken" type="password" autocomplete="off" required />
+                <span class="field-error"></span>
               </label>
               <label>
-                Nom
+                Nom <span class="required-marker" aria-hidden="true">*</span>
                 <input name="lastName" autocomplete="family-name" required />
+                <span class="field-error"></span>
               </label>
               <label>
-                Prenom
+                Prenom <span class="required-marker" aria-hidden="true">*</span>
                 <input name="firstName" autocomplete="given-name" required />
+                <span class="field-error"></span>
               </label>
               <label>
-                Email
+                Email <span class="required-marker" aria-hidden="true">*</span>
                 <input name="email" type="email" autocomplete="email" required />
+                <span class="field-error"></span>
               </label>
               <label>
-                Equipe
+                Equipe <span class="required-marker" aria-hidden="true">*</span>
                 <select name="team" required>
                   <option value="">Chargement...</option>
                 </select>
+                <span class="field-error"></span>
               </label>
               <label id="proposed-team-field" class="is-hidden">
-                Proposer une nouvelle equipe
+                Proposer une nouvelle equipe <span class="required-marker" aria-hidden="true">*</span>
                 <input name="proposedTeam" maxlength="180" />
+                <span class="field-error"></span>
               </label>
               <label>
-                Etablissement
+                Etablissement <span class="required-marker" aria-hidden="true">*</span>
                 <select name="establishment" required>
                   <option value="">Chargement...</option>
                 </select>
+                <span class="field-error"></span>
               </label>
               <label id="proposed-establishment-field" class="is-hidden">
-                Proposer un nouvel etablissement
+                Proposer un nouvel etablissement <span class="required-marker" aria-hidden="true">*</span>
                 <input name="proposedEstablishment" maxlength="180" />
+                <span class="field-error"></span>
               </label>
               <label class="wide">
                 Commentaire optionnel
@@ -413,6 +421,10 @@
                     <input name="name" required maxlength="120" />
                   </label>
                   <label>
+                    Abreviation
+                    <input name="abbreviation" maxlength="24" placeholder="SAV, RH, IT..." />
+                  </label>
+                  <label>
                     Description
                     <textarea name="description" rows="3" maxlength="500"></textarea>
                   </label>
@@ -456,6 +468,10 @@
                     <input name="name" required maxlength="120" />
                   </label>
                   <label>
+                    Abreviation
+                    <input name="abbreviation" maxlength="24" placeholder="ML, FS, BDG..." />
+                  </label>
+                  <label>
                     Type d'etablissement
                     <select name="establishmentType">
                       <option value="warehouse">Entrepot</option>
@@ -464,6 +480,21 @@
                       <option value="research">Centre R&amp;D</option>
                       <option value="accounting">Comptabilite</option>
                       <option value="office" selected>Bureau</option>
+                      <option value="remote">Teletravail</option>
+                      <option value="other">Autre</option>
+                    </select>
+                  </label>
+                  <label>
+                    Discipline
+                    <select name="discipline">
+                      <option value="general" selected>Sport general</option>
+                      <option value="bike">Velo / cycling</option>
+                      <option value="racket">Sports de raquette</option>
+                      <option value="football">Football</option>
+                      <option value="golf">Golf</option>
+                      <option value="office">Bureau</option>
+                      <option value="warehouse">Entrepot</option>
+                      <option value="headquarters">Siege social</option>
                       <option value="remote">Teletravail</option>
                       <option value="other">Autre</option>
                     </select>

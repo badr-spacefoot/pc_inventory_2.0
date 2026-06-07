@@ -30,6 +30,7 @@ Flux:
 
 - Acces utilisateur par token de collecte.
 - Formulaire utilisateur: nom, prenom, email, equipe, etablissement, commentaire.
+- Champs obligatoires marques par `*`, avec messages lisibles sans perte du brouillon.
 - Brouillon local du formulaire de collecte conserve jusqu'a generation reussie.
 - Listes equipe/etablissement synchronisees avec l'admin, avec option `Autre` et validation admin.
 - Collecteur desktop transparent scaffold, commande PowerShell, copie du script et telechargement fallback.
@@ -45,6 +46,10 @@ Flux:
 - Enrichissement materiel cacheable: score CPU, generation CPU, age modele, prix estime, valeur marche, confiance et recommandation.
 - Generation admin de tokens de collecte temporaires avec expiration, limite d'utilisations et revocation.
 - Centre admin `Pending changes` pour approuver, modifier, rejeter ou lier les propositions utilisateur.
+- Reordonnancement drag-and-drop avec ligne d'insertion visible.
+- Codes internes/abreviations optionnels pour equipes et etablissements.
+- Icones equipe et discipline lieu: SAV, achat, RH, Biz Dev, IT, design, logistique, catalogue, B2C, finance, direction, marketing, velo, raquette, football, golf, bureau, entrepot, siege.
+- Notifications cliquables vers machine, proposition, equipe, etablissement ou tokens.
 
 ## Installation Supabase
 
@@ -258,6 +263,34 @@ Dans `Pending changes`, un admin peut:
 - rejeter en conservant l'historique.
 
 Le champ `service` est deprecie. Il reste en base pour compatibilite avec les anciennes donnees et imports, mais il n'est plus demande dans le formulaire de collecte ni exporte dans le CSV standard.
+
+## UI, badges et navigation
+
+Les champs obligatoires de la page collecte affichent un marqueur `*`. La validation est faite cote interface avec des messages lisibles, et le brouillon reste conserve dans `localStorage` en cas d'erreur.
+
+Dans `Organisation`, les listes equipes et etablissements affichent une ligne d'insertion pendant le drag-and-drop. Le nouvel ordre est sauvegarde par `POST /admin/organization/reorder`, puis reutilise dans les listes de collecte et les filtres.
+
+Les equipes et etablissements ont un champ optionnel `abbreviation`:
+
+- `ML - Montlouis-sur-Loire`
+- `FS - Footstore`
+- `RH - Ressources humaines`
+
+Si aucune abbreviation n'est stockee, l'interface genere un code court d'affichage sans l'ecrire en base. La recherche globale matche le nom complet et l'abbreviation.
+
+Les etablissements ont aussi une `discipline` optionnelle pour choisir l'icone: `bike`, `racket`, `football`, `golf`, `general`, `office`, `warehouse`, `headquarters`, `remote`, `other`.
+
+Les badges OS, OEM, equipes, lieux, statuts et notifications utilisent une palette plus douce, compatible dark mode. Les logos OEM du detail machine sont centres dans un conteneur stable pour eviter les decalages visuels.
+
+Les notifications sont cliquables:
+
+- `device` ouvre le detail machine;
+- `pending_change` ouvre `Pending changes`;
+- `team` ou `establishment` ouvre `Organisation`;
+- `collection_access_token` ouvre `Acces`;
+- sans cible, la notification est seulement marquee comme lue.
+
+Le detail machine utilise des onglets `Vue generale`, `Materiel`, `OS`, `Reseau`, `Affectation`, `Cycle de vie` et `Historique`, avec une grille deux colonnes sur grand ecran et un empilement responsive sur mobile.
 
 ## Tokens temporaires de collecte
 

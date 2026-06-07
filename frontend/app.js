@@ -52,6 +52,9 @@ const englishTranslations = {
   "Declarer un poste": "Register a computer",
   "Une page web seule ne peut pas lire le numero de serie, le CPU, la RAM ou le stockage complet. La collecte materielle passe donc par un script local lance volontairement par l'utilisateur.": "A web page alone cannot read the serial number, CPU, RAM, or full storage details. Hardware collection therefore uses a local script run voluntarily by the user.",
   "Token de collecte": "Collection token",
+  "Champ requis.": "Required field.",
+  "Adresse email invalide.": "Invalid email address.",
+  "Veuillez completer les champs requis.": "Please complete the required fields.",
   "Nom": "Last name",
   "Prenom": "First name",
   "Equipe": "Team",
@@ -100,6 +103,8 @@ const englishTranslations = {
   "Lier a l'existant": "Link existing",
   "Modifier et approuver": "Modify and approve",
   "Proposition traitee.": "Proposal processed.",
+  "Abreviation deja utilisee par une autre equipe.": "Abbreviation already used by another team.",
+  "Abreviation deja utilisee par un autre etablissement.": "Abbreviation already used by another location.",
   "Commande generee. Proposition envoyee a l'admin.": "Command generated. Proposal sent to admin.",
   "Commande copiee.": "Command copied.",
   "Script copie.": "Script copied.",
@@ -112,6 +117,8 @@ const englishTranslations = {
   "Compte mis a jour.": "Account updated.",
   "Compte supprime.": "Account deleted.",
   "Notifications mises a jour.": "Notifications updated.",
+  "Notification marquee comme lue.": "Notification marked as read.",
+  "Element lie introuvable.": "Related item not found.",
   "Se connecter": "Sign in",
   "Dashboard": "Dashboard",
   "Vue du parc informatique": "IT fleet overview",
@@ -147,6 +154,7 @@ const englishTranslations = {
   "Equipes": "Teams",
   "Nouvelle equipe": "New team",
   "Nom de l'equipe": "Team name",
+  "Abreviation": "Abbreviation",
   "Description": "Description",
   "Couleur": "Color",
   "Equipe active": "Active team",
@@ -156,6 +164,7 @@ const englishTranslations = {
   "Nouvel etablissement": "New location",
   "Nom de l'etablissement": "Location name",
   "Type d'etablissement": "Location type",
+  "Discipline": "Discipline",
   "Entrepot": "Warehouse",
   "Boutique": "Store",
   "Siege social": "Headquarters",
@@ -164,6 +173,9 @@ const englishTranslations = {
   "Bureau": "Office",
   "Teletravail": "Remote",
   "Autre": "Other",
+  "Sport general": "General sport",
+  "Velo / cycling": "Bike / cycling",
+  "Sports de raquette": "Racket sports",
   "Rechercher une adresse": "Search for an address",
   "Commencez a saisir une adresse...": "Start typing an address...",
   "Adresse": "Address",
@@ -263,6 +275,8 @@ const englishTranslations = {
   "Dernier enrichissement": "Last enrichment",
   "Mettre a jour": "Update",
   "Historique des scans": "Scan history",
+  "Cycle de vie": "Lifecycle",
+  "Version OS": "OS version",
   "Aucun scan detaille.": "No detailed scans.",
   "Historique prix marche": "Market price history",
   "Aucun prix externe collecte.": "No external prices collected.",
@@ -545,6 +559,38 @@ function toggleProposalFields() {
   if (form.elements.proposedEstablishment) form.elements.proposedEstablishment.required = establishmentOther;
 }
 
+function clearFieldErrors(form) {
+  form.querySelectorAll(".field-error").forEach((node) => {
+    node.textContent = "";
+  });
+  form.querySelectorAll(".field-invalid").forEach((node) => node.classList.remove("field-invalid"));
+}
+
+function setFieldError(input, message) {
+  const label = input.closest("label");
+  label?.classList.add("field-invalid");
+  const error = label?.querySelector(".field-error");
+  if (error) error.textContent = translate(message);
+}
+
+function validateCollectionForm(form) {
+  toggleProposalFields();
+  clearFieldErrors(form);
+  let valid = true;
+  Array.from(form.elements).forEach((input) => {
+    if (!input.name || input.disabled || input.type === "submit" || input.closest(".is-hidden")) return;
+    const value = String(input.value || "").trim();
+    if (input.required && !value) {
+      setFieldError(input, "Champ requis.");
+      valid = false;
+    } else if (input.type === "email" && value && !input.checkValidity()) {
+      setFieldError(input, "Adresse email invalide.");
+      valid = false;
+    }
+  });
+  return valid;
+}
+
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
 }
@@ -556,6 +602,32 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function fallbackAbbreviation(name) {
+  const words = String(name || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9 ]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length === 0) return "";
+  if (words.length === 1) return words[0].slice(0, 3).toUpperCase();
+  return words.slice(0, 3).map((word) => word[0]).join("").toUpperCase();
+}
+
+function displayWithAbbreviation(name, abbreviation) {
+  const abbr = String(abbreviation || "").trim().toUpperCase();
+  return abbr ? `${abbr} - ${name}` : name;
+}
+
+function teamRecordByName(name) {
+  return state.teams.find((team) => team.name === name) || null;
+}
+
+function establishmentRecordByName(name) {
+  return state.establishments.find((site) => site.name === name) || null;
 }
 
 function normalizeOsInfo(osString) {
@@ -703,25 +775,32 @@ function renderManufacturerBadge(device) {
   return `<span class="${info.badgeClass}" title="${escapeHtml(info.rawManufacturer || info.manufacturerName)}"><span class="manufacturer-logo ${info.colorClass}">${renderManufacturerLogo(info)}</span><span>${escapeHtml(info.manufacturerName)}</span></span>`;
 }
 
-function normalizeTeamInfo(teamName) {
+function normalizeTeamInfo(teamName, abbreviation = "") {
   const rawTeamName = String(teamName || "").trim();
   const normalized = rawTeamName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const rules = [
     ["sav", /\b(sav|service apres[- ]vente|support)\b/],
-    ["purchase", /\b(achat|achats|procurement)\b/],
+    ["purchase", /\b(achat|achats|procurement|mp)\b/],
     ["hr", /\b(rh|ressources humaines|human resources)\b/],
     ["sales", /\b(commercial|commerciale|biz dev|business development)\b/],
     ["tech", /\b(tech|it|informatique|developpement)\b/],
     ["design", /\b(design|graphisme|creative)\b/],
     ["store", /\b(store manager|responsable boutique)\b/],
-    ["logistics", /\b(logistique|logistics|warehouse)\b/],
-    ["catalog", /\b(catalogue|catalog|data)\b/],
+    ["logistics", /\b(logistique|logistics|warehouse|log)\b/],
+    ["catalog", /\b(catalogue|catalog|data|cata)\b/],
     ["b2c", /\bb2c\b/],
+    ["finance", /\b(finance|compta|accounting|comptabilite)\b/],
+    ["management", /\b(direction|management|dg|codir)\b/],
+    ["marketing", /\b(marketing|pub|communication)\b/],
   ];
+  const storedAbbreviation = String(abbreviation || "").trim().toUpperCase();
+  const fallback = fallbackAbbreviation(rawTeamName);
   const iconType = rules.find(([, pattern]) => pattern.test(normalized))?.[0] || "team";
   return {
     normalizedTeamName: normalized,
-    displayLabel: rawTeamName || translate("Non renseigne"),
+    displayLabel: storedAbbreviation || fallback || rawTeamName || translate("Non renseigne"),
+    abbreviation: storedAbbreviation || fallback,
+    fullLabel: rawTeamName || translate("Non renseigne"),
     iconType,
     badgeClass: `team-badge team-${iconType}`,
     rawTeamName,
@@ -740,23 +819,44 @@ function teamIcon(type) {
     logistics: '<path d="M3 6h11v11H3zM14 10h4l3 3v4h-7z"/><circle cx="7" cy="19" r="2"/><circle cx="18" cy="19" r="2"/>',
     catalog: '<path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/>',
     b2c: '<path d="M3 9l2-5h14l2 5M5 13v7h14v-7"/><circle cx="12" cy="14" r="2"/><path d="M8 20v-1a4 4 0 0 1 8 0v1"/>',
+    finance: '<path d="M6 7h12M6 12h10M6 17h12"/><path d="M15 4c-5 0-8 3-8 8s3 8 8 8"/>',
+    management: '<path d="m12 3 3 6 6 .5-4.5 4 1.5 6.5-6-3.5-6 3.5 1.5-6.5L3 9.5 9 9l3-6Z"/>',
+    marketing: '<path d="m3 11 14-6v14L3 13v-2Z"/><path d="M7 14v5a2 2 0 0 0 2 2h1"/>',
     team: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>',
   };
   return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[type] || paths.team}</svg>`;
 }
 
 function renderTeamBadge(teamName) {
-  const info = normalizeTeamInfo(teamName);
-  return `<span class="${info.badgeClass}">${teamIcon(info.iconType)}<span>${escapeHtml(info.displayLabel)}</span></span>`;
+  const record = teamRecordByName(teamName);
+  const info = normalizeTeamInfo(teamName, record?.abbreviation);
+  return `<span class="${info.badgeClass}" title="${escapeHtml(info.fullLabel)}">${teamIcon(info.iconType)}<span>${escapeHtml(info.displayLabel)}</span></span>`;
 }
 
-function locationInfo(type, name = "") {
-  const normalizedType = ["office", "store", "warehouse", "headquarters", "remote", "other"].includes(type) ? type : "other";
-  return { iconType: normalizedType, badgeClass: `location-badge location-${normalizedType}`, displayLabel: name || translate("Non renseigne") };
+function locationInfo(type, name = "", discipline = "", abbreviation = "") {
+  const disciplineType = String(discipline || "").trim();
+  const normalizedType = ["bike", "racket", "football", "golf", "general", "office", "store", "warehouse", "headquarters", "remote", "other"].includes(disciplineType)
+    ? disciplineType
+    : ["office", "store", "warehouse", "headquarters", "remote", "other"].includes(type)
+      ? type
+      : "other";
+  const storedAbbreviation = String(abbreviation || "").trim().toUpperCase();
+  const displayLabel = storedAbbreviation || fallbackAbbreviation(name) || name || translate("Non renseigne");
+  return {
+    iconType: normalizedType,
+    badgeClass: `location-badge location-${normalizedType}`,
+    displayLabel,
+    fullLabel: name || translate("Non renseigne"),
+  };
 }
 
 function locationIcon(type) {
   const paths = {
+    bike: '<circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M9 17h3l3-6h-4l-3 6M10 8h3M14 6h2"/>',
+    racket: '<ellipse cx="9" cy="8" rx="4" ry="6" transform="rotate(-35 9 8)"/><path d="m12 13 7 7M17 18l2-2"/>',
+    football: '<circle cx="12" cy="12" r="9"/><path d="m12 7 4 3-1.5 5h-5L8 10l4-3ZM5 10l3 0M16 10l3 0M9.5 15 8 19M14.5 15 16 19"/>',
+    golf: '<path d="M8 21V4l10 3-10 3"/><path d="M4 21h12"/><circle cx="17" cy="18" r="1"/>',
+    general: '<path d="M8 21h8M12 17v4"/><path d="M7 4h10v3a5 5 0 0 1-10 0V4Z"/><path d="M7 6H4a3 3 0 0 0 3 3M17 6h3a3 3 0 0 1-3 3"/>',
     office: '<path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M8 7h4M8 11h4M8 15h4M16 9h4v12"/>',
     store: '<path d="M3 9l2-5h14l2 5M5 13v7h14v-7"/><path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"/>',
     warehouse: '<path d="M3 21V8l9-5 9 5v13M7 21v-8h10v8M7 16h10"/>',
@@ -768,9 +868,14 @@ function locationIcon(type) {
 }
 
 function renderLocationBadge(device) {
-  const site = state.establishments.find((item) => item.name === device.establishment_name);
-  const info = locationInfo(site?.establishment_type || "other", device.establishment_name);
-  return `<span class="${info.badgeClass}">${locationIcon(info.iconType)}<span>${escapeHtml(info.displayLabel)}</span></span>`;
+  const site = establishmentRecordByName(device.establishment_name);
+  const info = locationInfo(
+    device.establishment_type || site?.establishment_type || "other",
+    device.establishment_name,
+    device.establishment_discipline || site?.discipline,
+    device.establishment_abbreviation || site?.abbreviation,
+  );
+  return `<span class="${info.badgeClass}" title="${escapeHtml(info.fullLabel)}">${locationIcon(info.iconType)}<span>${escapeHtml(info.displayLabel)}</span></span>`;
 }
 
 function confirmAction({ title = "Confirmer la suppression", message, confirmLabel = "Supprimer" }) {
@@ -1035,7 +1140,7 @@ function renderNotifications() {
     return true;
   });
   $("#notifications-list").innerHTML = notifications.map((item) => `
-    <article class="notification-item ${item.is_read ? "is-read" : ""} severity-${String(item.severity || "INFO").toLowerCase()}">
+    <article class="notification-item ${item.is_read ? "is-read" : ""} severity-${String(item.severity || "INFO").toLowerCase()}" role="button" tabindex="0" data-id="${escapeHtml(item.id)}">
       <div>
         <span class="notification-severity">${escapeHtml(item.severity || "INFO")}</span>
         <strong>${escapeHtml(item.title)}</strong>
@@ -1045,6 +1150,18 @@ function renderNotifications() {
       ${item.is_read ? "" : `<button class="secondary mark-notification-read" type="button" data-id="${item.id}">${translate("Marquer lu")}</button>`}
     </article>
   `).join("") || `<p class="helper">${translate("Aucune donnee.")}</p>`;
+  $$(".notification-item[data-id]").forEach((item) => {
+    const activate = () => openNotificationTarget(item.dataset.id).catch((error) => toast(error.message, "error"));
+    item.addEventListener("click", (event) => {
+      if (event.target.closest("button")) return;
+      activate();
+    });
+    item.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      activate();
+    });
+  });
   $$(".mark-notification-read").forEach((button) => {
     button.addEventListener("click", async () => {
       await api(`/admin/notifications/${button.dataset.id}/read`, { method: "POST", body: "{}" });
@@ -1056,6 +1173,43 @@ function renderNotifications() {
   count.classList.toggle("is-hidden", state.unreadNotifications === 0);
 }
 
+async function openNotificationTarget(id) {
+  const notification = state.notifications.find((item) => item.id === id);
+  if (!notification) return;
+  if (!notification.is_read) {
+    await api(`/admin/notifications/${id}/read`, { method: "POST", body: "{}" });
+  }
+  const entityType = String(notification.related_entity_type || notification.relatedEntityType || "").toLowerCase();
+  const entityId = notification.related_entity_id || notification.relatedEntityId || "";
+  if (entityType === "device" && entityId) {
+    setAdminView("fleet");
+    if (!state.devices.some((device) => device.id === entityId)) await loadAdminData();
+    if (!state.devices.some((device) => device.id === entityId)) {
+      toast("Element lie introuvable.", "error");
+      await loadNotifications();
+      return;
+    }
+    await selectDevice(entityId);
+  } else if (entityType === "pending_change") {
+    setAdminView("pending");
+    await Promise.all([loadOrganization(), loadPendingChanges()]);
+  } else if (entityType === "team") {
+    setAdminView("organization");
+    await loadOrganization();
+    if (entityId) editTeam(entityId);
+  } else if (entityType === "establishment" || entityType === "location") {
+    setAdminView("organization");
+    await loadOrganization();
+    if (entityId) editEstablishment(entityId);
+  } else if (entityType === "collection_access_token" || entityType === "token") {
+    setAdminView("access");
+    await loadAccessTokens();
+  } else {
+    toast("Notification marquee comme lue.", "success");
+  }
+  await loadNotifications();
+}
+
 async function loadNotifications() {
   if (!canPerformAction("NOTIFICATION_VIEW")) return;
   const data = await api("/admin/notifications");
@@ -1065,8 +1219,8 @@ async function loadNotifications() {
 }
 
 function renderPendingChanges() {
-  const existingTeamOptions = state.teams.map((team) => `<option value="${escapeHtml(team.id)}">${escapeHtml(team.name)}</option>`).join("");
-  const existingSiteOptions = state.establishments.map((site) => `<option value="${escapeHtml(site.id)}">${escapeHtml(site.name)}</option>`).join("");
+  const existingTeamOptions = state.teams.map((team) => `<option value="${escapeHtml(team.id)}">${escapeHtml(displayWithAbbreviation(team.name, team.abbreviation))}</option>`).join("");
+  const existingSiteOptions = state.establishments.map((site) => `<option value="${escapeHtml(site.id)}">${escapeHtml(displayWithAbbreviation(site.name, site.abbreviation))}</option>`).join("");
   $("#pending-changes-list").innerHTML = state.pendingChanges.map((item) => {
     const isTeam = item.type === "TEAM";
     const options = isTeam ? existingTeamOptions : existingSiteOptions;
@@ -1137,7 +1291,9 @@ function getSearchBlob(device) {
     device.last_name,
     device.email,
     device.team_name,
+    device.team_abbreviation,
     device.establishment_name,
+    device.establishment_abbreviation,
     device.model,
     device.manufacturer,
     device.os_name,
@@ -1392,9 +1548,9 @@ function renderDetail(device, scans, history = []) {
   const family = detectDeviceFamily(manufacturer.manufacturerName, device.model);
   const canEditDevice = canPerformAction("DEVICE_EDIT");
   const teamOptions = state.teams.map((team) =>
-    `<option value="${team.id}" ${device.team_id === team.id ? "selected" : ""}>${escapeHtml(team.name)}</option>`).join("");
+    `<option value="${team.id}" ${device.team_id === team.id ? "selected" : ""}>${escapeHtml(displayWithAbbreviation(team.name, team.abbreviation))}</option>`).join("");
   const establishmentOptions = state.establishments.map((site) =>
-    `<option value="${site.id}" ${device.establishment_id === site.id ? "selected" : ""}>${escapeHtml(site.name)}</option>`).join("");
+    `<option value="${site.id}" ${device.establishment_id === site.id ? "selected" : ""}>${escapeHtml(displayWithAbbreviation(site.name, site.abbreviation))}</option>`).join("");
   const userOptions = state.users.map((user) => {
     const name = `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.email;
     return `<option value="${user.id}" ${device.assigned_user_id === user.id ? "selected" : ""}>${escapeHtml(name)} (${escapeHtml(user.email)})</option>`;
@@ -1420,21 +1576,22 @@ function renderDetail(device, scans, history = []) {
     <nav class="detail-tabs" aria-label="${escapeHtml(translate("Sections machine"))}">
       <button class="detail-tab is-active" type="button" data-detail-tab="overview">${translate("Vue generale")}</button>
       <button class="detail-tab" type="button" data-detail-tab="hardware">${translate("Materiel")}</button>
+      <button class="detail-tab" type="button" data-detail-tab="os">${translate("OS")}</button>
       <button class="detail-tab" type="button" data-detail-tab="network">${translate("Reseau")}</button>
       <button class="detail-tab" type="button" data-detail-tab="assignment">${translate("Affectation")}</button>
+      <button class="detail-tab" type="button" data-detail-tab="lifecycle">${translate("Cycle de vie")}</button>
       <button class="detail-tab" type="button" data-detail-tab="history">${translate("Historique")}</button>
     </nav>
     <section class="detail-tab-panel is-active" data-detail-panel="overview">
       ${detailRows([
         ["Hostname", device.hostname],
-        ["OS", [device.os_name, device.os_version].filter(Boolean).join(" ")],
         ["Fabricant", manufacturer.manufacturerName],
         ["Famille", family],
         ["Modele", device.model],
         ["Derniere remontee", formatDate(device.last_seen_at)],
-        ["Score age", `${device.hardware_age_score || 0}/100`],
-        ["Priorite remplacement", priorityValue !== null && priorityValue !== undefined ? `${priorityValue}/100` : ""],
-        ["Reco", localizedEnrichmentValue(device.recommendation)],
+        ["Utilisateur", `${device.first_name || ""} ${device.last_name || ""}`.trim() || device.email],
+        ["Equipe", displayWithAbbreviation(device.team_name || "", device.team_abbreviation)],
+        ["Etablissement", displayWithAbbreviation(device.establishment_name || "", device.establishment_abbreviation)],
       ])}
       ${canEditDevice ? `<form id="status-form" class="form-grid one scan-history">
         <label>${translate("Statut")}<select name="status">${Object.entries(labels).map(([value, label]) => `<option value="${value}" ${device.status === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>
@@ -1456,6 +1613,9 @@ function renderDetail(device, scans, history = []) {
     <section class="detail-tab-panel" data-detail-panel="network">
       ${detailRows([["MAC", device.mac_address], ["IP locale", device.local_ip], ["Utilisateur OS", device.windows_user], ["Script", device.script_version]])}
     </section>
+    <section class="detail-tab-panel" data-detail-panel="os">
+      ${detailRows([["OS", device.os_name], ["Version OS", device.os_version], ["Derniere remontee", formatDate(device.last_seen_at)], ["Script", device.script_version]])}
+    </section>
     <section class="detail-tab-panel" data-detail-panel="assignment">
       <div class="assignment-summary">${renderTeamBadge(device.team_name)} ${renderLocationBadge(device)}</div>
       ${canEditDevice ? `<form id="assignment-form" class="form-grid one assignment-form">
@@ -1473,6 +1633,17 @@ function renderDetail(device, scans, history = []) {
       <div class="history-timeline">${renderHistoryTimeline(history)}</div>
       <div class="scan-history"><h3>${translate("Scans")}</h3><ul>${scanRows || `<li>${translate("Aucun scan detaille.")}</li>`}</ul></div>
       <div class="scan-history"><h3>${translate("Prix marche")}</h3><ul>${priceRows || `<li>${translate("Aucun prix externe collecte.")}</li>`}</ul></div>
+    </section>
+    <section class="detail-tab-panel" data-detail-panel="lifecycle">
+      ${detailRows([
+        ["Statut", labels[device.status] || device.status],
+        ["Score age", `${device.hardware_age_score || 0}/100`],
+        ["Priorite remplacement", priorityValue !== null && priorityValue !== undefined ? `${priorityValue}/100` : ""],
+        ["Reco", localizedEnrichmentValue(device.recommendation)],
+        ["Dernier enrichissement", formatDate(device.last_enriched_at)],
+        ["Confiance prix", device.price_confidence_score ? `${device.price_confidence_score}/100` : ""],
+        ["Valeur actuelle estimee", money(device.estimated_current_value || device.current_market_price_avg)],
+      ])}
     </section>
   `;
 
@@ -1826,7 +1997,7 @@ function updateOrganizationDatalists() {
       `<option value="">${translate("Selectionnez une equipe")}</option>`,
       ...state.teams
         .filter((team) => team.active !== false)
-        .map((team) => `<option value="${escapeHtml(team.name)}">${escapeHtml(team.name)}</option>`),
+        .map((team) => `<option value="${escapeHtml(team.name)}">${escapeHtml(displayWithAbbreviation(team.name, team.abbreviation))}</option>`),
       `<option value="__other__">${translate("Autre")}</option>`,
     ].join("");
     teamSelect.value = [...teamSelect.options].some((option) => option.value === selected) ? selected : "";
@@ -1837,7 +2008,7 @@ function updateOrganizationDatalists() {
       `<option value="">${translate("Selectionnez un etablissement")}</option>`,
       ...state.establishments
         .filter((site) => site.active !== false)
-        .map((site) => `<option value="${escapeHtml(site.name)}">${escapeHtml(site.name)}</option>`),
+        .map((site) => `<option value="${escapeHtml(site.name)}">${escapeHtml(displayWithAbbreviation(site.name, site.abbreviation))}</option>`),
       `<option value="__other__">${translate("Autre")}</option>`,
     ].join("");
     establishmentSelect.value = [...establishmentSelect.options].some((option) => option.value === selected) ? selected : "";
@@ -1854,9 +2025,9 @@ function renderOrganization() {
         <div class="organization-sort-row ${team.active ? "" : "is-inactive"}" draggable="${canManageTeams}" data-entity="team" data-id="${team.id}">
           ${canManageTeams ? `<button class="drag-handle" type="button" aria-label="Deplacer ${escapeHtml(team.name)}" title="Glisser pour reordonner">&#8942;&#8942;</button>` : ""}
           <button class="organization-item edit-team" type="button" data-id="${team.id}">
-            <span class="organization-icon" style="--item-color:${escapeHtml(team.color || "#16735f")}">${teamIcon(normalizeTeamInfo(team.name).iconType)}</span>
+            <span class="organization-icon" style="--item-color:${escapeHtml(team.color || "#16735f")}">${teamIcon(normalizeTeamInfo(team.name, team.abbreviation).iconType)}</span>
             <span>
-              <strong>${escapeHtml(team.name)}</strong>
+              <strong>${escapeHtml(displayWithAbbreviation(team.name, team.abbreviation))}</strong>
               <small>${state.language === "en" ? `${team.device_count} computer(s), ${team.user_count || 0} user(s)` : `${team.device_count} machine(s), ${team.user_count || 0} utilisateur(s)`}${team.description ? ` - ${escapeHtml(team.description)}` : ""}</small>
             </span>
             <span class="organization-chevron">&rsaquo;</span>
@@ -1877,9 +2048,9 @@ function renderOrganization() {
         <div class="organization-sort-row ${site.active ? "" : "is-inactive"}" draggable="${canManageLocations}" data-entity="establishment" data-id="${site.id}">
           ${canManageLocations ? `<button class="drag-handle" type="button" aria-label="Deplacer ${escapeHtml(site.name)}" title="Glisser pour reordonner">&#8942;&#8942;</button>` : ""}
           <button class="organization-item edit-establishment" type="button" data-id="${site.id}">
-            <span class="organization-icon site type-${escapeHtml(site.establishment_type || "office")}">${establishmentIcon(site.establishment_type || "office")}</span>
+            <span class="organization-icon site type-${escapeHtml(site.discipline || site.establishment_type || "office")}">${locationIcon(site.discipline || site.establishment_type || "office")}</span>
             <span>
-              <strong>${escapeHtml(site.name)}</strong>
+              <strong>${escapeHtml(displayWithAbbreviation(site.name, site.abbreviation))}</strong>
               <small>${translate(establishmentTypeLabels[site.establishment_type] || establishmentTypeLabels.office)} - ${state.language === "en" ? `${site.device_count} computer(s), ${site.user_count || 0} user(s)` : `${site.device_count} machine(s), ${site.user_count || 0} utilisateur(s)`}${location ? ` - ${escapeHtml(location)}` : ""}</small>
             </span>
             <span class="organization-chevron">&rsaquo;</span>
@@ -1911,10 +2082,11 @@ async function saveOrganizationOrder(entityType) {
 async function moveOrganizationItem(entityType, id, targetIndex) {
   const items = entityType === "team" ? state.teams : state.establishments;
   const currentIndex = items.findIndex((item) => item.id === id);
-  const boundedIndex = Math.max(0, Math.min(targetIndex, items.length - 1));
+  const boundedIndex = Math.max(0, Math.min(targetIndex, items.length));
   if (currentIndex < 0 || currentIndex === boundedIndex) return;
   const [item] = items.splice(currentIndex, 1);
-  items.splice(boundedIndex, 0, item);
+  const adjustedIndex = currentIndex < boundedIndex ? boundedIndex - 1 : boundedIndex;
+  items.splice(adjustedIndex, 0, item);
   renderOrganization();
   updateOrganizationDatalists();
   try {
@@ -1927,6 +2099,11 @@ async function moveOrganizationItem(entityType, id, targetIndex) {
 }
 
 function bindOrganizationSorting() {
+  const clearDropIndicators = () => {
+    $$(".organization-sort-row.drop-before, .organization-sort-row.drop-after").forEach((row) => {
+      row.classList.remove("drop-before", "drop-after");
+    });
+  };
   $$(".sort-step").forEach((button) => {
     button.addEventListener("click", () => {
       const items = button.dataset.entity === "team" ? state.teams : state.establishments;
@@ -1940,17 +2117,30 @@ function bindOrganizationSorting() {
       event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData("text/plain", `${row.dataset.entity}:${row.dataset.id}`);
     });
-    row.addEventListener("dragend", () => row.classList.remove("is-dragging"));
+    row.addEventListener("dragend", () => {
+      row.classList.remove("is-dragging");
+      clearDropIndicators();
+    });
     row.addEventListener("dragover", (event) => {
       event.preventDefault();
       event.dataTransfer.dropEffect = "move";
+      clearDropIndicators();
+      const rect = row.getBoundingClientRect();
+      const after = event.clientY > rect.top + rect.height / 2;
+      row.classList.add(after ? "drop-after" : "drop-before");
+    });
+    row.addEventListener("dragleave", () => {
+      row.classList.remove("drop-before", "drop-after");
     });
     row.addEventListener("drop", (event) => {
       event.preventDefault();
       const [entityType, id] = event.dataTransfer.getData("text/plain").split(":");
       if (entityType !== row.dataset.entity) return;
       const items = entityType === "team" ? state.teams : state.establishments;
-      moveOrganizationItem(entityType, id, items.findIndex((item) => item.id === row.dataset.id));
+      const targetIndex = items.findIndex((item) => item.id === row.dataset.id);
+      const after = row.classList.contains("drop-after");
+      clearDropIndicators();
+      moveOrganizationItem(entityType, id, targetIndex + (after ? 1 : 0));
     });
   });
 }
@@ -1959,6 +2149,7 @@ function resetTeamForm() {
   const form = $("#team-form");
   form.reset();
   form.elements.id.value = "";
+  form.elements.abbreviation.value = "";
   form.elements.color.value = "#16735f";
   form.elements.active.checked = true;
   $("#team-editor-title").textContent = "Nouvelle equipe";
@@ -1971,6 +2162,7 @@ function editTeam(id) {
   const form = $("#team-form");
   form.elements.id.value = team.id;
   form.elements.name.value = team.name || "";
+  form.elements.abbreviation.value = team.abbreviation || "";
   form.elements.description.value = team.description || "";
   form.elements.color.value = team.color || "#16735f";
   form.elements.active.checked = Boolean(team.active);
@@ -1982,8 +2174,10 @@ function resetEstablishmentForm() {
   const form = $("#establishment-form");
   form.reset();
   form.elements.id.value = "";
+  form.elements.abbreviation.value = "";
   form.elements.country.value = "France";
   form.elements.establishmentType.value = "office";
+  form.elements.discipline.value = "general";
   form.elements.active.checked = true;
   $("#address-search").value = "";
   $("#address-search-status").textContent = "";
@@ -1999,7 +2193,9 @@ function editEstablishment(id) {
   const form = $("#establishment-form");
   form.elements.id.value = site.id;
   form.elements.name.value = site.name || "";
+  form.elements.abbreviation.value = site.abbreviation || "";
   form.elements.establishmentType.value = site.establishment_type || "office";
+  form.elements.discipline.value = site.discipline || "general";
   form.elements.address.value = site.address || "";
   form.elements.postalCode.value = site.postal_code || "";
   form.elements.city.value = site.city || "";
@@ -2280,6 +2476,11 @@ function bindEvents() {
 
   $("#collect-form").addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (!validateCollectionForm(event.currentTarget)) {
+      saveCollectionDraft();
+      toast("Veuillez completer les champs requis.", "error");
+      return;
+    }
     const form = Object.fromEntries(new FormData(event.currentTarget));
     const payload = { ...form };
     if (payload.team === "__other__") payload.team = "";
@@ -2435,6 +2636,7 @@ function bindEvents() {
     const id = values.id;
     const payload = {
       name: values.name,
+      abbreviation: values.abbreviation,
       description: values.description,
       color: values.color,
       active: form.elements.active.checked,
@@ -2442,10 +2644,10 @@ function bindEvents() {
     const button = form.querySelector('button[type="submit"]');
     button.disabled = true;
     try {
-      await api(id ? `/admin/teams/${id}` : "/admin/teams", { method: "POST", body: JSON.stringify(payload) });
+      const result = await api(id ? `/admin/teams/${id}` : "/admin/teams", { method: "POST", body: JSON.stringify(payload) });
       await loadAdminData();
       resetTeamForm();
-      toast(id ? "Equipe mise a jour." : "Equipe creee.");
+      toast(result.duplicateAbbreviation ? "Abreviation deja utilisee par une autre equipe." : id ? "Equipe mise a jour." : "Equipe creee.", result.duplicateAbbreviation ? "warning" : "info");
     } catch (error) {
       toast(error.message);
     } finally {
@@ -2459,7 +2661,9 @@ function bindEvents() {
     const id = values.id;
     const payload = {
       name: values.name,
+      abbreviation: values.abbreviation,
       establishmentType: values.establishmentType,
+      discipline: values.discipline,
       address: values.address,
       postalCode: values.postalCode,
       city: values.city,
@@ -2471,13 +2675,13 @@ function bindEvents() {
     const button = form.querySelector('button[type="submit"]');
     button.disabled = true;
     try {
-      await api(id ? `/admin/establishments/${id}` : "/admin/establishments", {
+      const result = await api(id ? `/admin/establishments/${id}` : "/admin/establishments", {
         method: "POST",
         body: JSON.stringify(payload),
       });
       await loadAdminData();
       resetEstablishmentForm();
-      toast(id ? "Etablissement mis a jour." : "Etablissement cree.");
+      toast(result.duplicateAbbreviation ? "Abreviation deja utilisee par un autre etablissement." : id ? "Etablissement mis a jour." : "Etablissement cree.", result.duplicateAbbreviation ? "warning" : "info");
     } catch (error) {
       toast(error.message);
     } finally {

@@ -404,6 +404,18 @@ label {
   font-weight: 750;
 }
 
+.required-marker {
+  color: var(--danger);
+  font-weight: 900;
+}
+
+.field-error {
+  min-height: 16px;
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 input,
 textarea,
 select {
@@ -420,6 +432,12 @@ textarea:focus,
 select:focus {
   border-color: var(--brand);
   outline: 3px solid rgba(22, 115, 95, 0.14);
+}
+
+.field-invalid input,
+.field-invalid select {
+  border-color: var(--danger);
+  outline: 3px solid var(--danger-soft);
 }
 
 .wide,
@@ -794,9 +812,36 @@ pre {
   opacity: 0.5;
 }
 
+.organization-sort-row.drop-before,
+.organization-sort-row.drop-after {
+  position: relative;
+  background: color-mix(in srgb, var(--brand) 6%, transparent);
+}
+
+.organization-sort-row.drop-before::before,
+.organization-sort-row.drop-after::after {
+  content: "";
+  position: absolute;
+  left: 34px;
+  right: 0;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.organization-sort-row.drop-before::before {
+  top: -4px;
+}
+
+.organization-sort-row.drop-after::after {
+  bottom: -4px;
+}
+
 .organization-sort-row.is-dragging {
   opacity: 0.45;
   background: var(--soft);
+  transform: scale(0.99);
 }
 
 .drag-handle,
@@ -1039,9 +1084,9 @@ pre {
   align-items: center;
   gap: 7px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 999px;
   padding: 5px 8px;
-  background: var(--soft);
+  background: color-mix(in srgb, var(--soft), var(--surface) 36%);
   color: var(--ink);
   font-size: 12px;
   font-weight: 800;
@@ -1106,8 +1151,8 @@ pre {
   display: grid;
   place-items: center;
   border: 1px solid color-mix(in srgb, currentColor 24%, transparent);
-  border-radius: 6px;
-  background: color-mix(in srgb, currentColor 10%, var(--surface));
+  border-radius: 8px;
+  background: color-mix(in srgb, currentColor 8%, var(--surface));
   color: var(--oem-color, var(--muted));
 }
 
@@ -1125,6 +1170,8 @@ pre {
   width: 20px;
   height: 20px;
   object-fit: contain;
+  object-position: center;
+  display: block;
 }
 
 :root[data-theme="dark"] .manufacturer-logo img {
@@ -1132,8 +1179,9 @@ pre {
 }
 
 .manufacturer-hero .manufacturer-logo img {
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
+  margin: auto;
 }
 
 .team-badge,
@@ -1142,9 +1190,10 @@ pre {
   max-width: 150px;
   align-items: center;
   gap: 6px;
-  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+  border-radius: 999px;
   padding: 5px 8px;
-  background: var(--soft);
+  background: color-mix(in srgb, currentColor 8%, var(--surface));
   color: var(--ink);
   font-size: 12px;
   font-weight: 750;
@@ -1169,13 +1218,20 @@ pre {
   text-overflow: ellipsis;
 }
 
-.team-tech { color: var(--brand); }
-.team-sales, .team-b2c { color: #a35d17; }
-.team-design { color: #8a54a2; }
-.team-logistics, .team-purchase { color: #39739a; }
-.location-store { color: #b13f5c; }
-.location-warehouse { color: #a16818; }
-.location-headquarters { color: #3273b6; }
+.team-tech { color: #21806f; }
+.team-sales, .team-b2c { color: #9a6a22; }
+.team-design { color: #7b5aa6; }
+.team-logistics, .team-purchase { color: #3f7694; }
+.team-finance { color: #5d7d35; }
+.team-management { color: #886a22; }
+.team-marketing { color: #a0506e; }
+.location-store, .location-general { color: #9a5971; }
+.location-bike { color: #267b68; }
+.location-racket { color: #6f63a6; }
+.location-football { color: #4f7f45; }
+.location-golf { color: #7c7530; }
+.location-warehouse { color: #9a6a22; }
+.location-headquarters, .location-office { color: #406f9e; }
 .location-remote { color: #527967; }
 
 .manufacturer-logo text {
@@ -1231,7 +1287,7 @@ pre {
 }
 
 .manufacturer-hero strong,
-.manufacturer-hero span {
+.manufacturer-hero > span:not(.manufacturer-logo) {
   display: block;
 }
 
@@ -1239,7 +1295,7 @@ pre {
   font-size: 18px;
 }
 
-.manufacturer-hero span {
+.manufacturer-hero > span:not(.manufacturer-logo) span {
   margin-top: 3px;
   color: var(--muted);
 }
@@ -1348,7 +1404,7 @@ pre {
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.65fr) minmax(340px, 0.85fr);
+  grid-template-columns: minmax(0, 1.35fr) minmax(420px, 1fr);
   gap: 18px;
   margin-top: 18px;
 }
@@ -1410,7 +1466,8 @@ tbody tr.is-selected {
   display: inline-flex;
   border-radius: 999px;
   padding: 4px 9px;
-  background: var(--soft);
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  background: color-mix(in srgb, currentColor 8%, var(--surface));
   font-size: 12px;
   font-weight: 800;
 }
@@ -1420,7 +1477,8 @@ tbody tr.is-selected {
   display: inline-flex;
   border-radius: 999px;
   padding: 4px 8px;
-  background: var(--soft);
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  background: color-mix(in srgb, currentColor 8%, var(--surface));
   color: var(--ink);
   font-size: 11px;
   font-weight: 900;
@@ -1447,6 +1505,15 @@ tbody tr.is-selected {
   border-radius: 8px;
   padding: 14px;
   background: var(--surface);
+  cursor: pointer;
+  transition: background 0.16s ease, transform 0.16s ease;
+}
+
+.notification-item:hover,
+.notification-item:focus-visible {
+  background: var(--soft-hover);
+  outline: none;
+  transform: translateY(-1px);
 }
 
 .notification-item.is-read {
@@ -1481,15 +1548,17 @@ tbody tr.is-selected {
 
 .detail-list {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
 }
 
 .detail-list div {
   display: grid;
-  grid-template-columns: 132px 1fr;
-  gap: 10px;
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 9px;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: color-mix(in srgb, var(--surface), var(--soft) 36%);
 }
 
 .detail-list dt {
@@ -1504,11 +1573,13 @@ tbody tr.is-selected {
 
 .detail-tabs {
   display: flex;
-  gap: 4px;
-  margin: 0 -4px 16px;
+  gap: 6px;
+  margin: 0 0 16px;
   padding: 4px;
   overflow-x: auto;
-  border-bottom: 1px solid var(--line);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
 }
 
 .detail-tab {
@@ -1516,15 +1587,16 @@ tbody tr.is-selected {
   flex: 0 0 auto;
   padding: 0 9px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 6px;
   background: transparent;
   color: var(--muted);
   font-size: 12px;
 }
 
 .detail-tab.is-active {
-  background: var(--soft);
+  background: var(--surface);
   color: var(--ink);
+  box-shadow: 0 1px 3px rgba(24, 32, 27, 0.08);
 }
 
 .detail-tab-panel {
