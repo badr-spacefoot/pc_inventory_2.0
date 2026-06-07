@@ -228,6 +228,25 @@ a.secondary {
   font-weight: 900;
 }
 
+.time-format-control {
+  width: auto;
+  display: inline-flex;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.time-format-control select {
+  width: auto;
+  min-height: 36px;
+  padding: 6px 28px 6px 10px;
+  font-size: 12px;
+  font-weight: 850;
+}
+
 .topbar {
   display: flex;
   align-items: center;
@@ -1852,6 +1871,52 @@ tbody tr.is-selected {
   font-size: 12px;
 }
 
+.history-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 8px 0 0;
+}
+
+.history-meta div {
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+}
+
+.history-meta dt {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.history-meta dd {
+  margin: 2px 0 0;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.assignment-period {
+  display: grid;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--surface);
+}
+
+.assignment-period + .assignment-period {
+  margin-top: 8px;
+}
+
+.assignment-period p {
+  display: block;
+  margin: 0;
+  color: var(--muted);
+}
+
 .scan-history {
   margin-top: 18px;
 }
@@ -2054,6 +2119,14 @@ tbody tr.is-selected {
     min-width: 0;
     justify-content: center;
     padding: 0 8px;
+  }
+
+  .time-format-control {
+    width: 100%;
+  }
+
+  .history-meta {
+    grid-template-columns: 1fr;
   }
 
   .dashboard-head .action-button {

@@ -342,6 +342,64 @@ async function appendDeviceHistory(rows: Json[]) {
   if (error) throw error;
 }
 
+function eventSource(value: string) {
+  const normalized = safeString(value, 80).toUpperCase().replace(/[^A-Z0-9_]+/g, "_");
+  if (["MANUAL_ADMIN", "COLLECTOR", "IMPORT", "SYSTEM"].includes(normalized)) return normalized;
+  if (normalized === "MANUAL") return "MANUAL_ADMIN";
+  return normalized || "SYSTEM";
+}
+
+async function closeOpenAssignmentPeriod(deviceId: string, endedAt: string, unassignedBy: string, reason = "") {
+  const { error } = await supabase
+    .from("device_assignment_periods")
+    .update({
+      ended_at: endedAt,
+      unassigned_by: unassignedBy,
+      reason: reason || null,
+    })
+    .eq("device_id", deviceId)
+    .is("ended_at", null);
+  if (error) throw error;
+}
+
+async function openAssignmentPeriod(
+  deviceId: string,
+  userId: string | null,
+  teamId: string | null,
+  establishmentId: string | null,
+  startedAt: string,
+  assignedBy: string,
+  source: string,
+  reason = "",
+) {
+  if (!userId) return;
+  const [{ data: user, error: userError }, { data: team, error: teamError }, { data: site, error: siteError }] = await Promise.all([
+    supabase.from("users").select("first_name,last_name,email").eq("id", userId).maybeSingle(),
+    teamId ? supabase.from("teams").select("name").eq("id", teamId).maybeSingle() : Promise.resolve({ data: null, error: null }),
+    establishmentId ? supabase.from("establishments").select("name").eq("id", establishmentId).maybeSingle() : Promise.resolve({ data: null, error: null }),
+  ]);
+  if (userError) throw userError;
+  if (teamError) throw teamError;
+  if (siteError) throw siteError;
+  if (!user) return;
+  const userName = [user.first_name, user.last_name].map((value) => safeString(value)).filter(Boolean).join(" ");
+  const { error } = await supabase.from("device_assignment_periods").insert({
+    device_id: deviceId,
+    user_id: userId,
+    user_name: userName || safeString(user.email),
+    user_email: safeString(user.email) || null,
+    team_id: teamId,
+    team_name: safeString(team?.name) || null,
+    establishment_id: establishmentId,
+    establishment_name: safeString(site?.name) || null,
+    started_at: startedAt,
+    assigned_by: assignedBy,
+    source: eventSource(source),
+    reason: reason || null,
+  });
+  if (error) throw error;
+}
+
 function changedDeviceHistory(deviceId: string, previous: Json | null, current: Json, source: string, changedAt: string) {
   if (!previous) {
     return [{
@@ -1719,12 +1777,19 @@ async function handleAdminDeviceDetail(request: Request, id: string) {
   if (priceHistoryError) throw priceHistoryError;
   const { data: history, error: historyError } = await supabase
     .from("device_history")
-    .select("id,event_type,field_name,old_value,new_value,changed_by,source,notes,changed_at")
+    .select("id,event_type,field_name,old_value,new_value,changed_by,source,notes,changed_at,related_user_id,related_team_id,related_establishment_id")
     .eq("device_id", id)
     .order("changed_at", { ascending: false })
     .limit(200);
   if (historyError) throw historyError;
-  return json(request, { device: { ...device, ...assignment }, scans, priceHistory, history: history ?? [] });
+  const { data: assignmentPeriods, error: periodsError } = await supabase
+    .from("device_assignment_periods")
+    .select("id,user_id,user_name,user_email,team_id,team_name,establishment_id,establishment_name,started_at,ended_at,assigned_by,unassigned_by,source,reason")
+    .eq("device_id", id)
+    .order("started_at", { ascending: false })
+    .limit(100);
+  if (periodsError) throw periodsError;
+  return json(request, { device: { ...device, ...assignment, assignmentPeriods: assignmentPeriods ?? [] }, scans, priceHistory, history: history ?? [] });
 }
 
 async function recordExists(table: "teams" | "establishments" | "users", id: string | null) {
@@ -1735,7 +1800,8 @@ async function recordExists(table: "teams" | "establishments" | "users", id: str
 }
 
 async function handleAdminDeviceAssignment(request: Request, id: string) {
-  if (!(await isAdmin(request, "DEVICE_EDIT"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
+  const auth = await requireAction(request, "DEVICE_EDIT");
+  if (auth.response) return auth.response;
   const body = await request.json().catch(() => ({}));
   const teamId = safeString(body.teamId) || null;
   const establishmentId = safeString(body.establishmentId) || null;
@@ -1757,9 +1823,9 @@ async function handleAdminDeviceAssignment(request: Request, id: string) {
   if (!establishmentValid) return badRequest(request, "Etablissement selectionne introuvable.", 404);
   if (!userValid) return badRequest(request, "Utilisateur selectionne introuvable.", 404);
 
-  const [{ data: currentDevice, error: currentError }, { error: currentAssignmentError }, { data: targetTeam }, { data: targetSite }] = await Promise.all([
+  const [{ data: currentDevice, error: currentError }, { data: currentAssignment, error: currentAssignmentError }, { data: targetTeam }, { data: targetSite }] = await Promise.all([
     supabase.from("device_inventory_view").select("hostname,team_name,establishment_name,first_name,last_name,email,service,comment").eq("id", id).single(),
-    supabase.from("devices").select("assigned_user_id").eq("id", id).single(),
+    supabase.from("devices").select("assigned_user_id,team_id,establishment_id").eq("id", id).single(),
     teamId ? supabase.from("teams").select("name").eq("id", teamId).maybeSingle() : Promise.resolve({ data: null }),
     establishmentId ? supabase.from("establishments").select("name").eq("id", establishmentId).maybeSingle() : Promise.resolve({ data: null }),
   ]);
@@ -1825,9 +1891,17 @@ async function handleAdminDeviceAssignment(request: Request, id: string) {
   const { data, error } = await supabase.from("devices").update(values).eq("id", id).select("id").maybeSingle();
   if (error) throw error;
   if (!data) return badRequest(request, "Machine introuvable.", 404);
+  const changedAt = new Date().toISOString();
+  const assignmentChanged =
+    historyValue(currentAssignment?.assigned_user_id) !== historyValue(assignedUserId) ||
+    historyValue(currentAssignment?.team_id) !== historyValue(teamId) ||
+    historyValue(currentAssignment?.establishment_id) !== historyValue(establishmentId);
+  if (assignmentChanged) {
+    await closeOpenAssignmentPeriod(id, changedAt, auth.session?.username || "admin", "Device assignment changed.");
+    await openAssignmentPeriod(id, assignedUserId, teamId, establishmentId, changedAt, auth.session?.username || "admin", "MANUAL_ADMIN", "Device assigned by admin.");
+  }
   const oldUser = [currentDevice.first_name, currentDevice.last_name].filter(Boolean).join(" ") || currentDevice.email || null;
   const newUser = targetUser ? [targetUser.first_name, targetUser.last_name].filter(Boolean).join(" ") || targetUser.email : null;
-  const changedAt = new Date().toISOString();
   const historyRows = [
     ["team_id", "TEAM_CHANGED", currentDevice.team_name, targetTeam?.name],
     ["establishment_id", "LOCATION_CHANGED", currentDevice.establishment_name, targetSite?.name],
@@ -1841,8 +1915,11 @@ async function handleAdminDeviceAssignment(request: Request, id: string) {
       old_value: historyValue(oldValue),
       new_value: historyValue(newValue),
       changed_by: "admin",
-      source: "manual",
+      source: "MANUAL_ADMIN",
       changed_at: changedAt,
+      related_user_id: fieldName === "assigned_user_id" || fieldName === "owner_email" ? assignedUserId : null,
+      related_team_id: teamId,
+      related_establishment_id: establishmentId,
     }]
   );
   await appendDeviceHistory(historyRows);
@@ -2030,28 +2107,82 @@ async function handleAdminEnrich(request: Request) {
 }
 
 async function handleAdminDeviceStatus(request: Request, id: string) {
-  if (!(await isAdmin(request, "DEVICE_EDIT"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
+  const auth = await requireAction(request, "DEVICE_EDIT");
+  if (auth.response) return auth.response;
   const body = await request.json().catch(() => ({}));
   const status = safeString(body.status, 40);
+  const note = safeString(body.note, 2000);
   const allowed = ["active", "replace", "stock", "lost", "retired"];
   if (!allowed.includes(status)) return badRequest(request, "Statut invalide.");
-  const { data: previous, error: previousError } = await supabase.from("devices").select("status").eq("id", id).single();
+  if (status === "retired" && !note) return badRequest(request, "Note de sortie du parc requise.");
+  const { data: previous, error: previousError } = await supabase
+    .from("devices")
+    .select("status,assigned_user_id,team_id,establishment_id,hostname")
+    .eq("id", id)
+    .single();
   if (previousError) throw previousError;
-  const { data: device, error } = await supabase.from("devices").update({ status }).eq("id", id).select("id,status").single();
+  const values: Json = { status };
+  if (status === "retired") {
+    values.assigned_user_id = null;
+    values.team_id = null;
+  }
+  const { data: device, error } = await supabase.from("devices").update(values).eq("id", id).select("id,status").single();
   if (error) throw error;
+  const changedAt = new Date().toISOString();
   if (previous.status !== status) {
+    const eventType = status === "retired"
+      ? "DEVICE_RETIRED"
+      : previous.status === "retired"
+        ? "DEVICE_REACTIVATED"
+        : "STATUS_CHANGED";
     await appendDeviceHistory([{
       device_id: id,
-      event_type: "DEVICE_UPDATED",
+      event_type: eventType,
       field_name: "status",
       old_value: previous.status,
       new_value: status,
-      changed_by: "admin",
-      source: "manual",
-      changed_at: new Date().toISOString(),
+      changed_by: auth.session?.username || "admin",
+      source: "MANUAL_ADMIN",
+      notes: note || null,
+      changed_at: changedAt,
+      related_user_id: safeString(previous.assigned_user_id) || null,
+      related_team_id: safeString(previous.team_id) || null,
+      related_establishment_id: safeString(previous.establishment_id) || null,
     }]);
+    if (status === "retired") {
+      await closeOpenAssignmentPeriod(id, changedAt, auth.session?.username || "admin", note || "Device retired.");
+      if (previous.assigned_user_id) {
+        await appendDeviceHistory([{
+          device_id: id,
+          event_type: "USER_REMOVED",
+          field_name: "assigned_user_id",
+          old_value: historyValue(previous.assigned_user_id),
+          new_value: null,
+          changed_by: auth.session?.username || "admin",
+          source: "MANUAL_ADMIN",
+          notes: note || null,
+          changed_at: changedAt,
+          related_user_id: safeString(previous.assigned_user_id),
+          related_team_id: safeString(previous.team_id) || null,
+          related_establishment_id: safeString(previous.establishment_id) || null,
+        }]);
+      }
+      await notify("DEVICE_RETIRED", "notification.deviceRetired.title", "notification.deviceRetired.message", {
+        severity: "WARNING",
+        targetRole: "ADMIN",
+        relatedEntityType: "device",
+        relatedEntityId: id,
+      });
+    } else if (previous.status === "retired") {
+      await notify("DEVICE_REACTIVATED", "notification.deviceReactivated.title", "notification.deviceReactivated.message", {
+        severity: "SUCCESS",
+        targetRole: "ADMIN",
+        relatedEntityType: "device",
+        relatedEntityId: id,
+      });
+    }
   }
-  await audit("device_status_updated", "device", id, { status });
+  await audit("device_status_updated", "device", id, { status, note: note || null });
   return json(request, { device });
 }
 

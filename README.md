@@ -499,18 +499,38 @@ La migration `20260607150000_device_history_and_ordering.sql` ajoute l'ordre per
 
 ## Historique du cycle de vie
 
-`device_history` conserve la machine, le type d'evenement, le champ modifie, l'ancienne et la nouvelle valeur, la source, l'auteur et la date.
+`device_history` conserve la machine, le type d'evenement, le champ modifie, l'ancienne et la nouvelle valeur, la source, l'auteur, la date, la note et les references utilisateur/equipe/etablissement lorsque disponibles.
 
-La fiche machine comporte les onglets Vue generale, Materiel, Reseau, Affectation et Historique. L'onglet Historique affiche les evenements les plus recents et permet d'ajouter une note administrateur.
+La fiche machine comporte les onglets Vue generale, Materiel, Reseau, Affectation, Cycle de vie et Historique. L'onglet Historique affiche les evenements les plus recents, repond a `qui / quand / comment / quoi / pourquoi`, et permet d'ajouter une note administrateur.
+
+La table `device_assignment_periods` conserve les periodes d'utilisation historiques:
+
+- utilisateur et email;
+- equipe et etablissement;
+- date de debut, date de fin et duree calculee;
+- auteur d'affectation/retrait;
+- source (`MANUAL_ADMIN`, `COLLECTOR`, `IMPORT`, `SYSTEM`);
+- raison ou note.
 
 Les evenements sont ajoutes lorsque:
 
 - une machine est creee;
 - le collecteur ou l'import modifie le hostname, l'OS, le fabricant, le modele, le CPU, la RAM, le stockage ou l'utilisateur OS;
 - un administrateur change le proprietaire, l'equipe, l'etablissement ou le statut;
+- une machine est sortie du parc ou reactivee;
 - une reaffectation en masse deplace les machines vers une autre equipe ou un autre etablissement.
 
 `last_seen_at` et les scans identiques ne generent pas d'evenement afin d'eviter un historique bruyant. Les valeurs actuelles restent dans `devices`; les anciennes valeurs restent dans `device_history`.
+
+Quand un administrateur passe une machine en `Sorti du parc`, une fenetre demande une note obligatoire. La confirmation:
+
+- enregistre le statut `retired`;
+- vide le proprietaire courant et l'equipe courante;
+- ferme la periode d'affectation ouverte;
+- ajoute les evenements `DEVICE_RETIRED` et, si necessaire, `USER_REMOVED`;
+- cree une notification cliquable vers l'onglet Historique.
+
+Une machine sortie du parc n'a donc plus d'utilisateur courant. Les anciens utilisateurs restent visibles dans l'historique et dans la chronologie d'affectation.
 
 Un message `0 machine(s), 1 utilisateur(s)` indique generalement qu'un ancien profil de collecte conserve encore cette equipe ou cet etablissement. Ce n'est pas une coordonnee de carte. Le dialogue de reaffectation deplace ce profil proprement. Pour un audit manuel, consulter les colonnes `team_id` et `establishment_id` de la table `users`; ne pas supprimer directement une reference sans avoir choisi sa nouvelle affectation.
 
@@ -607,10 +627,15 @@ La table `notifications` conserve:
 
 Le dashboard affiche une cloche avec compteur de notifications non lues, une page de notifications, des filtres par severite/etat et les actions `Marquer lu` / `Tout marquer comme lu`.
 
+Les notifications systeme utilisent des cles de traduction cote interface lorsque possible. Les titres/messages connus sont rendus en francais ou en anglais selon la langue choisie; les nouvelles notifications de cycle de vie utilisent directement des cles comme `notification.deviceRetired.title`.
+
+Les dates et mois sont formates via `Intl.DateTimeFormat` / `Intl.RelativeTimeFormat`. Le select `Heure` dans le header permet de choisir `Auto`, `24h` ou `AM/PM`; la preference est conservee dans le navigateur et s'applique aux notifications, historiques, dates utilisateur, dernier scan et propositions.
+
 Des notifications sont creees notamment lors de:
 
 - creation ou mise a jour importante d'une machine par le collecteur;
 - reaffectation d'une machine;
+- sortie du parc ou reactivation d'une machine;
 - revocation ou suppression d'un token de collecte;
 - suppression equipe/etablissement bloquee;
 - creation, mise a jour, suppression ou bootstrap d'un compte admin.

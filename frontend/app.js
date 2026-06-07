@@ -8,6 +8,7 @@ const state = {
   adminToken: localStorage.getItem("it_inventory_admin_token") || "",
   currentAdmin: JSON.parse(localStorage.getItem("it_inventory_admin_user") || "null"),
   language: localStorage.getItem("it_inventory_language") || "fr",
+  timeFormatPreference: localStorage.getItem("it_inventory_time_format") || "auto",
   devices: [],
   filtered: [],
   selectedDeviceId: "",
@@ -28,6 +29,7 @@ const state = {
   scriptPreviewText: "",
   mapProvider: "openstreetmap",
 };
+let pendingRetirement = null;
 
 const statusLabels = {
   fr: { active: "Actif", replace: "A remplacer", stock: "En stock", lost: "Perdu", retired: "Sorti du parc" },
@@ -118,6 +120,49 @@ const englishTranslations = {
   "Lier a l'existant": "Link existing",
   "Modifier et approuver": "Modify and approve",
   "Proposition traitee.": "Proposal processed.",
+  "Format horaire": "Time format",
+  "Heure": "Time",
+  "Auto": "Auto",
+  "Sortir la machine du parc": "Retire device",
+  "Ajoutez une note avant de confirmer la sortie du parc.": "Please add a retirement note before confirming.",
+  "Note de sortie du parc requise.": "Retirement note required.",
+  "Confirmer": "Confirm",
+  "Aucun utilisateur actuel": "No current user",
+  "Chronologie utilisateurs": "User timeline",
+  "Utilise de": "Used from",
+  "a": "to",
+  "a aujourd'hui": "to present",
+  "Duree": "Duration",
+  "Assigne par": "Assigned by",
+  "Retire par": "Unassigned by",
+  "Source": "Source",
+  "Pourquoi": "Why",
+  "Qui": "Who",
+  "Quand": "When",
+  "Comment": "How",
+  "Quoi": "What",
+  "MANUAL_ADMIN": "Manual admin",
+  "COLLECTOR": "Collector",
+  "IMPORT": "Import",
+  "SYSTEM": "System",
+  "notification.deviceRetired.title": "Device retired",
+  "notification.deviceRetired.message": "A device has been retired.",
+  "notification.deviceReactivated.title": "Device reactivated",
+  "notification.deviceReactivated.message": "A device has been reactivated.",
+  "notification.deviceReassigned.title": "Device reassigned",
+  "notification.deviceReassigned.message": "A device assignment has changed.",
+  "notification.pendingTeam.title": "Pending team proposal",
+  "notification.pendingTeam.message": "A new team proposal is waiting for review.",
+  "notification.pendingLocation.title": "Pending location proposal",
+  "notification.pendingLocation.message": "A new location proposal is waiting for review.",
+  "notification.collectorReceived.title": "Collector submission received",
+  "notification.collectorReceived.message": "A device inventory submission was received.",
+  "notification.adminAction.title": "Admin action completed",
+  "notification.adminAction.message": "An admin action has been completed.",
+  "notification.tokenRevoked.title": "Token revoked",
+  "notification.tokenRevoked.message": "A collection token was revoked.",
+  "notification.tokenDeleted.title": "Token deleted",
+  "notification.tokenDeleted.message": "A collection token was deleted.",
   "Abreviation deja utilisee par une autre equipe.": "Abbreviation already used by another team.",
   "Abreviation deja utilisee par un autre etablissement.": "Abbreviation already used by another location.",
   "Commande generee. Proposition envoyee a l'admin.": "Command generated. Proposal sent to admin.",
@@ -363,12 +408,17 @@ const englishTranslations = {
   "Ajouter une note a l'historique...": "Add a history note...",
   "Machine creee": "Device created",
   "Machine mise a jour": "Device updated",
+  "Machine sortie du parc": "Device retired",
+  "Machine reactivee": "Device reactivated",
   "Utilisateur affecte": "User assigned",
   "Utilisateur reaffecte": "User reassigned",
+  "Utilisateur retire": "User removed",
   "Equipe modifiee": "Team changed",
   "Etablissement modifie": "Location changed",
   "Systeme mis a jour": "OS changed",
   "Materiel modifie": "Hardware changed",
+  "Statut modifie": "Status changed",
+  "Collecte mise a jour": "Collector update",
   "Reinitialisation detectee": "Reset detected",
   "Note administrateur": "Admin note",
   "Import mis a jour": "Import updated",
@@ -380,6 +430,9 @@ const englishTranslations = {
   "Numero de serie": "Serial number",
   "RAM totale": "Total RAM",
   "Stockage total": "Total storage",
+  "Type stockage": "Storage type",
+  "Utilisateur OS": "OS user",
+  "Email proprietaire": "Owner email",
   "Note ajoutee.": "Note added.",
   "Statut mis a jour.": "Status updated.",
   "Equipe mise a jour.": "Team updated.",
@@ -464,6 +517,8 @@ function applyLanguage(language, persist = true) {
   renderValuation();
   renderOrganization();
   renderAccessTokens();
+  renderNotifications();
+  syncAdminUserActiveLabel();
   if (state.selectedDetail) renderDetail(state.selectedDetail, state.selectedScans, state.selectedHistory);
   translateElement(document.body);
   setTheme(document.documentElement.dataset.theme || "light");
@@ -996,7 +1051,42 @@ function openReassignment(entityType, sourceId, references) {
 
 function formatDate(value) {
   if (!value) return "-";
-  return new Intl.DateTimeFormat(state.language === "en" ? "en-GB" : "fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  const locale = state.language === "en" ? "en-US" : "fr-FR";
+  const preference = state.timeFormatPreference === "auto"
+    ? (state.language === "en" ? "12h" : "24h")
+    : state.timeFormatPreference;
+  return new Intl.DateTimeFormat(locale, {
+    dateStyle: "medium",
+    timeStyle: "short",
+    hour12: preference === "12h",
+  }).format(new Date(value));
+}
+
+function formatRelativeDate(value) {
+  if (!value) return "-";
+  const deltaDays = Math.round((new Date(value).getTime() - Date.now()) / 86400000);
+  const locale = state.language === "en" ? "en-US" : "fr-FR";
+  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  if (Math.abs(deltaDays) < 1) return formatter.format(0, "day");
+  if (Math.abs(deltaDays) < 31) return formatter.format(deltaDays, "day");
+  const deltaMonths = Math.round(deltaDays / 30);
+  if (Math.abs(deltaMonths) < 18) return formatter.format(deltaMonths, "month");
+  return formatter.format(Math.round(deltaMonths / 12), "year");
+}
+
+function formatDuration(startValue, endValue = null) {
+  if (!startValue) return "-";
+  const start = new Date(startValue).getTime();
+  const end = endValue ? new Date(endValue).getTime() : Date.now();
+  const days = Math.max(0, Math.floor((end - start) / 86400000));
+  const years = Math.floor(days / 365);
+  const months = Math.floor((days % 365) / 30);
+  const restDays = days - years * 365 - months * 30;
+  const parts = [];
+  if (years) parts.push(state.language === "en" ? `${years} year${years > 1 ? "s" : ""}` : `${years} an${years > 1 ? "s" : ""}`);
+  if (months) parts.push(state.language === "en" ? `${months} month${months > 1 ? "s" : ""}` : `${months} mois`);
+  if (restDays || parts.length === 0) parts.push(state.language === "en" ? `${restDays} day${restDays > 1 ? "s" : ""}` : `${restDays} jour${restDays > 1 ? "s" : ""}`);
+  return parts.join(", ");
 }
 
 function daysSince(value) {
@@ -1274,9 +1364,9 @@ function renderNotifications() {
     <article class="notification-item ${item.is_read ? "is-read" : ""} severity-${String(item.severity || "INFO").toLowerCase()}" role="button" tabindex="0" data-id="${escapeHtml(item.id)}">
       <div>
         <span class="notification-severity">${escapeHtml(item.severity || "INFO")}</span>
-        <strong>${escapeHtml(item.title)}</strong>
-        <p>${escapeHtml(item.message)}</p>
-        <small>${formatDate(item.created_at)} - ${escapeHtml(item.type || "")}</small>
+        <strong>${escapeHtml(notificationTitle(item))}</strong>
+        <p>${escapeHtml(notificationMessage(item))}</p>
+        <small>${formatDate(item.created_at)} (${formatRelativeDate(item.created_at)}) - ${escapeHtml(notificationTypeLabel(item.type))}</small>
       </div>
       ${item.is_read ? "" : `<button class="secondary mark-notification-read" type="button" data-id="${item.id}">${translate("Marquer lu")}</button>`}
     </article>
@@ -1304,6 +1394,42 @@ function renderNotifications() {
   count.classList.toggle("is-hidden", state.unreadNotifications === 0);
 }
 
+function notificationTypeKey(type) {
+  const keys = {
+    PENDING_TEAM_PROPOSAL: "notification.pendingTeam",
+    PENDING_LOCATION_PROPOSAL: "notification.pendingLocation",
+    COLLECTOR_SUBMISSION_RECEIVED: "notification.collectorReceived",
+    COLLECTOR_SUBMISSION_FAILED: "notification.collectorReceived",
+    DEVICE_REASSIGNED: "notification.deviceReassigned",
+    DEVICE_OWNER_CHANGED: "notification.deviceReassigned",
+    TEAM_CHANGED: "notification.deviceReassigned",
+    LOCATION_CHANGED: "notification.deviceReassigned",
+    DEVICE_RETIRED: "notification.deviceRetired",
+    DEVICE_REACTIVATED: "notification.deviceReactivated",
+    TOKEN_REVOKED: "notification.tokenRevoked",
+    TOKEN_DELETED: "notification.tokenDeleted",
+    ADMIN_ACTION_COMPLETED: "notification.adminAction",
+  };
+  return keys[type] || "";
+}
+
+function notificationTitle(item) {
+  if (String(item.title || "").startsWith("notification.")) return translate(item.title);
+  const key = notificationTypeKey(item.type);
+  return key ? translate(`${key}.title`) : translate(item.title || item.type || "Notification");
+}
+
+function notificationMessage(item) {
+  if (String(item.message || "").startsWith("notification.")) return translate(item.message);
+  const key = notificationTypeKey(item.type);
+  return key ? translate(`${key}.message`) : translate(item.message || "");
+}
+
+function notificationTypeLabel(type) {
+  const key = notificationTypeKey(type);
+  return key ? translate(`${key}.title`) : translate(type || "");
+}
+
 async function openNotificationTarget(id) {
   const notification = state.notifications.find((item) => item.id === id);
   if (!notification) return;
@@ -1321,6 +1447,9 @@ async function openNotificationTarget(id) {
       return;
     }
     await selectDevice(entityId);
+    if (["DEVICE_RETIRED", "DEVICE_REACTIVATED", "DEVICE_REASSIGNED", "DEVICE_OWNER_CHANGED"].includes(String(notification.type || ""))) {
+      activateDetailTab("history");
+    }
   } else if (entityType === "pending_change") {
     setAdminView("pending");
     await Promise.all([loadOrganization(), loadPendingChanges()]);
@@ -1339,6 +1468,11 @@ async function openNotificationTarget(id) {
     toast("Notification marquee comme lue.", "success");
   }
   await loadNotifications();
+}
+
+function activateDetailTab(tabName) {
+  $$(".detail-tab").forEach((tab) => tab.classList.toggle("is-active", tab.dataset.detailTab === tabName));
+  $$(".detail-tab-panel").forEach((panel) => panel.classList.toggle("is-active", panel.dataset.detailPanel === tabName));
 }
 
 async function loadNotifications() {
@@ -1575,11 +1709,15 @@ function renderDevices() {
     : `${state.filtered.length} resultat${state.filtered.length === 1 ? "" : "s"}`;
   const labels = currentStatusLabels();
   $("#devices-table").innerHTML = state.filtered
-    .map(
-      (device) => `
+    .map((device) => {
+      const userName = device.status === "retired"
+        ? translate("Aucun utilisateur actuel")
+        : (`${device.first_name || ""} ${device.last_name || ""}`.trim() || "-");
+      const userEmail = device.status === "retired" ? translate("Sorti du parc") : (device.email || "");
+      return `
         <tr data-id="${device.id}" class="${device.id === state.selectedDeviceId ? "is-selected" : ""}">
           <td><strong class="cell-primary">${escapeHtml(device.hostname || "-")}</strong><small class="cell-secondary">${escapeHtml(device.serial_number || "")}</small></td>
-          <td><strong class="cell-primary">${escapeHtml(`${device.first_name || ""} ${device.last_name || ""}`.trim() || "-")}</strong><small class="cell-secondary">${escapeHtml(device.email || "")}</small></td>
+          <td><strong class="cell-primary">${escapeHtml(userName)}</strong><small class="cell-secondary">${escapeHtml(userEmail)}</small></td>
           <td>${renderTeamBadge(device.team_name, device.team_id, device.team_color)}</td>
           <td>${renderLocationBadge(device)}</td>
           <td>${renderOsBadge(device)}</td>
@@ -1587,8 +1725,8 @@ function renderDevices() {
           <td>${formatDate(device.last_seen_at)}</td>
           <td><span class="${statusClass(device.status)}">${labels[device.status] || device.status || "Actif"}</span></td>
         </tr>
-      `
-    )
+      `;
+    })
     .join("");
 
   $$("#devices-table tr").forEach((row) => {
@@ -1616,12 +1754,17 @@ function historyLabel(event) {
   const labels = {
     DEVICE_CREATED: "Machine creee",
     DEVICE_UPDATED: "Machine mise a jour",
+    DEVICE_RETIRED: "Machine sortie du parc",
+    DEVICE_REACTIVATED: "Machine reactivee",
     USER_ASSIGNED: "Utilisateur affecte",
     USER_REASSIGNED: "Utilisateur reaffecte",
+    USER_REMOVED: "Utilisateur retire",
     TEAM_CHANGED: "Equipe modifiee",
     LOCATION_CHANGED: "Etablissement modifie",
     OS_CHANGED: "Systeme mis a jour",
     HARDWARE_CHANGED: "Materiel modifie",
+    STATUS_CHANGED: "Statut modifie",
+    COLLECTOR_UPDATE: "Collecte mise a jour",
     DEVICE_RESET: "Reinitialisation detectee",
     MANUAL_EDIT: "Note administrateur",
     IMPORT_UPDATE: "Import mis a jour",
@@ -1646,6 +1789,7 @@ function historyFieldLabel(fieldName) {
     team_id: "Equipe",
     establishment_id: "Etablissement",
     assigned_user_id: "Proprietaire",
+    owner_email: "Email proprietaire",
     status: "Statut",
   };
   return translate(labels[fieldName] || fieldName);
@@ -1656,17 +1800,56 @@ function renderHistoryTimeline(history) {
     <article class="history-event">
       <span class="history-marker"></span>
       <div>
-        <time>${formatDate(event.changed_at)}</time>
+        <time>${formatDate(event.changed_at)} (${formatRelativeDate(event.changed_at)})</time>
         <strong>${escapeHtml(translate(historyLabel(event)))}</strong>
         ${event.field_name ? `<small>${escapeHtml(historyFieldLabel(event.field_name))}</small>` : ""}
         ${event.old_value !== null || event.new_value !== null ? `
           <p><span>${translate("De")}: ${escapeHtml(event.old_value || "-")}</span><span>${translate("Vers")}: ${escapeHtml(event.new_value || "-")}</span></p>
         ` : ""}
         ${event.notes ? `<p>${escapeHtml(event.notes)}</p>` : ""}
-        <small>${escapeHtml(event.changed_by || "system")} - ${escapeHtml(event.source || "system")}</small>
+        <dl class="history-meta">
+          <div><dt>${translate("Qui")}</dt><dd>${escapeHtml(event.changed_by || "system")}</dd></div>
+          <div><dt>${translate("Comment")}</dt><dd>${escapeHtml(sourceLabel(event.source))}</dd></div>
+          <div><dt>${translate("Quand")}</dt><dd>${escapeHtml(formatDate(event.changed_at))}</dd></div>
+        </dl>
       </div>
     </article>
   `).join("") || `<p class="helper">${translate("Aucun historique.")}</p>`;
+}
+
+function sourceLabel(source) {
+  const normalized = String(source || "SYSTEM").toUpperCase().replace(/[^A-Z0-9_]+/g, "_");
+  if (normalized === "MANUAL") return translate("MANUAL_ADMIN");
+  return translate(normalized);
+}
+
+function renderAssignmentPeriods(periods = []) {
+  return periods.map((period) => {
+    const user = period.user_name || period.user_email || translate("Aucun utilisateur actuel");
+    const endLabel = period.ended_at ? formatDate(period.ended_at) : translate("a aujourd'hui");
+    return `
+      <article class="assignment-period">
+        <strong>${escapeHtml(user)}</strong>
+        <small>${escapeHtml([period.team_name, period.establishment_name].filter(Boolean).join(" - ") || "-")}</small>
+        <p>${translate("Utilise de")} ${escapeHtml(formatDate(period.started_at))} ${translate("a")} ${escapeHtml(endLabel)}</p>
+        <p>${translate("Duree")}: ${escapeHtml(formatDuration(period.started_at, period.ended_at))}</p>
+        <small>${translate("Assigne par")}: ${escapeHtml(period.assigned_by || "-")} · ${translate("Source")}: ${escapeHtml(sourceLabel(period.source))}</small>
+        ${period.unassigned_by ? `<small>${translate("Retire par")}: ${escapeHtml(period.unassigned_by)}</small>` : ""}
+        ${period.reason ? `<p>${translate("Pourquoi")}: ${escapeHtml(period.reason)}</p>` : ""}
+      </article>
+    `;
+  }).join("") || `<p class="helper">${translate("Aucune donnee.")}</p>`;
+}
+
+function promptRetirementNote(device) {
+  return new Promise((resolve) => {
+    pendingRetirement = { resolve };
+    $("#retire-dialog-title").textContent = translate("Sortir la machine du parc");
+    $("#retire-dialog-message").textContent = `${translate("Ajoutez une note avant de confirmer la sortie du parc.")} ${device.hostname || ""}`.trim();
+    $("#retire-note").value = "";
+    $("#retire-dialog").showModal();
+    $("#retire-note").focus();
+  });
 }
 
 function renderDetail(device, scans, history = []) {
@@ -1678,6 +1861,9 @@ function renderDetail(device, scans, history = []) {
   const manufacturer = normalizeManufacturer(device.manufacturer, device.model);
   const family = detectDeviceFamily(manufacturer.manufacturerName, device.model);
   const canEditDevice = canPerformAction("DEVICE_EDIT");
+  const currentUserLabel = device.status === "retired"
+    ? translate("Aucun utilisateur actuel")
+    : (`${device.first_name || ""} ${device.last_name || ""}`.trim() || device.email || translate("Non renseigne"));
   const teamOptions = state.teams.map((team) =>
     `<option value="${team.id}" ${device.team_id === team.id ? "selected" : ""}>${escapeHtml(displayWithAbbreviation(team.name, team.abbreviation))}</option>`).join("");
   const establishmentOptions = state.establishments.map((site) =>
@@ -1720,7 +1906,7 @@ function renderDetail(device, scans, history = []) {
         ["Famille", family],
         ["Modele", device.model],
         ["Derniere remontee", formatDate(device.last_seen_at)],
-        ["Utilisateur", `${device.first_name || ""} ${device.last_name || ""}`.trim() || device.email],
+        ["Utilisateur", currentUserLabel],
         ["Equipe", displayWithAbbreviation(device.team_name || "", device.team_abbreviation)],
         ["Etablissement", displayWithAbbreviation(device.establishment_name || "", device.establishment_abbreviation)],
       ])}
@@ -1765,6 +1951,7 @@ function renderDetail(device, scans, history = []) {
         <button class="secondary" type="submit">${translate("Ajouter la note")}</button>
       </form>
       <div class="history-timeline">${renderHistoryTimeline(history)}</div>
+      <div class="scan-history"><h3>${translate("Chronologie utilisateurs")}</h3>${renderAssignmentPeriods(device.assignmentPeriods || [])}</div>
       <div class="scan-history"><h3>${translate("Scans")}</h3><ul>${scanRows || `<li>${translate("Aucun scan detaille.")}</li>`}</ul></div>
       <div class="scan-history"><h3>${translate("Prix marche")}</h3><ul>${priceRows || `<li>${translate("Aucun prix externe collecte.")}</li>`}</ul></div>
     </section>
@@ -1783,8 +1970,7 @@ function renderDetail(device, scans, history = []) {
 
   $$(".detail-tab").forEach((button) => {
     button.addEventListener("click", () => {
-      $$(".detail-tab").forEach((tab) => tab.classList.toggle("is-active", tab === button));
-      $$(".detail-tab-panel").forEach((panel) => panel.classList.toggle("is-active", panel.dataset.detailPanel === button.dataset.detailTab));
+      activateDetailTab(button.dataset.detailTab);
     });
   });
 
@@ -1824,14 +2010,34 @@ function renderDetail(device, scans, history = []) {
   if ($("#status-form")) $("#status-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const status = new FormData(event.currentTarget).get("status");
+    let note = "";
+    if (status === "retired" && device.status !== "retired") {
+      note = await promptRetirementNote(device);
+      if (!note) {
+        event.currentTarget.elements.status.value = device.status;
+        return;
+      }
+    }
     try {
       const result = await api(`/admin/devices/${device.id}/status`, {
         method: "POST",
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, note }),
       });
       const index = state.devices.findIndex((item) => item.id === device.id);
-      if (index >= 0) state.devices[index] = { ...state.devices[index], status: result.device.status };
-      applyFilters();
+      if (index >= 0) {
+        state.devices[index] = {
+          ...state.devices[index],
+          status: result.device.status,
+          assigned_user_id: result.device.status === "retired" ? null : state.devices[index].assigned_user_id,
+          first_name: result.device.status === "retired" ? "" : state.devices[index].first_name,
+          last_name: result.device.status === "retired" ? "" : state.devices[index].last_name,
+          email: result.device.status === "retired" ? "" : state.devices[index].email,
+          team_id: result.device.status === "retired" ? null : state.devices[index].team_id,
+          team_name: result.device.status === "retired" ? "" : state.devices[index].team_name,
+        };
+      }
+      await loadAdminData();
+      await selectDevice(device.id);
       toast("Statut mis a jour.");
     } catch (error) {
       toast(error.message);
@@ -2701,6 +2907,37 @@ function bindEvents() {
     localStorage.removeItem("it_inventory_admin_user");
     $("#admin-login").classList.remove("is-hidden");
     $("#admin-dashboard").classList.add("is-hidden");
+  });
+
+  $("#time-format-preference").value = state.timeFormatPreference;
+  $("#time-format-preference").addEventListener("change", (event) => {
+    state.timeFormatPreference = event.currentTarget.value;
+    localStorage.setItem("it_inventory_time_format", state.timeFormatPreference);
+    renderNotifications();
+    if (state.selectedDetail) renderDetail(state.selectedDetail, state.selectedScans, state.selectedHistory);
+    applyFilters();
+  });
+
+  $("#cancel-retire").addEventListener("click", () => {
+    pendingRetirement?.resolve("");
+    pendingRetirement = null;
+  });
+  $("#confirm-retire").addEventListener("click", (event) => {
+    const note = $("#retire-note").value.trim();
+    if (!note) {
+      event.preventDefault();
+      toast("Note de sortie du parc requise.", "warning");
+      $("#retire-note").focus();
+      return;
+    }
+    pendingRetirement?.resolve(note);
+    pendingRetirement = null;
+  });
+  $("#retire-dialog").addEventListener("close", () => {
+    if (pendingRetirement) {
+      pendingRetirement.resolve("");
+      pendingRetirement = null;
+    }
   });
 
   $("#refresh-admin").addEventListener("click", () => loadAdminData().catch((error) => toast(error.message)));

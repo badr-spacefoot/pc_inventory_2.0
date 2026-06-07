@@ -206,7 +206,29 @@ create table if not exists public.device_history (
   changed_by text not null default 'system',
   source text not null default 'collector',
   notes text,
+  related_user_id uuid references public.users(id) on delete set null,
+  related_team_id uuid references public.teams(id) on delete set null,
+  related_establishment_id uuid references public.establishments(id) on delete set null,
   changed_at timestamptz not null default now()
+);
+
+create table if not exists public.device_assignment_periods (
+  id uuid primary key default gen_random_uuid(),
+  device_id uuid not null references public.devices(id) on delete cascade,
+  user_id uuid references public.users(id) on delete set null,
+  user_name text,
+  user_email text,
+  team_id uuid references public.teams(id) on delete set null,
+  team_name text,
+  establishment_id uuid references public.establishments(id) on delete set null,
+  establishment_name text,
+  started_at timestamptz not null default now(),
+  ended_at timestamptz,
+  assigned_by text not null default 'system',
+  unassigned_by text,
+  source text not null default 'SYSTEM',
+  reason text,
+  created_at timestamptz not null default now()
 );
 
 create table if not exists public.hardware_enrichment (
@@ -274,6 +296,8 @@ create index if not exists idx_devices_serial_number on public.devices(serial_nu
 create index if not exists idx_devices_hostname_mac on public.devices(hostname, mac_address);
 create index if not exists idx_device_scans_device_collected on public.device_scans(device_id, collected_at desc);
 create index if not exists idx_device_history_device_changed on public.device_history(device_id, changed_at desc);
+create index if not exists idx_device_assignment_periods_device on public.device_assignment_periods(device_id, started_at desc);
+create index if not exists idx_device_assignment_periods_open on public.device_assignment_periods(device_id) where ended_at is null;
 create index if not exists idx_teams_sort_index on public.teams(sort_index, name);
 create index if not exists idx_establishments_sort_index on public.establishments(sort_index, name);
 create index if not exists idx_teams_abbreviation on public.teams(lower(abbreviation));
@@ -418,6 +442,7 @@ alter table public.admin_users enable row level security;
 alter table public.notifications enable row level security;
 alter table public.pending_changes enable row level security;
 alter table public.device_history enable row level security;
+alter table public.device_assignment_periods enable row level security;
 alter table public.hardware_enrichment enable row level security;
 alter table public.market_price_history enable row level security;
 alter table public.cpu_benchmarks enable row level security;
