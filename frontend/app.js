@@ -87,6 +87,8 @@ const englishTranslations = {
   "Aucun lien a copier": "No link to copy",
   "Invitation creee.": "Invitation created.",
   "Invitation revoquee.": "Invitation revoked.",
+  "Invitation supprimee.": "Invitation deleted.",
+  "Supprimer cette invitation ?": "Delete this invitation?",
   "Aucune invitation generee.": "No invitations generated.",
   "Tokens techniques avances": "Advanced technical tokens",
   "Optionnel": "Optional",
@@ -1666,6 +1668,7 @@ function renderCollectionInvites() {
           <td>
             <div class="token-actions">
               ${status.key === "valid" ? `<button class="secondary revoke-invite" type="button" data-id="${invite.id}">${translate("Revoquer")}</button>` : ""}
+              <button class="secondary delete-invite" type="button" data-id="${invite.id}">${translate("Supprimer")}</button>
             </div>
           </td>
         </tr>
@@ -1688,6 +1691,21 @@ function renderCollectionInvites() {
         await api(`/admin/collection-invites/${button.dataset.id}/revoke`, { method: "POST", body: "{}" });
         await loadCollectionInvites();
         toast("Invitation revoquee.");
+      } catch (error) {
+        toast(error.message, "error");
+        button.disabled = false;
+      }
+    });
+  });
+  $$(".delete-invite").forEach((button) => {
+    button.addEventListener("click", async () => {
+      if (!confirm(translate("Supprimer cette invitation ?"))) return;
+      button.disabled = true;
+      try {
+        await api(`/admin/collection-invites/${button.dataset.id}`, { method: "DELETE" });
+        delete state.rawInviteUrls[button.dataset.id];
+        await loadCollectionInvites();
+        toast("Invitation supprimee.");
       } catch (error) {
         toast(error.message, "error");
         button.disabled = false;
@@ -3830,7 +3848,8 @@ function bindEvents() {
   });
   $("#invite-form").addEventListener("submit", async (event) => {
     event.preventDefault();
-    const values = Object.fromEntries(new FormData(event.currentTarget));
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form));
     const payload = {
       label: values.label,
       durationHours: Number(values.durationHours),
@@ -3849,7 +3868,7 @@ function bindEvents() {
       state.rawInviteUrls[result.invite.id] = inviteUrl;
       $("#generated-invite-url").textContent = inviteUrl;
       $("#invite-result").classList.remove("is-hidden");
-      event.currentTarget.reset();
+      form.reset();
       updateOrganizationDatalists();
       await loadCollectionInvites();
       toast("Invitation creee.", "success");
@@ -3862,7 +3881,8 @@ function bindEvents() {
   });
   $("#token-form").addEventListener("submit", async (event) => {
     event.preventDefault();
-    const values = Object.fromEntries(new FormData(event.currentTarget));
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form));
     const payload = {
       label: values.label,
       durationHours: Number(values.durationHours),
@@ -3873,7 +3893,7 @@ function bindEvents() {
       state.rawAccessTokens[result.record.id] = result.token;
       $("#generated-token").textContent = result.token;
       $("#token-result").classList.remove("is-hidden");
-      event.currentTarget.reset();
+      form.reset();
       await loadAccessTokens();
       toast("Token genere.");
     } catch (error) {

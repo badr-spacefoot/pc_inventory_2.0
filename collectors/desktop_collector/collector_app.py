@@ -49,7 +49,7 @@ else:
 
 
 DEFAULT_API_URL = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
-COLLECTOR_VERSION = "0.1.12"
+COLLECTOR_VERSION = "0.1.13"
 COLLECTOR_BUILD_CHANNEL = "github-release"
 DRAFT_PATH = Path.home() / ".spacefoot_it_collector.json"
 PREFILL_FILE_MAX_AGE_SECONDS = 24 * 60 * 60
@@ -298,6 +298,7 @@ class CollectorApp(tk.Tk):
         self.last_loaded_prefill_file = str(draft.get("prefillFilePath") or "")
         self.last_loaded_prefill_mtime = float(draft.get("prefillFileMtime") or 0)
         self.scan_log = tk.StringVar(value="")
+        self.raw_json_visible = False
         self.status = tk.StringVar(value=self.t("Ready."))
         self.connection_status = tk.StringVar(value=self.t("Not validated."))
 
@@ -421,6 +422,7 @@ class CollectorApp(tk.Tk):
         if self.teams or self.establishments:
             self.after(0, self.update_org_controls)
         self.after(0, self.update_proposal_visibility)
+        self.after(0, self.restore_dynamic_content)
         self.show_step(current_step)
         self.after(50, self.apply_title_bar_theme)
 
@@ -430,8 +432,6 @@ class CollectorApp(tk.Tk):
     def toggle_language(self) -> None:
         self.language.set("fr" if self.language.get() == "en" else "en")
         self.persist_draft()
-        self.status.set(self.t("Ready."))
-        self.connection_status.set(self.t("Not validated."))
         self._build_ui()
 
     def theme_label(self) -> str:
@@ -452,6 +452,18 @@ class CollectorApp(tk.Tk):
         self.theme_preference.set(order[(order.index(current) + 1) % len(order)] if current in order else "system")
         self.persist_draft()
         self._build_ui()
+
+    def restore_dynamic_content(self) -> None:
+        if hasattr(self, "scan_log_output") and self.scan_log.get():
+            self.scan_log_output.delete("1.0", tk.END)
+            self.scan_log_output.insert(tk.END, self.scan_log.get())
+            self.scan_log_output.see(tk.END)
+        if self.payload and hasattr(self, "summary"):
+            self.render_scan_summary()
+        if hasattr(self, "raw_card") and self.raw_json_visible:
+            self.raw_visible.set(True)
+            self.raw_card.grid()
+            self.raw_toggle.configure(text=self.t("Hide Advanced / Raw JSON"))
 
     def card(self, parent) -> tk.Frame:
         frame = tk.Frame(parent, bg=COLORS["panel"], padx=18, pady=16, highlightbackground=COLORS["line"], highlightthickness=1)
@@ -633,6 +645,9 @@ class CollectorApp(tk.Tk):
         self.label(log_card, self.t("Scan log"), 13, bold=True).grid(row=0, column=0, sticky="w")
         self.scan_log_output = scrolledtext.ScrolledText(log_card, height=5, bg=COLORS["input"], fg=COLORS["text"], insertbackground=COLORS["text"], relief="flat")
         self.scan_log_output.grid(row=1, column=0, sticky="ew", pady=(8, 0))
+        if self.scan_log.get():
+            self.scan_log_output.insert(tk.END, self.scan_log.get())
+            self.scan_log_output.see(tk.END)
         self.summary = tk.Frame(frame, bg=COLORS["bg"])
         self.summary.grid(row=2, column=0, sticky="nsew", pady=(14, 0))
         self.summary.columnconfigure(0, weight=1)
@@ -640,8 +655,10 @@ class CollectorApp(tk.Tk):
 
     def append_scan_log(self, message: str) -> None:
         timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+        line = f"[{timestamp}] {message}\n"
+        self.scan_log.set(f"{self.scan_log.get()}{line}")
         if hasattr(self, "scan_log_output"):
-            self.scan_log_output.insert(tk.END, f"[{timestamp}] {message}\n")
+            self.scan_log_output.insert(tk.END, line)
             self.scan_log_output.see(tk.END)
 
     def _review_step(self):
@@ -665,11 +682,14 @@ class CollectorApp(tk.Tk):
         self.label(self.raw_card, self.t("Advanced / Raw JSON"), 14, bold=True).grid(row=0, column=0, sticky="w")
         self.raw_output = scrolledtext.ScrolledText(self.raw_card, height=18, bg=COLORS["input"], fg=COLORS["text"], insertbackground=COLORS["text"], relief="flat")
         self.raw_output.grid(row=1, column=0, sticky="nsew", pady=(10, 0))
+        if self.payload:
+            self.raw_output.insert(tk.END, json.dumps(self.payload, indent=2, ensure_ascii=False))
         return frame
 
     def toggle_raw_json(self) -> None:
         visible = not self.raw_visible.get()
         self.raw_visible.set(visible)
+        self.raw_json_visible = visible
         if visible:
             self.raw_card.grid()
             self.raw_toggle.configure(text=self.t("Hide Advanced / Raw JSON"))
@@ -897,6 +917,7 @@ class CollectorApp(tk.Tk):
         self.status.set(self.t("Scanning hardware..."))
         if hasattr(self, "scan_log_output"):
             self.scan_log_output.delete("1.0", tk.END)
+        self.scan_log.set("")
         self.append_scan_log("Starting hardware inventory.")
         threading.Thread(target=self._scan_background, daemon=True).start()
 

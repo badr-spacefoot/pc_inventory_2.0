@@ -1659,6 +1659,27 @@ async function handleAdminRevokeCollectionInvite(request: Request, id: string) {
   return json(request, { invite: data });
 }
 
+async function handleAdminDeleteCollectionInvite(request: Request, id: string) {
+  if (!(await isAdmin(request, "TOKEN_MANAGE"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
+  const { data: invite, error: findError } = await supabase
+    .from("collection_invites")
+    .select("id,label")
+    .eq("id", id)
+    .maybeSingle();
+  if (findError) throw findError;
+  if (!invite) return badRequest(request, "Invitation introuvable.", 404);
+  const { error } = await supabase.from("collection_invites").delete().eq("id", id);
+  if (error) throw error;
+  await audit("collection_invite_deleted", "collection_invite", id, { label: invite.label });
+  await notify("TOKEN_DELETED", "Invitation supprimee", `L'invitation ${invite.label} a ete supprimee.`, {
+    severity: "WARNING",
+    targetRole: "ADMIN",
+    relatedEntityType: "collection_invite",
+    relatedEntityId: id,
+  });
+  return json(request, { deleted: true });
+}
+
 async function handleAdminRevokeAccessToken(request: Request, id: string) {
   if (!(await isAdmin(request, "TOKEN_MANAGE"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
   const { data, error } = await supabase
@@ -2721,6 +2742,8 @@ Deno.serve(async (request) => {
     if (request.method === "POST" && path.endsWith("/admin/collection-invites")) return await handleAdminCreateCollectionInvite(request);
     const revokeInviteMatch = path.match(/\/admin\/collection-invites\/([0-9a-f-]+)\/revoke/i);
     if (request.method === "POST" && revokeInviteMatch) return await handleAdminRevokeCollectionInvite(request, revokeInviteMatch[1]);
+    const deleteInviteMatch = path.match(/\/admin\/collection-invites\/([0-9a-f-]+)$/i);
+    if (request.method === "DELETE" && deleteInviteMatch) return await handleAdminDeleteCollectionInvite(request, deleteInviteMatch[1]);
     const revokeTokenMatch = path.match(/\/admin\/access-tokens\/([0-9a-f-]+)\/revoke/i);
     if (request.method === "POST" && revokeTokenMatch) return await handleAdminRevokeAccessToken(request, revokeTokenMatch[1]);
     const deleteTokenMatch = path.match(/\/admin\/access-tokens\/([0-9a-f-]+)$/i);
