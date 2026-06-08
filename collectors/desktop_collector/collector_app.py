@@ -16,6 +16,7 @@ import socket
 import subprocess
 import sys
 import threading
+import time
 import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox, scrolledtext, ttk
@@ -48,9 +49,10 @@ else:
 
 
 DEFAULT_API_URL = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
-COLLECTOR_VERSION = "0.1.11"
+COLLECTOR_VERSION = "0.1.12"
 COLLECTOR_BUILD_CHANNEL = "github-release"
 DRAFT_PATH = Path.home() / ".spacefoot_it_collector.json"
+PREFILL_FILE_MAX_AGE_SECONDS = 24 * 60 * 60
 DARK_COLORS = {
     "bg": "#1d241f",
     "panel": "#252d28",
@@ -293,6 +295,8 @@ class CollectorApp(tk.Tk):
         self.theme_preference = tk.StringVar(value=draft.get("themePreference") or "system")
         self.prefill_code = tk.StringVar(value=draft.get("prefillCode") or "")
         self.connection_visible = tk.BooleanVar(value=bool(draft.get("connectionVisible", False)))
+        self.last_loaded_prefill_file = str(draft.get("prefillFilePath") or "")
+        self.last_loaded_prefill_mtime = float(draft.get("prefillFileMtime") or 0)
         self.scan_log = tk.StringVar(value="")
         self.status = tk.StringVar(value=self.t("Ready."))
         self.connection_status = tk.StringVar(value=self.t("Not validated."))
@@ -367,10 +371,33 @@ class CollectorApp(tk.Tk):
             chip.grid(row=0, column=index, sticky="w", padx=(0, 8))
             setattr(self, f"step_chip_{index}", chip)
 
-        self.content = tk.Frame(shell, bg=COLORS["bg"])
-        self.content.grid(row=2, column=0, sticky="nsew")
+        self.content_shell = tk.Frame(shell, bg=COLORS["bg"])
+        self.content_shell.grid(row=2, column=0, sticky="nsew")
+        self.content_shell.columnconfigure(0, weight=1)
+        self.content_shell.rowconfigure(0, weight=1)
+        self.content_canvas = tk.Canvas(
+            self.content_shell,
+            bg=COLORS["bg"],
+            highlightthickness=0,
+            borderwidth=0,
+            yscrollincrement=24,
+        )
+        self.content_scrollbar = tk.Scrollbar(self.content_shell, orient="vertical", command=self.content_canvas.yview)
+        self.content_canvas.configure(yscrollcommand=self.content_scrollbar.set)
+        self.content_canvas.grid(row=0, column=0, sticky="nsew")
+        self.content_scrollbar.grid(row=0, column=1, sticky="ns")
+        self.content = tk.Frame(self.content_canvas, bg=COLORS["bg"])
         self.content.columnconfigure(0, weight=1)
-        self.content.rowconfigure(0, weight=1)
+        self.content_window = self.content_canvas.create_window((0, 0), window=self.content, anchor="nw")
+        self.content.bind(
+            "<Configure>",
+            lambda event: self.content_canvas.configure(scrollregion=self.content_canvas.bbox("all")),
+        )
+        self.content_canvas.bind(
+            "<Configure>",
+            lambda event: self.content_canvas.itemconfigure(self.content_window, width=event.width),
+        )
+        self.content_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
 
         self.step_frames = [
             self._connection_step(),
@@ -398,7 +425,7 @@ class CollectorApp(tk.Tk):
         self.after(50, self.apply_title_bar_theme)
 
     def language_label(self) -> str:
-        return "🇫🇷 FR" if self.language.get() == "en" else "🇬🇧 EN"
+        return "\U0001F310 FR" if self.language.get() == "en" else "\U0001F310 EN"
 
     def toggle_language(self) -> None:
         self.language.set("fr" if self.language.get() == "en" else "en")
@@ -409,11 +436,15 @@ class CollectorApp(tk.Tk):
 
     def theme_label(self) -> str:
         labels = {
-            "system": f"◐ {self.t('System')}",
-            "dark": f"☾ {self.t('Dark')}",
-            "light": f"☼ {self.t('Light')}",
+            "system": f"\u25c9 {self.t('System')}",
+            "dark": f"\u25cf {self.t('Dark')}",
+            "light": f"\u25cb {self.t('Light')}",
         }
         return f"{self.t('Theme')}: {labels.get(self.theme_preference.get(), self.theme_preference.get())}"
+
+    def _on_mousewheel(self, event) -> None:
+        if hasattr(self, "content_canvas"):
+            self.content_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
     def toggle_theme(self) -> None:
         order = ["system", "dark", "light"]
@@ -686,6 +717,8 @@ class CollectorApp(tk.Tk):
             "themePreference": self.theme_preference.get(),
             "prefillCode": self.prefill_code.get().strip(),
             "connectionVisible": self.connection_visible.get(),
+            "prefillFilePath": self.last_loaded_prefill_file,
+            "prefillFileMtime": self.last_loaded_prefill_mtime,
         })
 
     def load_prefill(self) -> None:
@@ -696,22 +729,33 @@ class CollectorApp(tk.Tk):
         threading.Thread(target=self._load_prefill_background, daemon=True).start()
 
     def auto_load_prefill_file(self) -> None:
-        if self.access_token.get().strip() or self.prefill_code.get().strip():
-            return
         path = newest_prefill_file()
         if not path:
             return
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
+            mtime = path.stat().st_mtime
+        except OSError:
+            return
+        if time.time() - mtime > PREFILL_FILE_MAX_AGE_SECONDS:
+            return
+        try:
+            data = json.loads(path.read_text(encoding="utf-8-sig"))
         except (OSError, json.JSONDecodeError):
             return
         code = str(data.get("prefillCode") or "").strip()
         if not code:
             return
+        current_code = self.prefill_code.get().strip()
+        already_loaded = str(path) == self.last_loaded_prefill_file and mtime <= self.last_loaded_prefill_mtime
+        if current_code == code and already_loaded:
+            return
         if data.get("apiUrl"):
             self.api_url.set(str(data.get("apiUrl")))
         self.prefill_code.set(code)
+        self.last_loaded_prefill_file = str(path)
+        self.last_loaded_prefill_mtime = mtime
         self.status.set(self.t("Prefill file loaded automatically. You can edit before submitting."))
+        self.persist_draft()
         self.load_prefill()
 
     def _load_prefill_background(self) -> None:
@@ -755,6 +799,8 @@ class CollectorApp(tk.Tk):
         for frame in self.step_frames:
             frame.grid_remove()
         self.step_frames[self.step_index].grid()
+        if hasattr(self, "content_canvas"):
+            self.content_canvas.yview_moveto(0)
         for index, chip in enumerate(getattr(self, f"step_chip_{i}") for i in range(4)):
             active = index == self.step_index
             chip.configure(bg=COLORS["brand"] if active else COLORS["panel"], fg=COLORS["text"] if active else COLORS["muted"])
@@ -787,11 +833,24 @@ class CollectorApp(tk.Tk):
         site_values = [self.org_label(item) for item in self.establishments if item.get("name")] + [self.t("Other")]
         self.team_combo.configure(values=team_values)
         self.establishment_combo.configure(values=site_values)
+        self.normalize_selected_org_labels()
         self.status.set(f"{self.t('Loaded')} {len(self.teams)} {self.t('teams and')} {len(self.establishments)} {self.t('locations.')}")
+
+    def normalize_selected_org_labels(self) -> None:
+        for variable, items in ((self.team, self.teams), (self.establishment, self.establishments)):
+            value = variable.get().strip()
+            if not value:
+                continue
+            for item in items:
+                if value == item.get("name") or value == self.org_label(item):
+                    variable.set(self.org_label(item))
+                    break
 
     def org_label(self, item: dict) -> str:
         name = item.get("name", "")
         abbreviation = item.get("abbreviation", "")
+        if abbreviation and name.lower().startswith(f"{abbreviation.lower()} - "):
+            return name
         return f"{abbreviation} - {name}" if abbreviation else name
 
     def org_name_from_label(self, value: str, items: list[dict]) -> str:
