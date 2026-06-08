@@ -1267,7 +1267,9 @@ async function persistScan(request: Request, user: { id: string; team_id: string
   if (previousDeviceError) throw previousDeviceError;
   if (previousAssignmentError) throw previousAssignmentError;
   const deviceValues = {
-    assigned_user_id: previousAssignment?.assigned_user_id ?? user.id,
+    assigned_user_id: ["stock", "retired"].includes(safeString(previousDevice?.status))
+      ? null
+      : previousAssignment?.assigned_user_id ?? user.id,
     team_id: previousAssignment?.team_id ?? user.team_id,
     establishment_id: previousAssignment?.establishment_id ?? user.establishment_id,
     hostname: safeString(body.hostname, 160),
@@ -2612,8 +2614,10 @@ async function handleAdminDeviceStatus(request: Request, id: string) {
     .single();
   if (previousError) throw previousError;
   const values: Json = { status };
-  if (status === "retired") {
+  if (status === "retired" || status === "stock") {
     values.assigned_user_id = null;
+  }
+  if (status === "retired") {
     values.team_id = null;
   }
   const { data: device, error } = await supabase.from("devices").update(values).eq("id", id).select("id,status").single();
@@ -2639,8 +2643,8 @@ async function handleAdminDeviceStatus(request: Request, id: string) {
       related_team_id: safeString(previous.team_id) || null,
       related_establishment_id: safeString(previous.establishment_id) || null,
     }]);
-    if (status === "retired") {
-      await closeOpenAssignmentPeriod(id, changedAt, auth.session?.username || "admin", note || "Device retired.");
+    if (status === "retired" || status === "stock") {
+      await closeOpenAssignmentPeriod(id, changedAt, auth.session?.username || "admin", note || (status === "stock" ? "Device moved to stock." : "Device retired."));
       if (previous.assigned_user_id) {
         await appendDeviceHistory([{
           device_id: id,
@@ -2650,13 +2654,15 @@ async function handleAdminDeviceStatus(request: Request, id: string) {
           new_value: null,
           changed_by: auth.session?.username || "admin",
           source: "MANUAL_ADMIN",
-          notes: note || null,
+          notes: note || (status === "stock" ? "Moved to stock." : null),
           changed_at: changedAt,
           related_user_id: safeString(previous.assigned_user_id),
           related_team_id: safeString(previous.team_id) || null,
           related_establishment_id: safeString(previous.establishment_id) || null,
         }]);
       }
+    }
+    if (status === "retired") {
       await notify("DEVICE_RETIRED", "notification.deviceRetired.title", "notification.deviceRetired.message", {
         severity: "WARNING",
         targetRole: "ADMIN",

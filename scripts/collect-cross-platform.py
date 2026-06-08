@@ -14,7 +14,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-SCRIPT_VERSION = "1.4.0"
+SCRIPT_VERSION = "1.5.0"
 
 PLACEHOLDER_VALUES = {
     "",
@@ -474,6 +474,14 @@ def windows_info():
       }
       return ''
     }
+    function RegistryValue($path, $name) {
+      try {
+        $value = (Get-ItemProperty -Path $path -Name $name -ErrorAction SilentlyContinue).$name
+        return Clean $value
+      } catch {
+        return ''
+      }
+    }
 
     $computer = Get-CimInstance Win32_ComputerSystem
     $computerProduct = Get-CimInstance Win32_ComputerSystemProduct
@@ -483,6 +491,26 @@ def windows_info():
     $msSystem = Get-CimInstance -Namespace root\wmi -ClassName MS_SystemInformation | Select-Object -First 1
     $os = Get-CimInstance Win32_OperatingSystem
     $processor = Get-CimInstance Win32_Processor | Select-Object -First 1
+    $registryBiosPath = 'HKLM:\HARDWARE\DESCRIPTION\System\BIOS'
+    $memoryTypeMap = @{
+      20='DDR'; 21='DDR2'; 22='DDR2 FB-DIMM'; 24='DDR3'; 26='DDR4'; 27='LPDDR'; 28='LPDDR2'; 29='LPDDR3'; 30='LPDDR4'; 31='Logical non-volatile'; 34='DDR5'; 35='LPDDR5'
+    }
+    $memoryModules = @(Get-CimInstance Win32_PhysicalMemory | ForEach-Object {
+      $type = $memoryTypeMap[[int]$_.SMBIOSMemoryType]
+      if (-not $type) { $type = Clean $_.MemoryType }
+      [pscustomobject]@{
+        bankLabel = Clean $_.BankLabel
+        slot = Clean $_.DeviceLocator
+        manufacturer = Clean $_.Manufacturer
+        partNumber = Clean $_.PartNumber
+        serialNumber = Clean $_.SerialNumber
+        capacityGb = To-Gb $_.Capacity
+        speedMhz = if ($_.Speed) { [int]$_.Speed } else { $null }
+        configuredSpeedMhz = if ($_.ConfiguredClockSpeed) { [int]$_.ConfiguredClockSpeed } else { $null }
+        memoryType = Clean $type
+        formFactor = Clean $_.FormFactor
+      }
+    })
     $videoControllers = @(Get-CimInstance Win32_VideoController |
       Where-Object { $_.Name -and $_.Name -notmatch 'Microsoft Basic|Remote Display|Indirect Display' })
     $logicalDisks = @(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3')
@@ -543,10 +571,10 @@ def windows_info():
       productNumber = FirstClean @($computerProduct.Version, $computer.SystemSKUNumber)
       baseboardProduct = FirstClean @($baseboard.Product, $msSystem.BaseBoardProduct)
       baseboardManufacturer = Clean $baseboard.Manufacturer
-      biosSerialNumber = Clean $bios.SerialNumber
+      biosSerialNumber = FirstClean @($bios.SerialNumber, (RegistryValue $registryBiosPath 'SystemSerialNumber'), (RegistryValue $registryBiosPath 'SerialNumber'))
       chassisSerialNumber = Clean $enclosure.SerialNumber
       assetTag = Clean $enclosure.SMBIOSAssetTag
-      serviceTag = FirstClean @($bios.SerialNumber, $computerProduct.IdentifyingNumber, $enclosure.SerialNumber)
+      serviceTag = FirstClean @($bios.SerialNumber, $computerProduct.IdentifyingNumber, $enclosure.SerialNumber, (RegistryValue $registryBiosPath 'SystemSerialNumber'), (RegistryValue $registryBiosPath 'SerialNumber'))
       uuid = Clean $computerProduct.UUID
     }
     $modelNumber = FirstClean @($hardwareIdentity.systemSku, $hardwareIdentity.productNumber, $hardwareIdentity.baseboardProduct)
@@ -564,6 +592,7 @@ def windows_info():
       gpu=Clean (($gpus | ForEach-Object { $_.name }) -join ' | ')
       gpus=$gpus
       ramTotalGb=To-Gb $computer.TotalPhysicalMemory
+      memoryModules=$memoryModules
       storageTotalGb=To-Gb (($logicalDisks | Measure-Object Size -Sum).Sum)
       storageFreeGb=To-Gb (($logicalDisks | Measure-Object FreeSpace -Sum).Sum)
       storageType=Clean ($storageTypes -join ' + ')

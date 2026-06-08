@@ -527,6 +527,7 @@ const englishTranslations = {
   "Version OS": "OS version",
   "Numero de serie": "Serial number",
   "RAM totale": "Total RAM",
+  "Memoire": "Memory",
   "Stockage total": "Total storage",
   "Type stockage": "Storage type",
   "Utilisateur OS": "OS user",
@@ -1038,10 +1039,45 @@ function osIcon(iconType) {
 }
 
 function renderOsBadge(device) {
-  const fullOs = [device.os_name, device.os_version].filter(Boolean).join(" ").trim();
+  const fullOs = [device.os_name || device.osType || device.os_type, device.os_version].filter(Boolean).join(" ").trim();
   if (!fullOs) return "-";
   const info = normalizeOsInfo(fullOs);
   return `<span class="os-badge ${info.iconType}" title="${escapeHtml(fullOs)}" aria-label="${escapeHtml(fullOs)}">${osIcon(info.iconType)}<span>${escapeHtml(info.displayLabel)}</span></span>`;
+}
+
+function roundedCapacityGb(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return "";
+  const common = [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192];
+  const match = common.find((candidate) => Math.abs(numeric - candidate) / candidate <= 0.08);
+  return match || Math.round(numeric);
+}
+
+function formatCapacityGb(value, suffix = "Go") {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return "";
+  const rounded = roundedCapacityGb(numeric);
+  if (rounded && Math.abs(rounded - numeric) >= 0.1) {
+    return `${rounded} ${suffix} (${numeric.toLocaleString(state.language === "fr" ? "fr-FR" : "en-US", { maximumFractionDigits: 2 })} ${suffix})`;
+  }
+  return `${numeric.toLocaleString(state.language === "fr" ? "fr-FR" : "en-US", { maximumFractionDigits: 2 })} ${suffix}`;
+}
+
+function latestScanPayload(scans = []) {
+  return scans.find((scan) => scan.payload)?.payload || {};
+}
+
+function memorySummary(payload = {}) {
+  const modules = Array.isArray(payload.memoryModules) ? payload.memoryModules : [];
+  if (!modules.length) return "";
+  const types = [...new Set(modules.map((module) => module.memoryType || module.type).filter(Boolean))];
+  const speeds = [...new Set(modules.map((module) => Number(module.speedMhz || module.configuredSpeedMhz || 0)).filter(Boolean))];
+  const slots = modules.length;
+  return [
+    slots ? `${slots} slot${slots > 1 ? "s" : ""}` : "",
+    types.join(" + "),
+    speeds.length ? `${speeds.join(" / ")} MHz` : "",
+  ].filter(Boolean).join(" · ");
 }
 
 const manufacturerRules = [
@@ -2146,10 +2182,11 @@ function renderDevices() {
   const labels = currentStatusLabels();
   $("#devices-table").innerHTML = state.filtered
     .map((device) => {
-      const userName = device.status === "retired"
+      const unassignedStatus = ["retired", "stock"].includes(device.status);
+      const userName = unassignedStatus
         ? translate("Aucun utilisateur actuel")
         : (`${device.first_name || ""} ${device.last_name || ""}`.trim() || "-");
-      const userEmail = device.status === "retired" ? translate("Sorti du parc") : (device.email || "");
+      const userEmail = unassignedStatus ? (labels[device.status] || translate("Sorti du parc")) : (device.email || "");
       return `
         <tr data-id="${device.id}" class="${device.id === state.selectedDeviceId ? "is-selected" : ""}">
           <td><strong class="cell-primary">${escapeHtml(device.hostname || "-")}</strong><small class="cell-secondary">${escapeHtml(device.serial_number || device.service_tag || "")}</small></td>
@@ -2421,9 +2458,12 @@ function renderDetail(device, scans, history = []) {
   const manufacturer = normalizeManufacturer(device.manufacturer, device.model);
   const family = detectDeviceFamily(manufacturer.manufacturerName, device.model);
   const canEditDevice = canPerformAction("DEVICE_EDIT");
-  const currentUserLabel = device.status === "retired"
+  const unassignedStatus = ["retired", "stock"].includes(device.status);
+  const currentUserLabel = unassignedStatus
     ? translate("Aucun utilisateur actuel")
     : (`${device.first_name || ""} ${device.last_name || ""}`.trim() || device.email || translate("Non renseigne"));
+  const payload = latestScanPayload(scans);
+  const memoryDetails = memorySummary(payload);
   const teamOptions = state.teams.map((team) =>
     `<option value="${team.id}" ${device.team_id === team.id ? "selected" : ""}>${escapeHtml(displayWithAbbreviation(team.name, team.abbreviation))}</option>`).join("");
   const establishmentOptions = state.establishments.map((site) =>
@@ -2482,8 +2522,9 @@ function renderDetail(device, scans, history = []) {
       ${detailRows([
         ["Serial", device.serial_number], ["Etiquette service", device.service_tag], ["Numero modele / SKU", device.model_number],
         ["CPU", device.cpu], ["GPU", device.gpu],
-        ["RAM", device.ram_total_gb ? `${device.ram_total_gb} Go` : ""],
-        ["Stockage", `${device.storage_total_gb || "-"} Go total / ${device.storage_free_gb || "-"} Go libres`],
+        ["RAM", device.ram_total_gb ? formatCapacityGb(device.ram_total_gb) : ""],
+        ["Memoire", memoryDetails],
+        ["Stockage", `${formatCapacityGb(device.storage_total_gb) || "-"} total / ${formatCapacityGb(device.storage_free_gb) || "-"} libres`],
         ["Type stockage", device.storage_type], ["Score CPU", device.cpu_benchmark_score || device.cpu_score],
         ["Generation CPU", device.cpu_generation], ["Annee modele", device.release_year || device.model_release_year],
         ["Prix lancement", money(device.estimated_launch_price)],
@@ -2881,7 +2922,7 @@ function downloadPrefillFile() {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = "spacefoot-collector-prefill.json";
+  link.download = `spacefoot-collector-prefill-${state.prefillCode || "draft"}.json`;
   link.click();
   URL.revokeObjectURL(link.href);
   toast("Fichier de pre-remplissage telecharge. Ouvrez le collecteur: il le detectera automatiquement.", "success");

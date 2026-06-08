@@ -154,6 +154,8 @@ jobs:
           merge-multiple: true
 
       - name: Prepare release assets
+        env:
+          TAG_NAME: ${{ github.ref_name }}
         run: |
           mkdir -p release-upload
           find release-assets -maxdepth 1 -type f -exec cp {} release-upload/ \;
@@ -161,6 +163,12 @@ jobs:
             name="$(basename "$app")"
             (cd "$(dirname "$app")" && zip -qry "$GITHUB_WORKSPACE/release-upload/${name}.zip" "$name")
           done
+          version="${TAG_NAME#collector-}"
+          mv release-upload/spacefoot-it-collector-windows.exe "release-upload/spacefoot-it-collector-windows-${version}.exe"
+          mv release-upload/spacefoot-it-collector-linux "release-upload/spacefoot-it-collector-linux-${version}"
+          if [ -f release-upload/spacefoot-it-collector-macos.app.zip ]; then
+            mv release-upload/spacefoot-it-collector-macos.app.zip "release-upload/spacefoot-it-collector-macos-${version}.app.zip"
+          fi
           (cd release-upload && sha256sum * > SHA256SUMS.txt)
 
       - name: Create release

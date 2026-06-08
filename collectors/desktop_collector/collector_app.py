@@ -49,7 +49,7 @@ else:
 
 
 DEFAULT_API_URL = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
-COLLECTOR_VERSION = "0.1.13"
+COLLECTOR_VERSION = "0.1.14"
 COLLECTOR_BUILD_CHANNEL = "github-release"
 DRAFT_PATH = Path.home() / ".spacefoot_it_collector.json"
 PREFILL_FILE_MAX_AGE_SECONDS = 24 * 60 * 60
@@ -148,6 +148,7 @@ TRANSLATIONS = {
         "Serial / Service tag": "Serie / Service tag",
         "CPU": "CPU",
         "RAM": "RAM",
+        "Memory details": "Details memoire",
         "Storage": "Stockage",
         "GPU": "GPU",
         "Network": "Reseau",
@@ -167,6 +168,7 @@ TRANSLATIONS = {
         "API did not return a collection token.": "L'API n'a pas retourne de token de scan.",
         "Success": "Succes",
         "Inventory submitted successfully.": "Inventaire envoye avec succes.",
+        "Submission complete. You can close the collector.": "Envoi termine. Vous pouvez fermer le collecteur.",
         "Submission successful. Device": "Envoi reussi. Machine",
         "Submission failed": "Echec de l'envoi",
         "Theme": "Theme",
@@ -825,9 +827,12 @@ class CollectorApp(tk.Tk):
             active = index == self.step_index
             chip.configure(bg=COLORS["brand"] if active else COLORS["panel"], fg=COLORS["text"] if active else COLORS["muted"])
         self.back_button.configure(state="normal" if self.step_index > 0 else "disabled")
-        self.next_button.configure(text=self.t("Next") if self.step_index < 3 else self.t("Done"), state="normal" if self.step_index < 3 else "disabled")
+        self.next_button.configure(text=self.t("Next") if self.step_index < 3 else self.t("Done"), state="normal")
 
     def next_step(self) -> None:
+        if self.step_index >= 3:
+            self.destroy()
+            return
         if self.step_index == 0 and not self.api_url.get().strip():
             messagebox.showwarning(self.t("API URL required"), self.t("Please enter the API URL."))
             return
@@ -957,6 +962,12 @@ class CollectorApp(tk.Tk):
             child.destroy()
         p = self.payload
         identity = p.get("hardwareIdentity") or {}
+        memory_modules = p.get("memoryModules") if isinstance(p.get("memoryModules"), list) else []
+        memory_summary = ""
+        if memory_modules:
+            types = sorted({str(item.get("memoryType") or item.get("type") or "").strip() for item in memory_modules if item.get("memoryType") or item.get("type")})
+            speeds = sorted({str(item.get("configuredSpeedMhz") or item.get("speedMhz") or "").strip() for item in memory_modules if item.get("configuredSpeedMhz") or item.get("speedMhz")})
+            memory_summary = " · ".join(part for part in [f"{len(memory_modules)} slots", " + ".join(types), f"{' / '.join(speeds)} MHz" if speeds else ""] if part)
         items = [
             (self.t("OS"), f"{os_icon_name(p.get('osName'))}  {p.get('osName', '')} {p.get('osVersion', '')}".strip()),
             (self.t("Manufacturer"), p.get("manufacturer")),
@@ -965,6 +976,7 @@ class CollectorApp(tk.Tk):
             (self.t("Serial / Service tag"), p.get("serialNumber") or p.get("serviceTag") or identity.get("serviceTag")),
             (self.t("CPU"), p.get("cpu")),
             (self.t("RAM"), f"{p.get('ramTotalGb')} GB" if p.get("ramTotalGb") else ""),
+            (self.t("Memory details"), memory_summary),
             (self.t("Storage"), f"{p.get('storageTotalGb')} GB {self.t('total')} / {p.get('storageFreeGb')} GB {self.t('free')}"),
             (self.t("GPU"), p.get("gpu")),
             (self.t("Network"), f"{self.t('IP')} {p.get('localIp') or '-'} / {self.t('MAC')} {p.get('macAddress') or '-'}"),
@@ -1032,8 +1044,7 @@ class CollectorApp(tk.Tk):
             with urllib.request.urlopen(request, timeout=25) as response:
                 result = json.loads(response.read().decode("utf-8"))
             clear_sensitive_draft()
-            self.after(0, lambda: self.status.set(f"{self.t('Submission successful. Device')}: {result.get('deviceId', 'unknown')}"))
-            self.after(0, lambda: messagebox.showinfo(self.t("Success"), self.t("Inventory submitted successfully.")))
+            self.after(0, lambda: self.status.set(f"{self.t('Submission successful. Device')}: {result.get('deviceId', 'unknown')} · {self.t('Submission complete. You can close the collector.')}"))
         except Exception as exc:
             self.after(0, lambda: self.status.set(f"{self.t('Submission failed')}: {api_error_message(exc)}"))
             self.after(0, lambda: messagebox.showerror(self.t("Submission failed"), api_error_message(exc)))
