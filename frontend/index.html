@@ -61,16 +61,16 @@
         <div class="split">
           <section class="panel">
             <div class="panel-head">
-              <p class="eyebrow">Acces utilisateur</p>
+              <p class="eyebrow">Accès utilisateur</p>
               <h2>Declarer un poste</h2>
             </div>
             <p class="notice">
-              Une page web seule ne peut pas lire le numero de serie, le CPU, la RAM ou le stockage complet.
-              La collecte materielle passe donc par un script local lance volontairement par l'utilisateur.
+              Une page web seule ne peut pas lire le numéro de série, le CPU, la RAM ou le stockage complet.
+              La collecte matérielle passe donc par un script local lance volontairement par l'utilisateur.
             </p>
             <form id="collect-form" class="form-grid" novalidate>
               <div id="collect-invite-banner" class="invite-banner is-hidden wide">
-                <strong>Invitation chargee</strong>
+                <strong>Invitation chargée</strong>
                 <span>Vos informations sont pre-remplies. Telechargez le collecteur, relisez puis envoyez.</span>
               </div>
               <details id="collect-support-token" class="support-token-details wide">
@@ -83,7 +83,7 @@
               </details>
               <label class="wide">
                 Lien d'invitation
-                <input name="inviteCode" autocomplete="off" placeholder="Charge automatiquement depuis le lien" readonly />
+                <input name="inviteCode" autocomplete="off" placeholder="Chargé automatiquement depuis le lien" readonly />
                 <span class="field-error"></span>
               </label>
               <label>
@@ -92,7 +92,7 @@
                 <span class="field-error"></span>
               </label>
               <label>
-                Prenom <span class="required-marker" aria-hidden="true">*</span>
+                Prénom <span class="required-marker" aria-hidden="true">*</span>
                 <input name="firstName" autocomplete="given-name" required />
                 <span class="field-error"></span>
               </label>
@@ -102,26 +102,26 @@
                 <span class="field-error"></span>
               </label>
               <label>
-                Equipe <span class="required-marker" aria-hidden="true">*</span>
+                Équipe <span class="required-marker" aria-hidden="true">*</span>
                 <select name="team" required>
                   <option value="">Chargement...</option>
                 </select>
                 <span class="field-error"></span>
               </label>
               <label id="proposed-team-field" class="is-hidden">
-                Proposer une nouvelle equipe <span class="required-marker" aria-hidden="true">*</span>
+                Proposer une nouvelle équipe <span class="required-marker" aria-hidden="true">*</span>
                 <input name="proposedTeam" maxlength="180" />
                 <span class="field-error"></span>
               </label>
               <label>
-                Etablissement <span class="required-marker" aria-hidden="true">*</span>
+                Établissement <span class="required-marker" aria-hidden="true">*</span>
                 <select name="establishment" required>
                   <option value="">Chargement...</option>
                 </select>
                 <span class="field-error"></span>
               </label>
               <label id="proposed-establishment-field" class="is-hidden">
-                Proposer un nouvel etablissement <span class="required-marker" aria-hidden="true">*</span>
+                Proposer un nouvel établissement <span class="required-marker" aria-hidden="true">*</span>
                 <input name="proposedEstablishment" maxlength="180" />
                 <span class="field-error"></span>
               </label>
@@ -135,7 +135,7 @@
               <h3>Collecte transparente</h3>
               <p>Ce collecteur recupere uniquement les informations d'inventaire utiles a l'equipe IT.</p>
               <ul>
-                <li>hostname, OS, fabricant, modele et numero de serie</li>
+                <li>hostname, OS, fabricant, modèle et numéro de série</li>
                 <li>CPU, RAM, stockage, GPU si disponible</li>
                 <li>IP locale, MAC si autorisee, utilisateur OS connecte</li>
               </ul>
@@ -157,16 +157,16 @@
                 est telecharge automatiquement et le collecteur le detectera au demarrage.
               </p>
               <div class="collector-token-box support-only is-hidden">
-                <span>Code support de pre-remplissage</span>
+                <span>Code support de pré-remplissage</span>
                 <code id="collector-prefill-code"></code>
-                <button id="copy-prefill-code" class="token-copy-button" type="button" aria-label="Copier le code de pre-remplissage" title="Copier le code de pre-remplissage">
+                <button id="copy-prefill-code" class="token-copy-button" type="button" aria-label="Copier le code de pré-remplissage" title="Copier le code de pré-remplissage">
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <rect width="14" height="14" x="8" y="8" rx="2"></rect>
                     <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
                   </svg>
                 </button>
               </div>
-              <button id="download-prefill-file" class="secondary support-only is-hidden" type="button">Telecharger le fichier de pre-remplissage</button>
+              <button id="download-prefill-file" class="secondary support-only is-hidden" type="button">Télécharger le fichier de pré-remplissage</button>
               <div class="collector-options">
                 <article>
                   <h3>Application native recommandee</h3>
@@ -174,11 +174,11 @@
                   <div class="launcher-downloads">
                     <a id="collector-download-primary" class="primary action-button" href="https://github.com/badr-spacefoot/pc_inventory_2.0/releases" rel="noopener">
                       <span id="collector-os-icon" class="collector-os-icon" aria-hidden="true"></span>
-                      <span>Telecharger le collecteur</span>
+                      <span>Télécharger le collecteur</span>
                     </a>
                     <a id="collector-releases-link" class="secondary action-button" href="https://github.com/badr-spacefoot/pc_inventory_2.0/releases" target="_blank" rel="noopener">Autres versions</a>
                   </div>
-                  <div class="platform-downloads" aria-label="Telecharger pour une autre plateforme">
+                  <div class="platform-downloads" aria-label="Télécharger pour une autre plateforme">
                     <span>Autre plateforme</span>
                     <a data-platform-download="windows" href="#">Windows</a>
                     <a data-platform-download="macos" href="#">macOS</a>
@@ -186,7 +186,7 @@
                   </div>
                 </article>
                 <article>
-                  <h3>Mode avance IT</h3>
+                  <h3>Mode avancé IT</h3>
                   <p>Script lisible pour diagnostic ou support IT. Les antivirus peuvent bloquer les scripts lances depuis le navigateur.</p>
                 </article>
               </div>
@@ -194,7 +194,7 @@
               <div class="actions">
                 <button id="copy-command" class="secondary" type="button">Copier la commande</button>
                 <button id="copy-script" class="secondary" type="button">Copier le script</button>
-                <a id="download-script" class="secondary" href="../scripts/collect-windows.ps1" download>Telecharger le script</a>
+                <a id="download-script" class="secondary" href="../scripts/collect-windows.ps1" download>Télécharger le script</a>
               </div>
               <details class="script-preview">
                 <summary>Apercu du script PowerShell</summary>
@@ -240,7 +240,7 @@
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.3 6.4"></path><path d="M3 12a9 9 0 0 1 15.3-6.4"></path><path d="M18 2v4h-4"></path><path d="M6 22v-4h4"></path></svg>
                 <span>Actualiser</span>
               </button>
-              <button id="enrich-admin" class="secondary action-button" type="button" aria-label="Enrichir les donnees" title="Enrichir les donnees">
+              <button id="enrich-admin" class="secondary action-button" type="button" aria-label="Enrichir les données" title="Enrichir les données">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4"></path><path d="M12 17v4"></path><path d="M3 12h4"></path><path d="M17 12h4"></path><path d="m5.6 5.6 2.8 2.8"></path><path d="m15.6 15.6 2.8 2.8"></path><path d="m18.4 5.6-2.8 2.8"></path><path d="m8.4 15.6-2.8 2.8"></path><circle cx="12" cy="12" r="3"></circle></svg>
                 <span>Enrichir</span>
               </button>
@@ -248,9 +248,9 @@
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"></path><path d="M14 2v6h6"></path><path d="M12 18v-6"></path><path d="m9 15 3 3 3-3"></path></svg>
                 <span>CSV</span>
               </button>
-              <button id="logout-admin" class="secondary action-button" type="button" aria-label="Deconnexion" title="Deconnexion">
+              <button id="logout-admin" class="secondary action-button" type="button" aria-label="Déconnexion" title="Déconnexion">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="m16 17 5-5-5-5"></path><path d="M21 12H9"></path></svg>
-                <span>Deconnexion</span>
+                <span>Déconnexion</span>
               </button>
             </div>
           </div>
@@ -270,7 +270,7 @@
             </button>
             <button class="admin-nav-button" type="button" data-admin-view="access" data-permission="TOKEN_MANAGE">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"></circle><path d="m21 2-9.6 9.6M15 7l2 2M18 4l2 2"></path></svg>
-              Acces
+              Accès
             </button>
             <button class="admin-nav-button" type="button" data-admin-view="users" data-permission="USER_MANAGE">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M19 8v6M22 11h-6"></path></svg>
@@ -293,7 +293,7 @@
             <section class="panel valuation-toolbar">
               <div class="panel-head inline">
                 <div>
-                  <p class="eyebrow">Valeur materielle</p>
+                  <p class="eyebrow">Valeur matérielle</p>
                   <h3>Valorisation du parc</h3>
                 </div>
                 <span id="cpu-benchmark-status" class="helper"></span>
@@ -306,7 +306,7 @@
                 <input id="cpu-benchmark-file" class="is-hidden" type="file" accept=".csv,text/csv" />
               </div>
               <p class="helper valuation-note">
-                Les valeurs sont des estimations basees sur le modele, le CPU, la RAM, le GPU, la categorie et une depreciation par age.
+                Les valeurs sont des estimations basees sur le modèle, le CPU, la RAM, le GPU, la categorie et une depreciation par age.
               </p>
             </section>
 
@@ -323,7 +323,7 @@
           <section class="panel token-manager admin-section-view section-access is-hidden" data-permission="TOKEN_MANAGE">
             <div class="panel-head inline">
               <div>
-                <p class="eyebrow">Acces collecte</p>
+                <p class="eyebrow">Accès collecte</p>
                 <h3>Invitations de collecte</h3>
               </div>
               <button id="refresh-tokens" class="secondary" type="button">Actualiser</button>
@@ -331,11 +331,11 @@
             <div class="token-manager-grid invite-manager-grid">
               <form id="invite-form" class="form-grid">
                 <label>
-                  Libelle
+                  Libellé
                   <input name="label" placeholder="Collecte Paris - juin" required maxlength="120" />
                 </label>
                 <label>
-                  Duree
+                  Durée
                   <select name="durationHours">
                     <option value="24">24 heures</option>
                     <option value="168" selected>7 jours</option>
@@ -350,10 +350,10 @@
                 </label>
                 <label>
                   Email invite
-                  <input name="email" type="email" placeholder="prenom.nom@spacefoot.com" />
+                  <input name="email" type="email" placeholder="prénom.nom@spacefoot.com" />
                 </label>
                 <label>
-                  Prenom
+                  Prénom
                   <input name="firstName" autocomplete="off" />
                 </label>
                 <label>
@@ -361,14 +361,14 @@
                   <input name="lastName" autocomplete="off" />
                 </label>
                 <label>
-                  Equipe
+                  Équipe
                   <select name="team"></select>
                 </label>
                 <label>
-                  Etablissement
+                  Établissement
                   <select name="establishment"></select>
                 </label>
-                <button class="primary" type="submit">Creer un lien d'invitation</button>
+                <button class="primary" type="submit">Créer un lien d'invitation</button>
               </form>
               <div id="invite-result" class="token-result is-hidden">
                 <p class="helper">Envoyez ce lien a l'utilisateur. Il ne verra pas le token technique.</p>
@@ -387,11 +387,11 @@
               <table class="token-table">
                 <thead>
                   <tr>
-                    <th>Libelle</th>
+                    <th>Libellé</th>
                     <th>Lien</th>
                     <th>Expiration</th>
                     <th>Utilisations</th>
-                    <th>Derniere utilisation</th>
+                    <th>Dernière utilisation</th>
                     <th>Etat</th>
                     <th></th>
                   </tr>
@@ -404,11 +404,11 @@
             <div class="token-manager-grid">
               <form id="token-form" class="form-grid">
                 <label>
-                  Libelle
+                  Libellé
                   <input name="label" placeholder="Agence Paris - juin" required maxlength="120" />
                 </label>
                 <label>
-                  Duree
+                  Durée
                   <select name="durationHours">
                     <option value="1">1 heure</option>
                     <option value="24" selected>24 heures</option>
@@ -441,11 +441,11 @@
               <table class="token-table">
                 <thead>
                   <tr>
-                    <th>Libelle</th>
+                    <th>Libellé</th>
                     <th>Prefixe</th>
                     <th>Expiration</th>
                     <th>Utilisations</th>
-                    <th>Derniere utilisation</th>
+                    <th>Dernière utilisation</th>
                     <th>Etat</th>
                     <th></th>
                   </tr>
@@ -549,9 +549,9 @@
                 <div class="panel-head inline">
                   <div>
                     <p class="eyebrow">Structure</p>
-                    <h3>Equipes</h3>
+                    <h3>Équipes</h3>
                   </div>
-                  <button id="new-team" class="secondary icon-button" type="button" aria-label="Nouvelle equipe" title="Nouvelle equipe" data-permission="TEAM_MANAGE">
+                  <button id="new-team" class="secondary icon-button" type="button" aria-label="Nouvelle équipe" title="Nouvelle équipe" data-permission="TEAM_MANAGE">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
                   </button>
                 </div>
@@ -560,17 +560,17 @@
 
               <section class="panel organization-editor" data-permission="TEAM_MANAGE">
                 <div class="panel-head">
-                  <p class="eyebrow">Equipe</p>
-                  <h3 id="team-editor-title">Nouvelle equipe</h3>
+                  <p class="eyebrow">Équipe</p>
+                  <h3 id="team-editor-title">Nouvelle équipe</h3>
                 </div>
                 <form id="team-form" class="form-grid one">
                   <input name="id" type="hidden" />
                   <label>
-                    Nom de l'equipe
+                    Nom de l'équipe
                     <input name="name" required maxlength="120" />
                   </label>
                   <label>
-                    Abreviation
+                    Abréviation
                     <input name="abbreviation" maxlength="24" placeholder="SAV, RH, IT..." />
                   </label>
                   <label>
@@ -582,15 +582,15 @@
                     <input name="color" type="color" value="#16735f" />
                   </label>
                   <div class="color-tools">
-                    <button id="reset-team-color" class="secondary" type="button">Couleur par defaut</button>
+                    <button id="reset-team-color" class="secondary" type="button">Couleur par défaut</button>
                     <div id="team-badge-preview" class="badge-preview"></div>
                   </div>
                   <label class="switch-field">
                     <input name="active" type="checkbox" checked />
-                    <span>Equipe active</span>
+                    <span>Équipe active</span>
                   </label>
                   <div class="form-actions">
-                    <button class="primary" type="submit">Enregistrer l'equipe</button>
+                    <button class="primary" type="submit">Enregistrer l'équipe</button>
                     <button id="delete-team" class="danger-button is-hidden" type="button">Supprimer</button>
                   </div>
                 </form>
@@ -600,9 +600,9 @@
                 <div class="panel-head inline">
                   <div>
                     <p class="eyebrow">Implantations</p>
-                    <h3>Etablissements</h3>
+                    <h3>Établissements</h3>
                   </div>
-                  <button id="new-establishment" class="secondary icon-button" type="button" aria-label="Nouvel etablissement" title="Nouvel etablissement" data-permission="LOCATION_MANAGE">
+                  <button id="new-establishment" class="secondary icon-button" type="button" aria-label="Nouvel établissement" title="Nouvel établissement" data-permission="LOCATION_MANAGE">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
                   </button>
                 </div>
@@ -611,21 +611,21 @@
 
               <section class="panel organization-editor establishment-editor" data-permission="LOCATION_MANAGE">
                 <div class="panel-head">
-                  <p class="eyebrow">Etablissement</p>
-                  <h3 id="establishment-editor-title">Nouvel etablissement</h3>
+                  <p class="eyebrow">Établissement</p>
+                  <h3 id="establishment-editor-title">Nouvel établissement</h3>
                 </div>
                 <form id="establishment-form" class="form-grid">
                   <input name="id" type="hidden" />
                   <label>
-                    Nom de l'etablissement
+                    Nom de l'établissement
                     <input name="name" required maxlength="120" />
                   </label>
                   <label>
-                    Abreviation
+                    Abréviation
                     <input name="abbreviation" maxlength="24" placeholder="ML, FS, BDG..." />
                   </label>
                   <label>
-                    Type d'etablissement
+                    Type d'établissement
                     <select name="establishmentType">
                       <option value="warehouse">Entrepot</option>
                       <option value="store">Boutique</option>
@@ -659,7 +659,7 @@
                     <input name="color" type="color" value="#5f6f7f" />
                   </label>
                   <div class="color-tools wide">
-                    <button id="reset-establishment-color" class="secondary" type="button">Couleur par defaut</button>
+                    <button id="reset-establishment-color" class="secondary" type="button">Couleur par défaut</button>
                     <div id="establishment-badge-preview" class="badge-preview"></div>
                   </div>
                   <label class="wide address-search-field">
@@ -708,10 +708,10 @@
                   </label>
                   <label class="switch-field">
                     <input name="active" type="checkbox" checked />
-                    <span>Etablissement actif</span>
+                    <span>Établissement actif</span>
                   </label>
                   <div class="form-actions wide">
-                    <button class="primary" type="submit">Enregistrer l'etablissement</button>
+                    <button class="primary" type="submit">Enregistrer l'établissement</button>
                     <button id="delete-establishment" class="danger-button is-hidden" type="button">Supprimer</button>
                   </div>
                 </form>
@@ -729,14 +729,14 @@
             <div class="filters">
               <label>
                 Recherche
-                <input id="global-search" placeholder="Nom, hostname, modele, serial..." />
+                <input id="global-search" placeholder="Nom, hostname, modèle, serial..." />
               </label>
               <label>
-                Equipe
+                Équipe
                 <select id="filter-team"></select>
               </label>
               <label>
-                Etablissement
+                Établissement
                 <select id="filter-establishment"></select>
               </label>
               <label>
@@ -753,7 +753,7 @@
                 </select>
               </label>
               <label>
-                Modele
+                Modèle
                 <select id="filter-model"></select>
               </label>
               <label>
@@ -763,7 +763,7 @@
               <label>
                 Trier par
                 <select id="sort-devices">
-                  <option value="last_seen">Derniere remontee</option>
+                  <option value="last_seen">Dernière remontée</option>
                   <option value="manufacturer">Fabricant</option>
                   <option value="hostname">Hostname</option>
                 </select>
@@ -812,11 +812,11 @@
                     <tr>
                       <th>Hostname</th>
                       <th>Utilisateur</th>
-                      <th>Equipe</th>
-                      <th>Etablissement</th>
+                      <th>Équipe</th>
+                      <th>Établissement</th>
                       <th>OS</th>
-                      <th>Fabricant / Modele</th>
-                      <th>Derniere remontee</th>
+                      <th>Fabricant / Modèle</th>
+                      <th>Dernière remontée</th>
                       <th>Statut</th>
                     </tr>
                   </thead>
@@ -830,7 +830,7 @@
                 <p class="eyebrow">Detail</p>
                 <h3 id="detail-title">Selectionnez une machine</h3>
               </div>
-              <div id="device-detail" class="detail-empty">Aucune machine selectionnee.</div>
+              <div id="device-detail" class="detail-empty">Aucune machine s?lectionn?e.</div>
             </aside>
           </section>
 
@@ -891,7 +891,7 @@
         <div class="confirm-icon neutral" aria-hidden="true">
           <svg viewBox="0 0 24 24"><path d="M17 3l4 4-4 4"></path><path d="M3 7h18M7 21l-4-4 4-4"></path><path d="M21 17H3"></path></svg>
         </div>
-        <h3>Reaffecter les elements lies</h3>
+        <h3>Reaffecter les elements liés</h3>
         <p id="reassign-message"></p>
         <input name="entityType" type="hidden" />
         <input name="sourceId" type="hidden" />

@@ -68,46 +68,46 @@ const englishTranslations = {
   "Activer le mode clair": "Enable light mode",
   "Changer de theme": "Change theme",
   "Changer de langue": "Change language",
-  "Acces utilisateur": "User access",
+  "Accès utilisateur": "User access",
   "Declarer un poste": "Register a computer",
   "Une page web seule ne peut pas lire le numero de serie, le CPU, la RAM ou le stockage complet. La collecte materielle passe donc par un script local lance volontairement par l'utilisateur.": "A web page alone cannot read the serial number, CPU, RAM, or full storage details. Hardware collection therefore uses a local script run voluntarily by the user.",
   "Token de collecte": "Collection token",
-  "Invitation chargee": "Invitation loaded",
+  "Invitation chargée": "Invitation loaded",
   "Vos informations sont pre-remplies. Telechargez le collecteur, relisez puis envoyez.": "Your information is prefilled. Download the collector, review, then submit.",
   "Mode support IT: utiliser un token manuel": "IT support mode: use a manual token",
   "Lien d'invitation": "Invitation link",
-  "Charge automatiquement depuis le lien": "Loaded automatically from the link",
+  "Chargé automatiquement depuis le lien": "Loaded automatically from the link",
   "Methode recommandee: telechargez l'application adaptee a votre systeme. Le fichier de pre-remplissage est telecharge automatiquement et le collecteur le detectera au demarrage.": "Recommended method: download the app for your system. The prefill file is downloaded automatically and the collector will detect it at startup.",
-  "Code support de pre-remplissage": "Support prefill code",
+  "Code support de pré-remplissage": "Support prefill code",
   "Preparation terminee. Telechargez le collecteur.": "Preparation complete. Download the collector.",
   "Invitations de collecte": "Collection invitations",
-  "Creer un lien d'invitation": "Create invitation link",
+  "Créer un lien d'invitation": "Create invitation link",
   "Envoyez ce lien a l'utilisateur. Il ne verra pas le token technique.": "Send this link to the user. They will not see the technical token.",
   "Lien copie.": "Link copied.",
   "Aucun lien a copier": "No link to copy",
-  "Invitation creee.": "Invitation created.",
-  "Invitation revoquee.": "Invitation revoked.",
-  "Invitation supprimee.": "Invitation deleted.",
+  "Invitation créée.": "Invitation created.",
+  "Invitation révoquée.": "Invitation revoked.",
+  "Invitation supprimée.": "Invitation deleted.",
   "Supprimer cette invitation ?": "Delete this invitation?",
-  "Aucune invitation generee.": "No invitations generated.",
+  "Aucune invitation générée.": "No invitations generated.",
   "Tokens techniques avances": "Advanced technical tokens",
   "Optionnel": "Optional",
   "Champ requis.": "Required field.",
   "Adresse email invalide.": "Invalid email address.",
-  "Email proprietaire invalide.": "Invalid owner email.",
-  "Veuillez completer les champs requis.": "Please complete the required fields.",
+  "Email propriétaire invalide.": "Invalid owner email.",
+  "Veuillez compléter les champs requis.": "Please complete the required fields.",
   "Nom": "Last name",
-  "Prenom": "First name",
-  "Equipe": "Team",
-  "Etablissement": "Location",
+  "Prénom": "First name",
+  "Équipe": "Team",
+  "Établissement": "Location",
   "Proposer une nouvelle equipe": "Propose a new team",
   "Proposer un nouvel etablissement": "Propose a new location",
   "Selectionnez une equipe": "Select a team",
   "Selectionnez un etablissement": "Select a location",
   "Collecte transparente": "Transparent collection",
   "Ce collecteur recupere uniquement les informations d'inventaire utiles a l'equipe IT.": "This collector only gathers inventory information needed by the IT team.",
-  "hostname, OS, fabricant, modele et numero de serie": "hostname, OS, manufacturer, model, and serial number",
-  "Numero modele / SKU": "Model number / SKU",
+  "hostname, OS, fabricant, modèle et numéro de série": "hostname, OS, manufacturer, model, and serial number",
+  "Numéro modèle / SKU": "Model number / SKU",
   "Etiquette service": "Service tag",
   "CPU, RAM, stockage, GPU si disponible": "CPU, RAM, storage, GPU if available",
   "IP locale, MAC si autorisee, utilisateur OS connecte": "Local IP, MAC if allowed, logged-in OS user",
@@ -118,32 +118,32 @@ const englishTranslations = {
   "Remplissez le formulaire pour preparer le collecteur et pre-remplir l'application.": "Complete the form to prepare the collector and prefill the app.",
   "Methode recommandee: telechargez l'application adaptee a votre systeme, chargez le code de pre-remplissage, relisez les donnees collectees puis envoyez.": "Recommended method: download the app for your system, load the prefill code, review the collected data, then submit.",
   "Token temporaire a utiliser dans l'application": "Temporary token to use in the app",
-  "Code de pre-remplissage": "Prefill code",
-  "Copier le code de pre-remplissage": "Copy prefill code",
+  "Code de pré-remplissage": "Prefill code",
+  "Copier le code de pré-remplissage": "Copy prefill code",
   "Copier le token collecteur": "Copy collector token",
   "Application native recommandee": "Recommended native app",
   "Detection du systeme en cours...": "Detecting system...",
-  "Telecharger le collecteur": "Download collector",
+  "Télécharger le collecteur": "Download collector",
   "Autres versions": "Other versions",
   "Autre plateforme": "Other platform",
-  "Telecharger le collecteur Windows": "Download Windows Collector",
-  "Telecharger le collecteur macOS": "Download macOS Collector",
-  "Telecharger le collecteur Linux": "Download Linux Collector",
-  "Telecharger le collecteur": "Download Collector",
+  "Télécharger le collecteur Windows": "Download Windows Collector",
+  "Télécharger le collecteur macOS": "Download macOS Collector",
+  "Télécharger le collecteur Linux": "Download Linux Collector",
+  "Télécharger le collecteur": "Download Collector",
   "Collecteur detecte pour": "Collector detected for",
   "Choisissez votre plateforme ci-dessous.": "Choose your platform below.",
   "Aucun asset collecteur disponible pour cette plateforme.": "No collector asset is available for this platform.",
   "Code cree. Telechargez le collecteur puis chargez le code de pre-remplissage.": "Code created. Download the collector, then load the prefill code.",
   "Application collecteur": "Collector app",
-  "Version transparente Python/Tkinter pour Windows, Ubuntu/Linux et macOS. Elle affiche les donnees avant envoi.": "Transparent Python/Tkinter version for Windows, Ubuntu/Linux, and macOS. It shows data before sending.",
+  "Version transparente Python/Tkinter pour Windows, Ubuntu/Linux et macOS. Elle affiche les données avant envoi.": "Transparent Python/Tkinter version for Windows, Ubuntu/Linux, and macOS. It shows data before sending.",
   "Fallback PowerShell": "PowerShell fallback",
-  "Mode avance IT": "Advanced IT mode",
+  "Mode avancé IT": "Advanced IT mode",
   "Script lisible pour diagnostic ou support IT. Les antivirus peuvent bloquer les scripts lances depuis le navigateur.": "Readable script for diagnostics or IT support. Antivirus tools may block browser-launched scripts.",
   "Script lisible, non obfusque, a copier ou telecharger si l'application collecteur n'est pas disponible.": "Readable, non-obfuscated script to copy or download if the collector app is unavailable.",
   "Copier la commande": "Copy command",
   "Copier le script": "Copy script",
   "Apercu du script PowerShell": "PowerShell script preview",
-  "Telecharger le script": "Download script",
+  "Télécharger le script": "Download script",
   "Connexion": "Sign in",
   "Mot de passe admin": "Admin password",
   "Mot de passe": "Password",
@@ -155,7 +155,7 @@ const englishTranslations = {
   "Enregistrer le compte": "Save account",
   "Compte actif": "Active account",
   "Compte utilisateur": "User account",
-  "Derniere connexion": "Last login",
+  "Dernière connexion": "Last login",
   "Creation": "Created",
   "Securite": "Security",
   "Vide = inchange": "Empty = unchanged",
@@ -163,15 +163,15 @@ const englishTranslations = {
   "Copier le mot de passe": "Copy password",
   "Password copied": "Password copied",
   "No password to copy": "No password to copy",
-  "Mot de passe genere.": "Password generated.",
+  "Mot de passe généré.": "Password generated.",
   "Copie impossible.": "Copy failed.",
   "Aucune commande a copier": "No command to copy",
   "Aucun token a copier": "No token to copy",
   "Code copie.": "Code copied.",
   "Aucun code a copier": "No code to copy",
-  "Telecharger le fichier de pre-remplissage": "Download prefill file",
+  "Télécharger le fichier de pré-remplissage": "Download prefill file",
   "Fichier de pre-remplissage telecharge. Ouvrez le collecteur: il le detectera automatiquement.": "Prefill file downloaded. Open the collector: it will detect it automatically.",
-  "Aucun code de pre-remplissage": "No prefill code",
+  "Aucun code de pré-remplissage": "No prefill code",
   "Aucun script a copier": "No script to copy",
   "Actif": "Active",
   "Desactive": "Disabled",
@@ -201,7 +201,7 @@ const englishTranslations = {
   "Utilise de": "Used from",
   "a": "to",
   "a aujourd'hui": "to present",
-  "Duree": "Duration",
+  "Durée": "Duration",
   "Assigne par": "Assigned by",
   "Retire par": "Unassigned by",
   "Source": "Source",
@@ -260,8 +260,8 @@ const englishTranslations = {
   "notification.pendingRejected.message": "A pending change has been rejected.",
   "notification.deleteBlocked.title": "Deletion blocked",
   "notification.deleteBlocked.message": "This team or location still has linked devices or users.",
-  "Abreviation deja utilisee par une autre equipe.": "Abbreviation already used by another team.",
-  "Abreviation deja utilisee par un autre etablissement.": "Abbreviation already used by another location.",
+  "Abréviation déjà utilisée par une autre équipe.": "Abbreviation already used by another team.",
+  "Abréviation déjà utilisée par un autre établissement.": "Abbreviation already used by another location.",
   "Commande generee. Proposition envoyee a l'admin.": "Command generated. Proposal sent to admin.",
   "Commande copiee.": "Command copied.",
   "Script copie.": "Script copied.",
@@ -270,28 +270,28 @@ const englishTranslations = {
   "Non lues": "Unread",
   "Lues": "Read",
   "Severite": "Severity",
-  "Compte cree.": "Account created.",
+  "Compte créé.": "Account created.",
   "Compte mis a jour.": "Account updated.",
-  "Compte supprime.": "Account deleted.",
+  "Compte supprimé.": "Account deleted.",
   "Notifications mises a jour.": "Notifications updated.",
   "Notification marquee comme lue.": "Notification marked as read.",
-  "Element lie introuvable.": "Related item not found.",
+  "Element lié introuvable.": "Related item not found.",
   "Se connecter": "Sign in",
   "Dashboard": "Dashboard",
   "Vue du parc informatique": "IT fleet overview",
   "Actualiser": "Refresh",
   "Enrichir": "Enrich",
-  "Enrichir les donnees": "Enrich data",
-  "Deconnexion": "Sign out",
+  "Enrichir les données": "Enrich data",
+  "Déconnexion": "Sign out",
   "Sections d'administration": "Administration sections",
   "Parc": "Fleet",
   "Organisation": "Organization",
   "Valorisation": "Valuation",
-  "Acces": "Access",
-  "Acces collecte": "Collection access",
+  "Accès": "Access",
+  "Accès collecte": "Collection access",
   "Tokens temporaires": "Temporary tokens",
-  "Libelle": "Label",
-  "Duree": "Duration",
+  "Libellé": "Label",
+  "Durée": "Duration",
   "1 heure": "1 hour",
   "24 heures": "24 hours",
   "7 jours": "7 days",
@@ -306,22 +306,22 @@ const englishTranslations = {
   "Prefixe": "Prefix",
   "Expiration": "Expiration",
   "Utilisations": "Uses",
-  "Derniere utilisation": "Last used",
+  "Dernière utilisation": "Last used",
   "Etat": "Status",
   "Structure": "Structure",
-  "Equipes": "Teams",
-  "Nouvelle equipe": "New team",
-  "Nom de l'equipe": "Team name",
-  "Abreviation": "Abbreviation",
+  "Équipes": "Teams",
+  "Nouvelle équipe": "New team",
+  "Nom de l'équipe": "Team name",
+  "Abréviation": "Abbreviation",
   "Description": "Description",
   "Couleur": "Color",
-  "Equipe active": "Active team",
-  "Enregistrer l'equipe": "Save team",
+  "Équipe active": "Active team",
+  "Enregistrer l'équipe": "Save team",
   "Implantations": "Locations",
-  "Etablissements": "Locations",
-  "Nouvel etablissement": "New location",
-  "Nom de l'etablissement": "Location name",
-  "Type d'etablissement": "Location type",
+  "Établissements": "Locations",
+  "Nouvel établissement": "New location",
+  "Nom de l'établissement": "Location name",
+  "Type d'établissement": "Location type",
   "Discipline": "Discipline",
   "Entrepot": "Warehouse",
   "Boutique": "Store",
@@ -334,15 +334,15 @@ const englishTranslations = {
   "Sport general": "General sport",
   "Velo / cycling": "Bike / cycling",
   "Sports de raquette": "Racket sports",
-  "Couleur par defaut": "Default color",
+  "Couleur par défaut": "Default color",
   "Rechercher une adresse": "Search for an address",
   "Commencez a saisir une adresse...": "Start typing an address...",
   "Adresse": "Address",
   "Code postal": "Postal code",
   "Ville": "City",
   "Pays": "Country",
-  "Etablissement actif": "Active location",
-  "Enregistrer l'etablissement": "Save location",
+  "Établissement actif": "Active location",
+  "Enregistrer l'établissement": "Save location",
   "Renseignez latitude et longitude pour afficher la carte.": "Enter latitude and longitude to display the map.",
   "Ouvrir dans OpenStreetMap": "Open in OpenStreetMap",
   "Ouvrir dans Google Maps": "Open in Google Maps",
@@ -353,7 +353,7 @@ const englishTranslations = {
   "Recent": "Recent",
   "A surveiller": "Monitor",
   "A remplacer": "Replace",
-  "Modele": "Model",
+  "Modèle": "Model",
   "Statut": "Status",
   "Actif": "Active",
   "En stock": "In stock",
@@ -368,43 +368,43 @@ const englishTranslations = {
   "Plus de 350 EUR": "More than EUR 350",
   "Machines": "Computers",
   "Utilisateur": "User",
-  "Derniere remontee": "Last report",
+  "Dernière remontée": "Last report",
   "Detail": "Details",
   "Selectionnez une machine": "Select a computer",
-  "Aucune machine selectionnee.": "No computer selected.",
-  "Valeur estimee": "Estimated value",
-  "Valeur materielle": "Hardware value",
+  "Aucune machine s?lectionn?e.": "No computer selected.",
+  "Valeur estimée": "Estimated value",
+  "Valeur matérielle": "Hardware value",
   "Valorisation du parc": "Fleet valuation",
   "Enrichir toutes les machines": "Enrich all devices",
   "Recalculer les valeurs": "Recalculate values",
   "Importer benchmarks CPU": "Import CPU benchmarks",
   "Exporter inventaire enrichi": "Export enriched inventory",
-  "Les valeurs sont des estimations basees sur le modele, le CPU, la RAM, le GPU, la categorie et une depreciation par age.": "Values are estimates based on model, CPU, RAM, GPU, category, and age depreciation.",
+  "Les valeurs sont des estimations basees sur le modèle, le CPU, la RAM, le GPU, la categorie et une depreciation par age.": "Values are estimates based on model, CPU, RAM, GPU, category, and age depreciation.",
   "Valeur de lancement totale": "Total launch value",
   "Valeur actuelle totale": "Total current value",
   "Depreciation moyenne": "Average depreciation",
   "Age moyen": "Average age",
   "Plus de 4 ans": "Older than 4 years",
   "Priorite elevee": "High priority",
-  "Valeur par equipe": "Value by team",
+  "Valeur par équipe": "Value by team",
   "Distribution des ages": "Age distribution",
   "Distribution des performances": "Performance distribution",
   "Priorite de remplacement": "Replacement priority",
-  "Benchmarks importes": "Imported benchmarks",
-  "Jeu integre": "Bundled dataset",
+  "Benchmarks importés": "Imported benchmarks",
+  "Jeu intégré": "Bundled dataset",
   "Enrichir cette machine": "Enrich this device",
   "Source enrichissement": "Enrichment source",
   "Statut enrichissement": "Enrichment status",
   "Priorite remplacement": "Replacement priority",
-  "Categorie materielle": "Hardware category",
-  "Valeur actuelle estimee": "Estimated current value",
+  "Categorie matérielle": "Hardware category",
+  "Valeur actuelle estimée": "Estimated current value",
   "Confiance prix": "Price confidence",
   "Notes enrichissement": "Enrichment notes",
   "GPU": "GPU",
   "Type stockage": "Storage type",
   "Fichier CPU importe.": "CPU file imported.",
-  "Enrichissement termine.": "Enrichment completed.",
-  "Recalcul termine.": "Recalculation completed.",
+  "Enrichissement terminé.": "Enrichment completed.",
+  "Recalcul terminé.": "Recalculation completed.",
   "completed": "Completed",
   "partial": "Partial",
   "failed": "Failed",
@@ -424,9 +424,9 @@ const englishTranslations = {
   "Stockage": "Storage",
   "Utilisateur OS": "OS user",
   "Score age": "Age score",
-  "Generation CPU": "CPU generation",
+  "Génération CPU": "CPU génération",
   "Annee CPU": "CPU year",
-  "Annee modele": "Model year",
+  "Annee modèle": "Model year",
   "Prix lancement": "Launch price",
   "Valeur actuelle": "Current value",
   "Confiance": "Confidence",
@@ -437,66 +437,66 @@ const englishTranslations = {
   "Cycle de vie": "Lifecycle",
   "Version OS": "OS version",
   "Aucun scan detaille.": "No detailed scans.",
-  "Historique prix marche": "Market price history",
+  "Historique prix marché": "Market price history",
   "Aucun prix externe collecte.": "No external prices collected.",
-  "Non renseigne": "Not provided",
+  "Non renseigné": "Not provided",
   "Aucune donnee.": "No data.",
-  "Machines par etablissement": "Computers by location",
-  "Machines par equipe": "Computers by team",
+  "Machines par établissement": "Computers by location",
+  "Machines par équipe": "Computers by team",
   "Non mises a jour": "Not recently updated",
   "A jour": "Up to date",
   "Anciennete du parc": "Fleet age",
   "Modeles presents": "Most common models",
-  "RAM moyenne par equipe": "Average RAM by team",
-  "Valeur actuelle estimee": "Estimated current value",
-  "Valeur par etablissement": "Value by location",
+  "RAM moyenne par équipe": "Average RAM by team",
+  "Valeur actuelle estimée": "Estimated current value",
+  "Valeur par établissement": "Value by location",
   "Top machines a remplacer": "Top computers to replace",
-  "Age materiel vs CPU": "Hardware age vs CPU",
+  "Age matériel vs CPU": "Hardware age vs CPU",
   "Enrichissement requis.": "Enrichment required.",
   "Enrichissement...": "Enriching...",
-  "Aucune equipe.": "No teams.",
-  "Aucun etablissement.": "No locations.",
-  "Aucun token genere.": "No tokens generated.",
-  "Revoquer": "Revoke",
+  "Aucune équipe.": "No teams.",
+  "Aucun établissement.": "No locations.",
+  "Aucun token généré.": "No tokens generated.",
+  "Révoquer": "Revoke",
   "Supprimer": "Delete",
   "Annuler": "Cancel",
   "Confirmer la suppression": "Confirm deletion",
-  "Revoque": "Revoked",
-  "Expire": "Expired",
+  "Révoqué": "Revoked",
+  "Expiré": "Expired",
   "Epuise": "Exhausted",
   "Valide": "Valid",
   "Token complet indisponible apres rechargement": "Full token unavailable after reload",
   "Agence Paris - juin": "Paris office - June",
-  "Nom, hostname, modele, serial...": "Name, hostname, model, serial...",
-  "Commande generee.": "Command generated.",
+  "Nom, hostname, modèle, serial...": "Name, hostname, model, serial...",
+  "Commande générée.": "Command generated.",
   "Commande copiee.": "Command copied.",
-  "Token genere.": "Token generated.",
+  "Token généré.": "Token generated.",
   "Token copie.": "Token copied.",
-  "Token revoque.": "Token revoked.",
-  "Token supprime.": "Token deleted.",
-  "Equipe supprimee.": "Team deleted.",
-  "Etablissement supprime.": "Location deleted.",
+  "Token révoqué.": "Token revoked.",
+  "Token supprimé.": "Token deleted.",
+  "Équipe supprimée.": "Team deleted.",
+  "Établissement supprimé.": "Location deleted.",
   "Affectations mises a jour.": "Assignments updated.",
-  "Reaffectation terminee.": "Reassignment completed.",
+  "Réaffectation terminée.": "Reassignment completed.",
   "Ordre enregistre.": "Order saved.",
   "Fabricant": "Manufacturer",
   "Trier par": "Sort by",
   "Famille": "Family",
   "Affectations": "Assignments",
-  "Proprietaire": "Owner",
-  "Prenom proprietaire": "Owner first name",
-  "Nom proprietaire": "Owner last name",
-  "Email proprietaire": "Owner email",
+  "Propriétaire": "Owner",
+  "Prénom propriétaire": "Owner first name",
+  "Nom propriétaire": "Owner last name",
+  "Email propriétaire": "Owner email",
   "Enregistrer les affectations": "Save assignments",
-  "Reaffecter les elements lies": "Reassign linked records",
+  "Reaffecter les elements liés": "Reassign linked records",
   "Nouvelle destination": "New destination",
   "Reaffecter": "Reassign",
   "Machines par fabricant": "Devices by manufacturer",
   "Fabricant et OS": "Manufacturer and OS",
   "Age moyen par fabricant": "Average age by manufacturer",
   "Vue generale": "Overview",
-  "Materiel": "Hardware",
-  "Reseau": "Network",
+  "Matériel": "Hardware",
+  "Réseau": "Network",
   "Affectation": "Assignment",
   "Historique": "History",
   "De": "From",
@@ -504,40 +504,40 @@ const englishTranslations = {
   "Aucun historique.": "No history.",
   "Ajouter la note": "Add note",
   "Ajouter une note a l'historique...": "Add a history note...",
-  "Machine creee": "Device created",
+  "Machine créée": "Device created",
   "Machine mise a jour": "Device updated",
   "Machine sortie du parc": "Device retired",
-  "Machine reactivee": "Device reactivated",
-  "Utilisateur affecte": "User assigned",
-  "Utilisateur reaffecte": "User reassigned",
-  "Utilisateur retire": "User removed",
-  "Equipe modifiee": "Team changed",
-  "Etablissement modifie": "Location changed",
+  "Machine réactivée": "Device reactivated",
+  "Utilisateur affecté": "User assigned",
+  "Utilisateur réaffecté": "User reassigned",
+  "Utilisateur retiré": "User removed",
+  "Équipe modifi?e": "Team changed",
+  "Établissement modifi?": "Location changed",
   "Systeme mis a jour": "OS changed",
-  "Materiel modifie": "Hardware changed",
-  "Statut modifie": "Status changed",
+  "Matériel modifi?": "Hardware changed",
+  "Statut modifi?": "Status changed",
   "Collecte mise a jour": "Collector update",
   "Reinitialisation detectee": "Reset detected",
   "Note administrateur": "Admin note",
   "Import mis a jour": "Import updated",
   "Sections machine": "Device sections",
   "Scans": "Scans",
-  "Prix marche": "Market prices",
+  "Prix marché": "Market prices",
   "Nom d'hote": "Hostname",
   "Version OS": "OS version",
-  "Numero de serie": "Serial number",
+  "Numéro de série": "Serial number",
   "RAM totale": "Total RAM",
-  "Memoire": "Memory",
+  "Mémoire": "Memory",
   "Stockage total": "Total storage",
   "Type stockage": "Storage type",
   "Utilisateur OS": "OS user",
-  "Email proprietaire": "Owner email",
+  "Email propriétaire": "Owner email",
   "Note ajoutee.": "Note added.",
   "Statut mis a jour.": "Status updated.",
   "Equipe mise a jour.": "Team updated.",
-  "Equipe creee.": "Team created.",
+  "Équipe créée.": "Team created.",
   "Etablissement mis a jour.": "Location updated.",
-  "Etablissement cree.": "Location created.",
+  "Établissement créé.": "Location created.",
   "Recherche d'adresse...": "Searching addresses...",
   "Aucune adresse trouvee.": "No address found.",
   "Selection de l'adresse...": "Loading address...",
@@ -550,39 +550,39 @@ const englishTranslations = {
 const frenchNotificationTranslations = {
   "notification.deviceRetired.title": "Machine sortie du parc",
   "notification.deviceRetired.message": "Une machine a ete sortie du parc.",
-  "notification.deviceReactivated.title": "Machine reactivee",
+  "notification.deviceReactivated.title": "Machine réactivée",
   "notification.deviceReactivated.message": "Une machine a ete reactivee.",
   "notification.deviceReassigned.title": "Machine reaffectee",
   "notification.deviceReassigned.message": "L'affectation d'une machine a change.",
-  "notification.pendingTeam.title": "Proposition d'equipe en attente",
-  "notification.pendingTeam.message": "Une nouvelle proposition d'equipe attend validation.",
-  "notification.pendingLocation.title": "Proposition d'etablissement en attente",
-  "notification.pendingLocation.message": "Une nouvelle proposition d'etablissement attend validation.",
-  "notification.collectorReceived.title": "Collecte recue",
+  "notification.pendingTeam.title": "Proposition d'équipe en attente",
+  "notification.pendingTeam.message": "Une nouvelle proposition d'équipe attend validation.",
+  "notification.pendingLocation.title": "Proposition d'établissement en attente",
+  "notification.pendingLocation.message": "Une nouvelle proposition d'établissement attend validation.",
+  "notification.collectorReceived.title": "Collecte reçue",
   "notification.collectorReceived.message": "Une remontee d'inventaire machine a ete recue.",
-  "notification.collectorFailed.title": "Echec de collecte",
+  "notification.collectorFailed.title": "Échec de collecte",
   "notification.collectorFailed.message": "Une remontee d'inventaire machine a echoue.",
-  "notification.adminAction.title": "Action admin terminee",
+  "notification.adminAction.title": "Action admin terminée",
   "notification.adminAction.message": "Une action admin a ete terminee.",
-  "notification.tokenRevoked.title": "Token revoque",
+  "notification.tokenRevoked.title": "Token révoqué",
   "notification.tokenRevoked.message": "Un token de collecte a ete revoque.",
-  "notification.tokenDeleted.title": "Token supprime",
+  "notification.tokenDeleted.title": "Token supprimé",
   "notification.tokenDeleted.message": "Un token de collecte a ete supprime.",
-  "notification.tokenExpired.title": "Token expire",
+  "notification.tokenExpired.title": "Token expiré",
   "notification.tokenExpired.message": "Un token de collecte a expire.",
-  "notification.ownerChanged.title": "Proprietaire modifie",
+  "notification.ownerChanged.title": "Propriétaire modifi?",
   "notification.ownerChanged.message": "Le proprietaire d'une machine a change.",
-  "notification.teamChanged.title": "Equipe modifiee",
+  "notification.teamChanged.title": "Équipe modifi?e",
   "notification.teamChanged.message": "L'equipe d'une machine a change.",
-  "notification.locationChanged.title": "Etablissement modifie",
+  "notification.locationChanged.title": "Établissement modifi?",
   "notification.locationChanged.message": "L'etablissement d'une machine a change.",
-  "notification.osChanged.title": "OS modifie",
+  "notification.osChanged.title": "OS modifi?",
   "notification.osChanged.message": "Le systeme d'exploitation d'une machine a change.",
-  "notification.hardwareChanged.title": "Materiel modifie",
+  "notification.hardwareChanged.title": "Matériel modifi?",
   "notification.hardwareChanged.message": "Le profil materiel d'une machine a change.",
   "notification.userRemoved.title": "Utilisateur actuel retire",
   "notification.userRemoved.message": "Une machine n'a plus d'utilisateur actuel.",
-  "notification.deviceOld.title": "Machine au-dessus du seuil d'anciennete",
+  "notification.deviceOld.title": "Machine au-dessus du seuil d'ancienneté",
   "notification.deviceOld.message": "Une machine depasse le seuil de remplacement.",
   "notification.lowCpu.title": "Score CPU faible",
   "notification.lowCpu.message": "Une machine a un score CPU faible.",
@@ -592,8 +592,8 @@ const frenchNotificationTranslations = {
   "notification.pendingApproved.message": "Une proposition a ete approuvee.",
   "notification.pendingRejected.title": "Proposition rejetee",
   "notification.pendingRejected.message": "Une proposition a ete rejetee.",
-  "notification.deleteBlocked.title": "Suppression bloquee",
-  "notification.deleteBlocked.message": "Cette equipe ou cet etablissement contient encore des machines ou utilisateurs lies.",
+  "notification.deleteBlocked.title": "Suppression bloquée",
+  "notification.deleteBlocked.message": "Cette équipe ou cet établissement contient encore des machines ou utilisateurs liés.",
 };
 
 function translate(value) {
@@ -612,7 +612,7 @@ function currentStatusLabels() {
 function localizedEnrichmentValue(value) {
   const labels = {
     fr: {
-      completed: "Termine", partial: "Partiel", failed: "Echec", pending: "En attente",
+      completed: "Terminé", partial: "Partiel", failed: "Échec", pending: "En attente",
       "business-laptop": "Portable professionnel", workstation: "Station de travail",
       "mini-pc": "Mini PC", desktop: "Ordinateur fixe", "all-in-one": "Tout-en-un",
       keep: "Garder", watch: "Surveiller", replace: "Remplacer",
@@ -868,7 +868,7 @@ async function loadInviteFromUrl() {
   try {
     const invite = await api(`/collect/invite/${encodeURIComponent(inviteCode)}`);
     applyCollectionInvite(invite);
-    toast("Invitation chargee.", "success");
+    toast("Invitation chargée.", "success");
   } catch (error) {
     setCollectionInviteMode(null);
     if (collectionForm().elements.inviteCode) collectionForm().elements.inviteCode.value = inviteCode;
@@ -1156,7 +1156,7 @@ function normalizeTeamInfo(teamName, abbreviation = "") {
     ["design", /\b(design|graphisme|creative)\b/],
     ["store", /\b(store manager|responsable boutique)\b/],
     ["logistics", /\b(logistique|logistics|warehouse|log)\b/],
-    ["marketplace", /\b(marketplace|marketplaces|place de marche|places de marche|market place)\b/],
+    ["marketplace", /\b(marketplace|marketplaces|place de marché|places de marché|market place)\b/],
     ["catalog", /\b(catalogue|catalog|product integration|integration produits|data catalogue|pim|pimup|cata)\b/],
     ["b2c", /\bb2c\b/],
     ["finance", /\b(finance|compta|accounting|comptabilite)\b/],
@@ -1169,9 +1169,9 @@ function normalizeTeamInfo(teamName, abbreviation = "") {
   const iconType = rules.find(([, pattern]) => pattern.test(normalized))?.[0] || "team";
   return {
     normalizedTeamName: normalized,
-    displayLabel: storedAbbreviation || fallback || rawTeamName || translate("Non renseigne"),
+    displayLabel: storedAbbreviation || fallback || rawTeamName || translate("Non renseigné"),
     abbreviation: storedAbbreviation || fallback,
-    fullLabel: rawTeamName || translate("Non renseigne"),
+    fullLabel: rawTeamName || translate("Non renseigné"),
     iconType,
     badgeClass: `team-badge team-${iconType}`,
     rawTeamName,
@@ -1215,12 +1215,12 @@ function locationInfo(type, name = "", discipline = "", abbreviation = "") {
       ? type
       : "other";
   const storedAbbreviation = String(abbreviation || "").trim().toUpperCase();
-  const displayLabel = storedAbbreviation || fallbackAbbreviation(name) || name || translate("Non renseigne");
+  const displayLabel = storedAbbreviation || fallbackAbbreviation(name) || name || translate("Non renseigné");
   return {
     iconType: normalizedType,
     badgeClass: `location-badge location-${normalizedType}`,
     displayLabel,
-    fullLabel: name || translate("Non renseigne"),
+    fullLabel: name || translate("Non renseigné"),
   };
 }
 
@@ -1267,7 +1267,7 @@ function confirmAction({ title = "Confirmer la suppression", message, confirmLab
   });
 }
 
-function openReassignment(entityType, sourceId, references) {
+function openReassignment(entityType, sourceId, références) {
   const candidates = entityType === "team" ? state.teams : state.establishments;
   const select = $("#reassign-form").elements.targetId;
   select.innerHTML = candidates
@@ -1277,7 +1277,7 @@ function openReassignment(entityType, sourceId, references) {
   if (!select.options.length) {
     toast(state.language === "en"
       ? "Create another active destination before reassigning."
-      : "Creez une autre destination active avant la reaffectation.", "error");
+      : "Creez une autre destination active avant la réaffectation.", "error");
     return;
   }
   pendingReassignment = { entityType, sourceId };
@@ -1285,7 +1285,7 @@ function openReassignment(entityType, sourceId, references) {
   $("#reassign-form").elements.sourceId.value = sourceId;
   $("#reassign-message").textContent = state.language === "en"
     ? `${references.devices || 0} device(s) and ${references.users || 0} user(s) are linked. Choose a destination; the original record will then be deleted.`
-    : `${references.devices || 0} machine(s) et ${references.users || 0} utilisateur(s) sont lies. Choisissez une destination; l'ancien element sera ensuite supprime.`;
+    : `${références.devices || 0} machine(s) et ${références.users || 0} utilisateur(s) sont liés. Choisissez une destination; l'ancien element sera ensuite supprimé.`;
   $("#reassign-dialog").showModal();
 }
 
@@ -1413,7 +1413,7 @@ function updateWeatherDisplay() {
 
 async function loadWeather() {
   const unit = state.temperatureUnit === "fahrenheit" ? "fahrenheit" : "celsius";
-  const url = new URL("https://api.open-meteo.com/v1/forecast");
+  const url = new URL("https://api.open-météo.com/v1/forecast");
   url.searchParams.set("latitude", String(CONFIG.weatherLatitude));
   url.searchParams.set("longitude", String(CONFIG.weatherLongitude));
   url.searchParams.set("current", "temperature_2m,weather_code,is_day");
@@ -1518,7 +1518,7 @@ function statusClass(status) {
 }
 
 function tokenState(token) {
-  if (token.revoked_at) return { key: "revoked", label: translate("Revoque") };
+  if (token.revoked_at) return { key: "revoked", label: translate("Révoqué") };
   if (new Date(token.expires_at).getTime() <= Date.now()) return { key: "expired", label: translate("Expire") };
   if (token.max_uses !== null && Number(token.use_count) >= Number(token.max_uses)) {
     return { key: "exhausted", label: translate("Epuise") };
@@ -1622,7 +1622,7 @@ function renderAccessTokens() {
     .join("");
 
   if (state.accessTokens.length === 0) {
-    $("#tokens-table").innerHTML = `<tr><td colspan="7" class="helper">Aucun token genere.</td></tr>`;
+    $("#tokens-table").innerHTML = `<tr><td colspan="7" class="helper">Aucun token généré.</td></tr>`;
   }
 
   $$(".copy-access-token").forEach((button) => {
@@ -1638,7 +1638,7 @@ function renderAccessTokens() {
       try {
         await api(`/admin/access-tokens/${button.dataset.id}/revoke`, { method: "POST", body: "{}" });
         await loadAccessTokens();
-        toast("Token revoque.");
+        toast("Token révoqué.");
       } catch (error) {
         toast(error.message);
         button.disabled = false;
@@ -1659,7 +1659,7 @@ function renderAccessTokens() {
         await api(`/admin/access-tokens/${button.dataset.id}`, { method: "DELETE" });
         delete state.rawAccessTokens[button.dataset.id];
         await loadAccessTokens();
-        toast("Token supprime.");
+        toast("Token supprimé.");
       } catch (error) {
         toast(error.message);
         button.disabled = false;
@@ -1669,7 +1669,7 @@ function renderAccessTokens() {
 }
 
 function inviteState(invite) {
-  if (invite.revoked_at) return { key: "revoked", label: translate("Revoque") };
+  if (invite.revoked_at) return { key: "revoked", label: translate("Révoqué") };
   if (new Date(invite.expires_at).getTime() <= Date.now()) return { key: "expired", label: translate("Expire") };
   if (invite.max_uses !== null && Number(invite.use_count) >= Number(invite.max_uses)) {
     return { key: "exhausted", label: translate("Epuise") };
@@ -1712,7 +1712,7 @@ function renderCollectionInvites() {
     })
     .join("");
   if (state.collectionInvites.length === 0) {
-    table.innerHTML = `<tr><td colspan="7" class="helper">Aucune invitation generee.</td></tr>`;
+    table.innerHTML = `<tr><td colspan="7" class="helper">Aucune invitation générée.</td></tr>`;
   }
   $$(".copy-invite-row").forEach((button) => {
     button.addEventListener("click", async () => {
@@ -1726,7 +1726,7 @@ function renderCollectionInvites() {
       try {
         await api(`/admin/collection-invites/${button.dataset.id}/revoke`, { method: "POST", body: "{}" });
         await loadCollectionInvites();
-        toast("Invitation revoquee.");
+        toast("Invitation révoquée.");
       } catch (error) {
         toast(error.message, "error");
         button.disabled = false;
@@ -1741,7 +1741,7 @@ function renderCollectionInvites() {
         await api(`/admin/collection-invites/${button.dataset.id}`, { method: "DELETE" });
         delete state.rawInviteUrls[button.dataset.id];
         await loadCollectionInvites();
-        toast("Invitation supprimee.");
+        toast("Invitation supprimée.");
       } catch (error) {
         toast(error.message, "error");
         button.disabled = false;
@@ -1914,7 +1914,7 @@ async function openNotificationTarget(id) {
     setAdminView("fleet");
     if (!state.devices.some((device) => device.id === entityId)) await loadAdminData();
     if (!state.devices.some((device) => device.id === entityId)) {
-      toast("Element lie introuvable.", "error");
+      toast("Element lié introuvable.", "error");
       await loadNotifications();
       return;
     }
@@ -1978,7 +1978,7 @@ function renderPendingChanges() {
           <label>
             Lier a l'existant
             <select name="linkedEntityId" ${disabled ? "disabled" : ""}>
-              <option value="">Creer une nouvelle valeur</option>
+              <option value="">Créer une nouvelle valeur</option>
               ${options}
             </select>
           </label>
@@ -2094,7 +2094,7 @@ function renderMetrics() {
 
   $("#metrics").innerHTML = [
     ["Machines", total],
-    ["Valeur estimee", money(fleetValue)],
+    ["Valeur estimée", money(fleetValue)],
     [`Sans scan +${CONFIG.staleDays}j`, stale],
     ["CPU faible", lowCpu],
     ["Stockage faible", lowStorage],
@@ -2164,14 +2164,14 @@ function renderValuation() {
     else priorities.Low += 1;
   });
 
-  renderBarChart('[data-valuation-chart="value-team"]', translate("Valeur par equipe"), sumBy(devices, (device) => device.team_name, estimatedValue), " EUR");
+  renderBarChart('[data-valuation-chart="value-team"]', translate("Valeur par équipe"), sumBy(devices, (device) => device.team_name, estimatedValue), " EUR");
   renderBarChart('[data-valuation-chart="age"]', translate("Distribution des ages"), ageDistribution);
   renderBarChart('[data-valuation-chart="performance"]', translate("Distribution des performances"), performance);
   renderBarChart('[data-valuation-chart="priority"]', translate("Priorite de remplacement"), priorities);
 
   if (state.cpuBenchmarkStats) {
     $("#cpu-benchmark-status").textContent =
-      `${translate("Benchmarks importes")}: ${state.cpuBenchmarkStats.importedCount} / ${translate("Jeu integre")}: ${state.cpuBenchmarkStats.bundledCount}`;
+      `${translate("Benchmarks importés")}: ${state.cpuBenchmarkStats.importedCount} / ${translate("Jeu intégré")}: ${state.cpuBenchmarkStats.bundledCount}`;
   }
 }
 
@@ -2225,20 +2225,20 @@ async function selectDevice(id) {
 
 function historyLabel(event) {
   const labels = {
-    DEVICE_CREATED: "Machine creee",
+    DEVICE_CREATED: "Machine créée",
     DEVICE_UPDATED: "Machine mise a jour",
     DEVICE_RETIRED: "Machine sortie du parc",
-    DEVICE_REACTIVATED: "Machine reactivee",
-    USER_ASSIGNED: "Utilisateur affecte",
-    USER_REASSIGNED: "Utilisateur reaffecte",
-    USER_REMOVED: "Utilisateur retire",
-    TEAM_CHANGED: "Equipe modifiee",
-    LOCATION_CHANGED: "Etablissement modifie",
+    DEVICE_REACTIVATED: "Machine réactivée",
+    USER_ASSIGNED: "Utilisateur affecté",
+    USER_REASSIGNED: "Utilisateur réaffecté",
+    USER_REMOVED: "Utilisateur retiré",
+    TEAM_CHANGED: "Équipe modifi?e",
+    LOCATION_CHANGED: "Établissement modifi?",
     OS_CHANGED: "Systeme mis a jour",
-    HARDWARE_CHANGED: "Materiel modifie",
-    STATUS_CHANGED: "Statut modifie",
+    HARDWARE_CHANGED: "Matériel modifi?",
+    STATUS_CHANGED: "Statut modifi?",
     COLLECTOR_UPDATE: "Collecte mise a jour",
-    DEVICE_RESET: "Reinitialisation detectee",
+    DEVICE_RESET: "Réinitialisation détectée",
     MANUAL_EDIT: "Note administrateur",
     IMPORT_UPDATE: "Import mis a jour",
   };
@@ -2251,20 +2251,20 @@ function historyFieldLabel(fieldName) {
     os_name: "OS",
     os_version: "Version OS",
     manufacturer: "Fabricant",
-    model: "Modele",
-    model_number: "Numero modele / SKU",
+    model: "Modèle",
+    model_number: "Numéro modèle / SKU",
     service_tag: "Etiquette service",
-    serial_number: "Numero de serie",
+    serial_number: "Numéro de série",
     cpu: "CPU",
     gpu: "GPU",
     ram_total_gb: "RAM totale",
     storage_total_gb: "Stockage total",
     storage_type: "Type stockage",
     windows_user: "Utilisateur OS",
-    team_id: "Equipe",
-    establishment_id: "Etablissement",
-    assigned_user_id: "Proprietaire",
-    owner_email: "Email proprietaire",
+    team_id: "Équipe",
+    establishment_id: "Établissement",
+    assigned_user_id: "Propriétaire",
+    owner_email: "Email propriétaire",
     status: "Statut",
     legacy_google_sheets_history: "Historique Google Sheets",
   };
@@ -2429,7 +2429,7 @@ function renderAssignmentPeriods(periods = []) {
         <strong>${escapeHtml(user)}</strong>
         <small>${escapeHtml([period.team_name, period.establishment_name].filter(Boolean).join(" - ") || "-")}</small>
         <p>${translate("Utilise de")} ${escapeHtml(formatDate(period.started_at))} ${translate("a")} ${escapeHtml(endLabel)}</p>
-        <p>${translate("Duree")}: ${escapeHtml(formatDuration(period.started_at, period.ended_at))}</p>
+        <p>${translate("Durée")}: ${escapeHtml(formatDuration(period.started_at, period.ended_at))}</p>
         <small>${translate("Assigne par")}: ${escapeHtml(period.assigned_by || "-")} · ${translate("Source")}: ${escapeHtml(sourceLabel(period.source))}</small>
         ${period.unassigned_by ? `<small>${translate("Retire par")}: ${escapeHtml(period.unassigned_by)}</small>` : ""}
         ${period.reason ? `<p>${translate("Pourquoi")}: ${escapeHtml(period.reason)}</p>` : ""}
@@ -2461,7 +2461,7 @@ function renderDetail(device, scans, history = []) {
   const unassignedStatus = ["retired", "stock"].includes(device.status);
   const currentUserLabel = unassignedStatus
     ? translate("Aucun utilisateur actuel")
-    : (`${device.first_name || ""} ${device.last_name || ""}`.trim() || device.email || translate("Non renseigne"));
+    : (`${device.first_name || ""} ${device.last_name || ""}`.trim() || device.email || translate("Non renseigné"));
   const payload = latestScanPayload(scans);
   const memoryDetails = memorySummary(payload);
   const teamOptions = state.teams.map((team) =>
@@ -2487,14 +2487,14 @@ function renderDetail(device, scans, history = []) {
       <span class="manufacturer-logo ${manufacturer.colorClass}">${renderManufacturerLogo(manufacturer)}</span>
       <span>
         <strong>${escapeHtml(manufacturer.manufacturerName)}${family ? ` ${escapeHtml(family)}` : ""}</strong>
-        <span>${escapeHtml([device.model, device.model_number].filter(Boolean).join(" / ") || translate("Non renseigne"))}</span>
+        <span>${escapeHtml([device.model, device.model_number].filter(Boolean).join(" / ") || translate("Non renseigné"))}</span>
       </span>
     </div>
     <nav class="detail-tabs" aria-label="${escapeHtml(translate("Sections machine"))}">
       <button class="detail-tab is-active" type="button" data-detail-tab="overview">${translate("Vue generale")}</button>
-      <button class="detail-tab" type="button" data-detail-tab="hardware">${translate("Materiel")}</button>
+      <button class="detail-tab" type="button" data-detail-tab="hardware">${translate("Matériel")}</button>
       <button class="detail-tab" type="button" data-detail-tab="os">${translate("OS")}</button>
-      <button class="detail-tab" type="button" data-detail-tab="network">${translate("Reseau")}</button>
+      <button class="detail-tab" type="button" data-detail-tab="network">${translate("Réseau")}</button>
       <button class="detail-tab" type="button" data-detail-tab="assignment">${translate("Affectation")}</button>
       <button class="detail-tab" type="button" data-detail-tab="lifecycle">${translate("Cycle de vie")}</button>
       <button class="detail-tab" type="button" data-detail-tab="history">${translate("Historique")}</button>
@@ -2504,13 +2504,13 @@ function renderDetail(device, scans, history = []) {
         ["Hostname", device.hostname],
         ["Fabricant", manufacturer.manufacturerName],
         ["Famille", family],
-        ["Modele", device.model],
-        ["Numero modele / SKU", device.model_number],
+        ["Modèle", device.model],
+        ["Numéro modèle / SKU", device.model_number],
         ["Etiquette service", device.service_tag],
-        ["Derniere remontee", formatDate(device.last_seen_at)],
+        ["Dernière remontée", formatDate(device.last_seen_at)],
         ["Utilisateur", currentUserLabel],
-        ["Equipe", displayWithAbbreviation(device.team_name || "", device.team_abbreviation)],
-        ["Etablissement", displayWithAbbreviation(device.establishment_name || "", device.establishment_abbreviation)],
+        ["Équipe", displayWithAbbreviation(device.team_name || "", device.team_abbreviation)],
+        ["Établissement", displayWithAbbreviation(device.establishment_name || "", device.establishment_abbreviation)],
       ])}
       ${canEditDevice ? `<form id="status-form" class="form-grid one scan-history">
         <label>${translate("Statut")}<select name="status">${Object.entries(labels).map(([value, label]) => `<option value="${value}" ${device.status === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>
@@ -2520,32 +2520,32 @@ function renderDetail(device, scans, history = []) {
     </section>
     <section class="detail-tab-panel" data-detail-panel="hardware">
       ${detailRows([
-        ["Serial", device.serial_number], ["Etiquette service", device.service_tag], ["Numero modele / SKU", device.model_number],
+        ["Serial", device.serial_number], ["Etiquette service", device.service_tag], ["Numéro modèle / SKU", device.model_number],
         ["CPU", device.cpu], ["GPU", device.gpu],
         ["RAM", device.ram_total_gb ? formatCapacityGb(device.ram_total_gb) : ""],
-        ["Memoire", memoryDetails],
+        ["Mémoire", memoryDetails],
         ["Stockage", `${formatCapacityGb(device.storage_total_gb) || "-"} total / ${formatCapacityGb(device.storage_free_gb) || "-"} libres`],
         ["Type stockage", device.storage_type], ["Score CPU", device.cpu_benchmark_score || device.cpu_score],
-        ["Generation CPU", device.cpu_generation], ["Annee modele", device.release_year || device.model_release_year],
+        ["Génération CPU", device.cpu_generation], ["Annee modèle", device.release_year || device.model_release_year],
         ["Prix lancement", money(device.estimated_launch_price)],
-        ["Valeur actuelle estimee", money(device.estimated_current_value || device.current_market_price_avg)],
+        ["Valeur actuelle estimée", money(device.estimated_current_value || device.current_market_price_avg)],
       ])}
     </section>
     <section class="detail-tab-panel" data-detail-panel="network">
       ${detailRows([["MAC", device.mac_address], ["IP locale", device.local_ip], ["Utilisateur OS", device.windows_user], ["Script", device.script_version]])}
     </section>
     <section class="detail-tab-panel" data-detail-panel="os">
-      ${detailRows([["OS", device.os_name], ["Version OS", device.os_version], ["Derniere remontee", formatDate(device.last_seen_at)], ["Script", device.script_version]])}
+      ${detailRows([["OS", device.os_name], ["Version OS", device.os_version], ["Dernière remontée", formatDate(device.last_seen_at)], ["Script", device.script_version]])}
     </section>
     <section class="detail-tab-panel" data-detail-panel="assignment">
       <div class="assignment-summary">${renderTeamBadge(device.team_name, device.team_id, device.team_color)} ${renderLocationBadge(device)}</div>
       ${canEditDevice ? `<form id="assignment-form" class="form-grid one assignment-form">
-        <label>${translate("Equipe")}<select name="teamId"><option value="">${translate("Non renseigne")}</option>${teamOptions}</select></label>
-        <label>${translate("Etablissement")}<select name="establishmentId"><option value="">${translate("Non renseigne")}</option>${establishmentOptions}</select></label>
-        <label>${translate("Proprietaire")}<select name="assignedUserId"><option value="">${translate("Non renseigne")}</option>${userOptions}</select></label>
-        <label>${translate("Prenom proprietaire")}<input name="ownerFirstName" value="${escapeHtml(device.first_name || "")}" maxlength="120" /></label>
-        <label>${translate("Nom proprietaire")}<input name="ownerLastName" value="${escapeHtml(device.last_name || "")}" maxlength="120" /></label>
-        <label>${translate("Email proprietaire")}<input name="ownerEmail" type="email" value="${escapeHtml(device.email || "")}" maxlength="255" /></label>
+        <label>${translate("Équipe")}<select name="teamId"><option value="">${translate("Non renseigné")}</option>${teamOptions}</select></label>
+        <label>${translate("Établissement")}<select name="establishmentId"><option value="">${translate("Non renseigné")}</option>${establishmentOptions}</select></label>
+        <label>${translate("Propriétaire")}<select name="assignedUserId"><option value="">${translate("Non renseigné")}</option>${userOptions}</select></label>
+        <label>${translate("Prénom propriétaire")}<input name="ownerFirstName" value="${escapeHtml(device.first_name || "")}" maxlength="120" /></label>
+        <label>${translate("Nom propriétaire")}<input name="ownerLastName" value="${escapeHtml(device.last_name || "")}" maxlength="120" /></label>
+        <label>${translate("Email propriétaire")}<input name="ownerEmail" type="email" value="${escapeHtml(device.email || "")}" maxlength="255" /></label>
         <button type="submit" class="primary">${translate("Enregistrer les affectations")}</button>
       </form>` : ""}
     </section>
@@ -2557,7 +2557,7 @@ function renderDetail(device, scans, history = []) {
       <div class="history-timeline">${renderHistoryTimeline(history)}</div>
       <div class="scan-history"><h3>${translate("Chronologie utilisateurs")}</h3>${renderAssignmentPeriods(assignmentPeriodsFromLegacyHistory(history, device.assignmentPeriods || []))}</div>
       <div class="scan-history"><h3>${translate("Scans")}</h3><ul>${scanRows || `<li>${translate("Aucun scan detaille.")}</li>`}</ul></div>
-      <div class="scan-history"><h3>${translate("Prix marche")}</h3><ul>${priceRows || `<li>${translate("Aucun prix externe collecte.")}</li>`}</ul></div>
+      <div class="scan-history"><h3>${translate("Prix marché")}</h3><ul>${priceRows || `<li>${translate("Aucun prix externe collecte.")}</li>`}</ul></div>
     </section>
     <section class="detail-tab-panel" data-detail-panel="lifecycle">
       ${detailRows([
@@ -2567,7 +2567,7 @@ function renderDetail(device, scans, history = []) {
         ["Reco", localizedEnrichmentValue(device.recommendation)],
         ["Dernier enrichissement", formatDate(device.last_enriched_at)],
         ["Confiance prix", device.price_confidence_score ? `${device.price_confidence_score}/100` : ""],
-        ["Valeur actuelle estimee", money(device.estimated_current_value || device.current_market_price_avg)],
+        ["Valeur actuelle estimée", money(device.estimated_current_value || device.current_market_price_avg)],
       ])}
     </section>
   `;
@@ -2583,7 +2583,7 @@ function renderDetail(device, scans, history = []) {
     const values = Object.fromEntries(new FormData(event.currentTarget));
     const ownerEmail = String(values.ownerEmail || "").trim();
     if (ownerEmail && !event.currentTarget.elements.ownerEmail.checkValidity()) {
-      toast("Email proprietaire invalide.", "error");
+      toast("Email propriétaire invalide.", "error");
       return;
     }
     try {
@@ -2671,7 +2671,7 @@ function renderDetail(device, scans, history = []) {
 
 function countBy(items, getter) {
   return items.reduce((acc, item) => {
-    const key = getter(item) || "Non renseigne";
+    const key = getter(item) || "Non renseigné";
     acc[key] = (acc[key] || 0) + 1;
     return acc;
   }, {});
@@ -2680,7 +2680,7 @@ function countBy(items, getter) {
 function averageBy(items, groupGetter, valueGetter) {
   const groups = {};
   items.forEach((item) => {
-    const group = groupGetter(item) || "Non renseigne";
+    const group = groupGetter(item) || "Non renseigné";
     const value = Number(valueGetter(item) || 0);
     if (!value) return;
     groups[group] = groups[group] || { total: 0, count: 0 };
@@ -2714,8 +2714,8 @@ function renderBarChart(selector, title, data, suffix = "") {
 }
 
 function renderCharts() {
-  renderBarChart('[data-chart="establishments"]', "Machines par etablissement", countBy(state.filtered, (d) => d.establishment_name));
-  renderBarChart('[data-chart="teams"]', "Machines par equipe", countBy(state.filtered, (d) => d.team_name));
+  renderBarChart('[data-chart="establishments"]', "Machines par établissement", countBy(state.filtered, (d) => d.establishment_name));
+  renderBarChart('[data-chart="teams"]', "Machines par équipe", countBy(state.filtered, (d) => d.team_name));
   renderBarChart('[data-chart="os"]', "OS", countBy(state.filtered, (d) => d.os_name));
   renderBarChart('[data-chart="stale"]', "Non mises a jour", {
     [`+${CONFIG.staleDays} jours`]: state.filtered.filter((d) => daysSince(d.last_seen_at) > CONFIG.staleDays).length,
@@ -2723,18 +2723,18 @@ function renderCharts() {
   });
   renderBarChart('[data-chart="age"]', "Anciennete du parc", countBy(state.filtered, ageBucket));
   renderBarChart('[data-chart="models"]', "Modeles presents", countBy(state.filtered, (d) => d.model));
-  renderBarChart('[data-chart="ram"]', "RAM moyenne par equipe", averageBy(state.filtered, (d) => d.team_name, (d) => d.ram_total_gb), " Go");
+  renderBarChart('[data-chart="ram"]', "RAM moyenne par équipe", averageBy(state.filtered, (d) => d.team_name, (d) => d.ram_total_gb), " Go");
   renderBarChart('[data-chart="storage"]', "Stockage faible", {
     "< 15 Go": state.filtered.filter((d) => Number(d.storage_free_gb || 0) < 15).length,
     "15-30 Go": state.filtered.filter((d) => Number(d.storage_free_gb || 0) >= 15 && Number(d.storage_free_gb || 0) < 30).length,
     "> 30 Go": state.filtered.filter((d) => Number(d.storage_free_gb || 0) >= 30).length,
   });
-  renderBarChart('[data-chart="fleet-value"]', "Valeur actuelle estimee", {
+  renderBarChart('[data-chart="fleet-value"]', "Valeur actuelle estimée", {
     "Parc": Math.round(state.filtered.reduce((sum, d) => sum + estimatedValue(d), 0)),
   }, " EUR");
-  renderBarChart('[data-chart="value-by-site"]', "Valeur par etablissement", sumBy(state.filtered, (d) => d.establishment_name, estimatedValue), " EUR");
+  renderBarChart('[data-chart="value-by-site"]', "Valeur par établissement", sumBy(state.filtered, (d) => d.establishment_name, estimatedValue), " EUR");
   renderBarChart('[data-chart="replace-top"]', "Top machines a remplacer", topReplaceCandidates(state.filtered));
-  renderScatter('[data-chart="age-performance"]', "Age materiel vs CPU", state.filtered);
+  renderScatter('[data-chart="age-performance"]', "Age matériel vs CPU", state.filtered);
   renderBarChart(
     '[data-chart="manufacturers"]',
     translate("Machines par fabricant"),
@@ -2763,7 +2763,7 @@ function renderCharts() {
 
 function sumBy(items, groupGetter, valueGetter) {
   return items.reduce((acc, item) => {
-    const group = groupGetter(item) || "Non renseigne";
+    const group = groupGetter(item) || "Non renseigné";
     acc[group] = Math.round((acc[group] || 0) + Number(valueGetter(item) || 0));
     return acc;
   }, {});
@@ -2890,10 +2890,10 @@ function platformLabel(platform) {
 }
 
 function downloadLabel(platform) {
-  if (platform === "windows") return translate("Telecharger le collecteur Windows");
-  if (platform === "macos") return translate("Telecharger le collecteur macOS");
-  if (platform === "linux") return translate("Telecharger le collecteur Linux");
-  return translate("Telecharger le collecteur");
+  if (platform === "windows") return translate("Télécharger le collecteur Windows");
+  if (platform === "macos") return translate("Télécharger le collecteur macOS");
+  if (platform === "linux") return translate("Télécharger le collecteur Linux");
+  return translate("Télécharger le collecteur");
 }
 
 function osIconSvg(platform) {
@@ -2911,7 +2911,7 @@ function osIconSvg(platform) {
 
 function downloadPrefillFile() {
   if (!state.prefillCode) {
-    toast("Aucun code de pre-remplissage", "error");
+    toast("Aucun code de pré-remplissage", "error");
     return;
   }
   const payload = {
@@ -2947,7 +2947,7 @@ function updateCollectorDownloadUi() {
   } else {
     primary.href = releasePage;
     primary.removeAttribute("download");
-    primary.querySelector("span:not(.collector-os-icon)").textContent = translate("Telecharger le collecteur");
+    primary.querySelector("span:not(.collector-os-icon)").textContent = translate("Télécharger le collecteur");
     $("#collector-os-icon").innerHTML = osIconSvg("unknown");
     $("#collector-platform-copy").textContent = detected === "unknown"
       ? translate("Choisissez votre plateforme ci-dessous.")
@@ -3117,7 +3117,7 @@ function renderOrganization() {
         </div>
       `,
     )
-    .join("") || `<p class="helper">Aucune equipe.</p>`;
+    .join("") || `<p class="helper">Aucune équipe.</p>`;
 
   $("#establishments-manager-list").innerHTML = state.establishments
     .map((site, index) => {
@@ -3140,7 +3140,7 @@ function renderOrganization() {
         </div>
       `;
     })
-    .join("") || `<p class="helper">Aucun etablissement.</p>`;
+    .join("") || `<p class="helper">Aucun établissement.</p>`;
 
   $$(".edit-team").forEach((button) => button.addEventListener("click", () => editTeam(button.dataset.id)));
   $$(".edit-establishment").forEach((button) =>
@@ -3230,7 +3230,7 @@ function resetTeamForm() {
   form.elements.abbreviation.value = "";
   form.elements.color.value = defaultOrganizationColor(state.teams.length);
   form.elements.active.checked = true;
-  $("#team-editor-title").textContent = "Nouvelle equipe";
+  $("#team-editor-title").textContent = "Nouvelle équipe";
   $("#delete-team").classList.add("is-hidden");
   renderTeamPreview();
 }
@@ -3252,7 +3252,7 @@ function editTeam(id) {
 
 function renderTeamPreview() {
   const form = $("#team-form");
-  const name = form.elements.name.value || translate("Nouvelle equipe");
+  const name = form.elements.name.value || translate("Nouvelle équipe");
   const info = normalizeTeamInfo(name, form.elements.abbreviation.value);
   $("#team-badge-preview").innerHTML = `<span class="${info.badgeClass}" ${badgeStyle(form.elements.color.value)}>${teamIcon(info.iconType)}<span>${escapeHtml(info.displayLabel)}</span></span>`;
 }
@@ -3270,7 +3270,7 @@ function resetEstablishmentForm() {
   $("#address-search").value = "";
   $("#address-search-status").textContent = "";
   hideAddressSuggestions();
-  $("#establishment-editor-title").textContent = "Nouvel etablissement";
+  $("#establishment-editor-title").textContent = "Nouvel établissement";
   $("#delete-establishment").classList.add("is-hidden");
   renderEstablishmentPreview();
   renderEstablishmentMap();
@@ -3301,7 +3301,7 @@ function editEstablishment(id) {
 
 function renderEstablishmentPreview() {
   const form = $("#establishment-form");
-  const name = form.elements.name.value || translate("Nouvel etablissement");
+  const name = form.elements.name.value || translate("Nouvel établissement");
   const info = locationInfo(form.elements.establishmentType.value, name, form.elements.discipline.value, form.elements.abbreviation.value);
   $("#establishment-badge-preview").innerHTML = `<span class="${info.badgeClass}" ${badgeStyle(form.elements.color.value)}>${locationIcon(info.iconType)}<span>${escapeHtml(info.displayLabel)}</span></span>`;
 }
@@ -3335,7 +3335,7 @@ function renderEstablishmentMap() {
     linkLabel = "Ouvrir dans OpenStreetMap";
   }
   $("#establishment-map").innerHTML = `
-    <iframe title="Carte de l'etablissement" loading="lazy" src="${src}"></iframe>
+    <iframe title="Carte de l'établissement" loading="lazy" src="${src}"></iframe>
     <a href="${openUrl}" target="_blank" rel="noopener">${translate(linkLabel)}</a>
   `;
 }
@@ -3495,7 +3495,7 @@ async function runEnrichment({ mode = "refresh", deviceId = "", button = null } 
     });
     const message = state.language === "en"
       ? `${result.enriched} enriched, ${result.skipped} skipped, ${result.failed || 0} failed.`
-      : `${result.enriched} enrichie(s), ${result.skipped} ignoree(s), ${result.failed || 0} en echec.`;
+      : `${result.enriched} enrichie(s), ${result.skipped} ignoree(s), ${result.failed || 0} en échec.`;
     toast(message);
     await loadAdminData();
     return result;
@@ -3583,7 +3583,7 @@ function bindEvents() {
     event.preventDefault();
     if (!validateCollectionForm(event.currentTarget)) {
       saveCollectionDraft();
-      toast("Veuillez completer les champs requis.", "error");
+      toast("Veuillez compléter les champs requis.", "error");
       return;
     }
     const form = Object.fromEntries(new FormData(event.currentTarget));
@@ -3611,7 +3611,7 @@ function bindEvents() {
       state.prefillCode = result.prefillCode || "";
       $("#powershell-command").textContent = state.language === "en"
         ? "Use the native collector app. The prefill file is downloaded with the app and the fallback script is reserved for IT support."
-        : "Utilisez l'application collecteur native. Le fichier de pre-remplissage est telecharge avec l'app et le script fallback reste reserve au support IT.";
+        : "Utilisez l'application collecteur native. Le fichier de pré-remplissage est téléchargé avec l'app et le script fallback reste r?serv? au support IT.";
       updateCollectorDownloadUi();
       toast(translate("Preparation terminee. Telechargez le collecteur."), "success");
     } catch (error) {
@@ -3751,10 +3751,10 @@ function bindEvents() {
       await api(`/admin/teams/${id}`, { method: "DELETE" });
       await loadOrganization();
       resetTeamForm();
-      toast("Equipe supprimee.", "success");
+      toast("Équipe supprimée.", "success");
     } catch (error) {
       if (error.details?.code === "ENTITY_IN_USE") {
-        openReassignment("team", id, error.details.references || {});
+        openReassignment("team", id, error.details.références || {});
       } else {
         toast(error.message, "error");
       }
@@ -3775,10 +3775,10 @@ function bindEvents() {
       await api(`/admin/establishments/${id}`, { method: "DELETE" });
       await loadOrganization();
       resetEstablishmentForm();
-      toast("Etablissement supprime.", "success");
+      toast("Établissement supprimé.", "success");
     } catch (error) {
       if (error.details?.code === "ENTITY_IN_USE") {
-        openReassignment("establishment", id, error.details.references || {});
+        openReassignment("establishment", id, error.details.références || {});
       } else {
         toast(error.message, "error");
       }
@@ -3806,7 +3806,7 @@ function bindEvents() {
       await loadAdminData();
       resetTeamForm();
       resetEstablishmentForm();
-      toast("Reaffectation terminee.", "success");
+      toast("Réaffectation terminée.", "success");
     } catch (error) {
       toast(error.message, "error");
     } finally {
@@ -3912,7 +3912,7 @@ function bindEvents() {
       form.reset();
       updateOrganizationDatalists();
       await loadCollectionInvites();
-      toast("Invitation creee.", "success");
+      toast("Invitation créée.", "success");
     } catch (error) {
       toast(error.message, "error");
     }
@@ -3936,7 +3936,7 @@ function bindEvents() {
       $("#token-result").classList.remove("is-hidden");
       form.reset();
       await loadAccessTokens();
-      toast("Token genere.");
+      toast("Token généré.");
     } catch (error) {
       toast(error.message);
     }
@@ -3951,7 +3951,7 @@ function bindEvents() {
     passwordInput.type = "text";
     passwordInput.focus();
     passwordInput.select();
-    toast("Mot de passe genere.", "success");
+    toast("Mot de passe généré.", "success");
   });
   $("#copy-admin-password").addEventListener("click", async () => {
     await copyText($("#admin-user-form").elements.password.value, "Password copied", "No password to copy");
@@ -3991,7 +3991,7 @@ function bindEvents() {
       await api(`/admin/users/${id}`, { method: "DELETE" });
       await loadAdminUsers();
       resetAdminUserForm();
-      toast("Compte supprime.", "success");
+      toast("Compte supprimé.", "success");
     } catch (error) {
       toast(error.message, "error");
     }

@@ -5,16 +5,16 @@ Collecteur desktop transparent et packagable pour Windows, Linux et macOS.
 Objectif:
 
 - valider l'API et le token de collecte avant l'envoi;
-- charger les equipes et etablissements depuis les valeurs admin;
+- charger les équipes et établissements depuis les valeurs admin;
 - afficher clairement les donnees collectees avant soumission;
 - utiliser le meme contrat API que le web app (`/collect/profile` puis `/collect/scan`);
-- garder un panneau avance avec le JSON brut pour audit.
+- garder un panneau avancé avec le JSON brut pour audit.
 
 Flux utilisateur:
 
 1. `Connection`: API URL, token temporaire de collecte, validation du token.
 2. `Assignment`: prenom, nom, email, equipe et etablissement charges depuis l'admin.
-3. `Hardware scan`: collecte locale et resume materiel lisible.
+3. `Hardware scan`: collecte locale et resume matériel lisible.
 4. `Review & submit`: confirmation, puis envoi a l'API.
 
 L'adresse MAC est incluse par defaut lorsque l'organisation l'autorise. L'utilisateur peut la decocher avant le scan.
@@ -38,17 +38,17 @@ Le site telecharge aussi un fichier `spacefoot-collector-prefill.json` en meme t
 
 Les champs `Other team proposal` et `Other location proposal` sont caches tant que l'utilisateur ne choisit pas `Other` / `Autre`. Les listes equipes et etablissements sont toujours rechargees depuis l'API publique `/organization`.
 
-L'ecran de scan contient un journal integre: aucune console Windows visible n'est requise pour suivre l'avancement.
+L'écran de scan contient un journal intégré: aucune console Windows visible n'est requise pour suivre l'avancement.
 
 Le collecteur n'installe pas de controle a distance, ne lit aucun fichier personnel, aucun historique navigateur et aucun mot de passe. Les donnees sont envoyees seulement apres confirmation.
 
 Sous Windows, la collecte interroge CIM/WMI:
 
-- `Win32_ComputerSystem`: fabricant, modele, famille, SKU;
-- `Win32_ComputerSystemProduct`: nom produit, version/numero produit, identifiant, UUID;
-- `Win32_BIOS`: numero de serie BIOS/service tag;
+- `Win32_ComputerSystem`: fabricant, modèle, famille, SKU;
+- `Win32_ComputerSystemProduct`: nom produit, version/numéro produit, identifiant, UUID;
+- `Win32_BIOS`: numéro de série BIOS/service tag;
 - `Win32_BaseBoard`: fabricant et produit carte mere;
-- `Win32_SystemEnclosure`: numero chassis et asset tag;
+- `Win32_SystemEnclosure`: numéro chassis et asset tag;
 - `MS_SystemInformation` lorsque disponible.
 
 Les champs historiques restent presents (`manufacturer`, `model`, `serialNumber`). Les nouveaux identifiants sont exposes aussi via:
