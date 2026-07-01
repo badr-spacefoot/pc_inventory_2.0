@@ -15,7 +15,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-SCRIPT_VERSION = "1.5.0"
+SCRIPT_VERSION = "1.5.1"
 OSQUERY_ENGINE_VERSION = "0.1.0"
 
 PLACEHOLDER_VALUES = {
@@ -90,6 +90,23 @@ def bytes_to_gb(value):
         return None
 
 
+def standard_capacity_gb(usable_gib, common=None, tolerance=0.18):
+    gib = bytes_to_gb(usable_gib) if isinstance(usable_gib, str) and usable_gib.isdigit() else usable_gib
+    try:
+        marketed_gb = float(gib) * 1.073741824
+    except (TypeError, ValueError):
+        return None
+    common_values = common or [2, 4, 8, 12, 16, 24, 32, 48, 64, 96, 128, 256, 512, 1024]
+    nearest = min(common_values, key=lambda item: abs(item - marketed_gb))
+    if nearest and abs(nearest - marketed_gb) / nearest <= tolerance:
+        return nearest
+    return round(float(gib), 2)
+
+
+def normalized_memory_gb(usable_gib):
+    return standard_capacity_gb(usable_gib, [2, 4, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256, 512], 0.20)
+
+
 def local_ip():
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
@@ -97,6 +114,40 @@ def local_ip():
             return sock.getsockname()[0]
     except OSError:
         return ""
+
+
+def linux_physical_storage_summary():
+    if not shutil.which("lsblk"):
+        return {"storageTotalGb": None, "storageFreeGb": None, "storageType": ""}
+    output = run(["lsblk", "-b", "-dn", "-o", "NAME,SIZE,TYPE,ROTA,MODEL"])
+    total_bytes = 0
+    rotational_values = []
+    for line in output.splitlines():
+        parts = line.split(None, 4)
+        if len(parts) < 4:
+            continue
+        name, size_text, device_type, rota = parts[:4]
+        lowered_name = name.lower()
+        if device_type != "disk" or lowered_name.startswith(("loop", "ram", "zram", "sr")):
+            continue
+        size = as_int(size_text)
+        if not size or size <= 0:
+            continue
+        total_bytes += size
+        rotational_values.append(str(rota).strip())
+    free_gb = None
+    try:
+        free_gb = bytes_to_gb(shutil.disk_usage("/").free)
+    except OSError:
+        pass
+    storage_type = ""
+    if rotational_values:
+        storage_type = "SSD" if all(value == "0" for value in rotational_values) else "HDD"
+    return {
+        "storageTotalGb": bytes_to_gb(total_bytes) if total_bytes else None,
+        "storageFreeGb": free_gb,
+        "storageType": storage_type,
+    }
 
 
 def linux_info():
@@ -107,6 +158,7 @@ def linux_info():
             release[key] = value.strip('"')
     memory_kb = re.search(r"MemTotal:\s+(\d+)", read_text("/proc/meminfo"))
     disk = shutil.disk_usage("/")
+    physical_storage = linux_physical_storage_summary()
     manufacturer = read_text("/sys/class/dmi/id/sys_vendor")
     model = read_text("/sys/class/dmi/id/product_name")
     serial = read_text("/sys/class/dmi/id/product_serial")
@@ -130,10 +182,10 @@ def linux_info():
         "serialNumber": serial,
         "cpu": cpu or platform.processor(),
         "gpu": run(["sh", "-c", "lspci 2>/dev/null | grep -Ei 'vga|3d|display' | head -1"]),
-        "ramTotalGb": round(int(memory_kb.group(1)) / 1024 / 1024, 2) if memory_kb else None,
-        "storageTotalGb": bytes_to_gb(disk.total),
-        "storageFreeGb": bytes_to_gb(disk.free),
-        "storageType": storage_type,
+        "ramTotalGb": normalized_memory_gb(round(int(memory_kb.group(1)) / 1024 / 1024, 2)) if memory_kb else None,
+        "storageTotalGb": physical_storage.get("storageTotalGb") or bytes_to_gb(disk.total),
+        "storageFreeGb": physical_storage.get("storageFreeGb") or bytes_to_gb(disk.free),
+        "storageType": physical_storage.get("storageType") or storage_type,
     }
 
 
@@ -362,6 +414,13 @@ def collect_with_osquery(include_mac):
     system = platform.system()
     storage = osquery_storage_summary(mounts)
     logical_drives = mounts
+    linux_details = linux_info() if system == "Linux" else {}
+    if system == "Linux":
+        physical_storage = linux_physical_storage_summary()
+        if physical_storage.get("storageTotalGb"):
+            storage["storageTotalGb"] = physical_storage.get("storageTotalGb")
+        if physical_storage.get("storageFreeGb"):
+            storage["storageFreeGb"] = physical_storage.get("storageFreeGb")
     if storage.get("storageTotalGb") is None:
         fallback_storage = fallback_logical_storage()
         storage = fallback_storage["storage"]
@@ -370,23 +429,28 @@ def collect_with_osquery(include_mac):
     os_user = clean_identifier(first_row(logged_in_users).get("user")) or getpass.getuser()
     physical_memory = as_int(system_info.get("physical_memory") or system_info.get("memory_total"))
     ram_total_gb = bytes_to_gb(physical_memory)
+    if ram_total_gb is not None:
+        ram_total_gb = normalized_memory_gb(ram_total_gb)
     if ram_total_gb is None and system == "Windows":
         ram_total_gb = windows_memory_gb()
     manufacturer = first_clean(
+        linux_details.get("manufacturer"),
         system_info.get("hardware_vendor"),
         system_info.get("vendor"),
-        system_info.get("computer_name"),
+        system_info.get("computer_name") if system != "Linux" else "",
     )
     model = first_clean(
+        linux_details.get("model"),
         system_info.get("hardware_model"),
         system_info.get("hardware_version"),
         system_info.get("model"),
-        platform.machine(),
+        platform.machine() if system != "Linux" else "",
     )
     serial = first_clean(
+        linux_details.get("serialNumber"),
         system_info.get("hardware_serial"),
         system_info.get("serial_number"),
-        system_info.get("uuid"),
+        system_info.get("uuid") if system != "Linux" else "",
     )
     storage_types = sorted(
         {
@@ -432,12 +496,12 @@ def collect_with_osquery(include_mac):
         "serialNumber": serial,
         "serviceTag": serial,
         "cpu": first_clean(system_info.get("cpu_brand"), platform.processor()),
-        "gpu": "",
-        "gpus": [],
+        "gpu": first_clean(linux_details.get("gpu")) if system == "Linux" else "",
+        "gpus": [{"name": first_clean(linux_details.get("gpu"))}] if system == "Linux" and first_clean(linux_details.get("gpu")) else [],
         "ramTotalGb": ram_total_gb,
         "memoryModules": memory_modules,
         **storage,
-        "storageType": " + ".join(storage_types[:4]),
+        "storageType": first_clean(linux_details.get("storageType"), " + ".join(storage_types[:4])),
         "logicalDrives": logical_drives,
         "physicalDisks": disk_info,
         "hardwareIdentity": hardware_identity,
