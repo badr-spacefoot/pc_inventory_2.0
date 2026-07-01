@@ -2974,6 +2974,7 @@ function expectedCollectorVersion(asset = collectorAsset()) {
 }
 
 function hasKnownCompatibleCollector(asset = collectorAsset()) {
+  if (state.detectedPlatform !== "windows") return false;
   const saved = state.collectorInstallState || {};
   return Boolean(
     asset
@@ -3813,7 +3814,7 @@ function bindEvents() {
       toast("Aucun code de pré-remplissage", "error");
       return;
     }
-    rememberCollectorLaunch();
+    if (state.detectedPlatform === "windows") rememberCollectorLaunch();
     updateCollectorDownloadUi();
     window.location.href = state.collectorLaunchUrl;
     toast(

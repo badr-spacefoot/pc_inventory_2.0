@@ -28,18 +28,21 @@ jobs:
             separator: ;
             pyinstaller_mode: --onedir
             pyinstaller_icon: --icon frontend/assets/brand/app-icon.ico
+            pyinstaller_bundle_id: ""
           - name: macos
             os: macos-latest
             artifact: spacefoot-it-collector-macos
             separator: ":"
             pyinstaller_mode: --onefile
-            pyinstaller_icon: ""
+            pyinstaller_icon: --icon build/app-icon.icns
+            pyinstaller_bundle_id: "--osx-bundle-identifier com.spacefoot.itcollector"
           - name: linux
             os: ubuntu-latest
             artifact: spacefoot-it-collector-linux
             separator: ":"
             pyinstaller_mode: --onefile
             pyinstaller_icon: ""
+            pyinstaller_bundle_id: ""
 
     steps:
       - name: Checkout
@@ -53,6 +56,23 @@ jobs:
       - name: Install PyInstaller
         run: python -m pip install --upgrade pyinstaller
 
+      - name: Prepare macOS app icon
+        if: matrix.name == 'macos'
+        shell: bash
+        run: |
+          mkdir -p build/app-icon.iconset
+          sips -z 16 16 frontend/assets/brand/app-icon.png --out build/app-icon.iconset/icon_16x16.png
+          sips -z 32 32 frontend/assets/brand/app-icon.png --out build/app-icon.iconset/icon_16x16@2x.png
+          sips -z 32 32 frontend/assets/brand/app-icon.png --out build/app-icon.iconset/icon_32x32.png
+          sips -z 64 64 frontend/assets/brand/app-icon.png --out build/app-icon.iconset/icon_32x32@2x.png
+          sips -z 128 128 frontend/assets/brand/app-icon.png --out build/app-icon.iconset/icon_128x128.png
+          sips -z 256 256 frontend/assets/brand/app-icon.png --out build/app-icon.iconset/icon_128x128@2x.png
+          sips -z 256 256 frontend/assets/brand/app-icon.png --out build/app-icon.iconset/icon_256x256.png
+          sips -z 512 512 frontend/assets/brand/app-icon.png --out build/app-icon.iconset/icon_256x256@2x.png
+          sips -z 512 512 frontend/assets/brand/app-icon.png --out build/app-icon.iconset/icon_512x512.png
+          sips -z 1024 1024 frontend/assets/brand/app-icon.png --out build/app-icon.iconset/icon_512x512@2x.png
+          iconutil -c icns build/app-icon.iconset -o build/app-icon.icns
+
       - name: Build collector
         run: >
           pyinstaller
@@ -60,6 +80,7 @@ jobs:
           --windowed
           --name "${{ matrix.artifact }}"
           ${{ matrix.pyinstaller_icon }}
+          ${{ matrix.pyinstaller_bundle_id }}
           --add-data "scripts/collect-cross-platform.py${{ matrix.separator }}scripts"
           --add-data "frontend/assets/brand/app-icon.png${{ matrix.separator }}assets/brand"
           --hidden-import argparse
@@ -77,6 +98,39 @@ jobs:
           --hidden-import uuid
           --hidden-import winreg
           collectors/desktop_collector/collector_app.py
+
+      - name: Register macOS URL scheme
+        if: matrix.name == 'macos'
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import plistlib
+
+          plist_path = Path("dist/spacefoot-it-collector-macos.app/Contents/Info.plist")
+          if not plist_path.exists():
+              raise SystemExit(f"macOS app Info.plist not found: {plist_path}")
+
+          with plist_path.open("rb") as handle:
+              plist = plistlib.load(handle)
+
+          plist["CFBundleIdentifier"] = "com.spacefoot.itcollector"
+          plist["CFBundleName"] = "Spacefoot IT Collector"
+          plist["CFBundleDisplayName"] = "Spacefoot IT Collector"
+          plist["CFBundleURLTypes"] = [
+              entry
+              for entry in plist.get("CFBundleURLTypes", [])
+              if "spacefoot-collector" not in entry.get("CFBundleURLSchemes", [])
+          ]
+          plist["CFBundleURLTypes"].append({
+              "CFBundleTypeRole": "Viewer",
+              "CFBundleURLName": "com.spacefoot.itcollector",
+              "CFBundleURLSchemes": ["spacefoot-collector"],
+          })
+
+          with plist_path.open("wb") as handle:
+              plistlib.dump(plist, handle)
+          PY
 
       - name: Sign Windows collector
         if: matrix.name == 'windows'
