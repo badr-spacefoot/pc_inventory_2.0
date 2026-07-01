@@ -82,7 +82,7 @@ jobs:
           fi
           if [ -d installer-assets/osquery-root/opt/osquery ]; then
             cp -a installer-assets/osquery-root/opt/osquery installer-assets/bundled-tools/osquery
-            chmod +x installer-assets/bundled-tools/osquery/bin/osqueryi
+            find installer-assets/bundled-tools/osquery -name osqueryi -exec chmod +x {} \;
           else
             cp "$osqueryi_path" installer-assets/bundled-tools/osqueryi
             chmod +x installer-assets/bundled-tools/osqueryi
