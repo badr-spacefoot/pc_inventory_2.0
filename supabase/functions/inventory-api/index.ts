@@ -1287,15 +1287,18 @@ async function persistScan(request: Request, user: { id: string; team_id: string
   ] = await Promise.all([
     supabase.from("device_inventory_view").select("*").eq("dedupe_key", dedupe.dedupe_key).maybeSingle(),
     supabase.from("devices").select("assigned_user_id,team_id,establishment_id").eq("dedupe_key", dedupe.dedupe_key).maybeSingle(),
-  ]);
-  if (previousDeviceError) throw previousDeviceError;
-  if (previousAssignmentError) throw previousAssignmentError;
-  const deviceValues = {
-    assigned_user_id: ["stock", "retired"].includes(safeString(previousDevice?.status))
-      ? null
-      : previousAssignment?.assigned_user_id ?? user.id,
-    team_id: previousAssignment?.team_id ?? user.team_id,
-    establishment_id: previousAssignment?.establishment_id ?? user.establishment_id,
+  ]);
+  if (previousDeviceError) throw previousDeviceError;
+  if (previousAssignmentError) throw previousAssignmentError;
+  const eventSource = safeString(rawBody.importedFrom) ? "IMPORT" : "COLLECTOR";
+  const updateAssignmentFromScan = eventSource === "COLLECTOR";
+  const clearsAssignment = ["stock", "retired"].includes(safeString(previousDevice?.status));
+  const deviceValues = {
+    assigned_user_id: clearsAssignment
+      ? null
+      : updateAssignmentFromScan ? user.id : previousAssignment?.assigned_user_id ?? user.id,
+    team_id: updateAssignmentFromScan ? user.team_id : previousAssignment?.team_id ?? user.team_id,
+    establishment_id: updateAssignmentFromScan ? user.establishment_id : previousAssignment?.establishment_id ?? user.establishment_id,
     hostname: safeString(body.hostname, 160),
     os_name: safeString(body.osName, 80),
     os_version: safeString(body.osVersion, 160),
@@ -1323,11 +1326,24 @@ async function persistScan(request: Request, user: { id: string; team_id: string
   const { data: device, error: deviceError } = await supabase
     .from("devices")
     .upsert(deviceValues, { onConflict: "dedupe_key" })
-    .select("id")
-    .single();
-  if (deviceError) throw deviceError;
-
-  const { error: scanError } = await supabase.from("device_scans").insert({
+    .select("id")
+    .single();
+  if (deviceError) throw deviceError;
+  const assignmentChanged =
+    Boolean(previousAssignment) &&
+    (
+      historyValue(previousAssignment?.assigned_user_id) !== historyValue(deviceValues.assigned_user_id) ||
+      historyValue(previousAssignment?.team_id) !== historyValue(deviceValues.team_id) ||
+      historyValue(previousAssignment?.establishment_id) !== historyValue(deviceValues.establishment_id)
+    );
+  if (updateAssignmentFromScan && assignmentChanged) {
+    await closeOpenAssignmentPeriod(device.id, collectedAt, "collector", "Device assignment updated by collector scan.");
+    await openAssignmentPeriod(device.id, deviceValues.assigned_user_id, deviceValues.team_id, deviceValues.establishment_id, collectedAt, "collector", "COLLECTOR", "Device assignment updated by collector scan.");
+  } else if (updateAssignmentFromScan && !previousAssignment && deviceValues.assigned_user_id) {
+    await openAssignmentPeriod(device.id, deviceValues.assigned_user_id, deviceValues.team_id, deviceValues.establishment_id, collectedAt, "collector", "COLLECTOR", "Device assigned by first collector scan.");
+  }
+
+  const { error: scanError } = await supabase.from("device_scans").insert({
     device_id: device.id,
     user_id: user.id,
     collected_at: collectedAt,
@@ -1352,10 +1368,9 @@ async function persistScan(request: Request, user: { id: string; team_id: string
     windows_user: deviceValues.windows_user,
     script_version: deviceValues.script_version,
     hardware_age_score: deviceValues.hardware_age_score,
-  });
-  if (scanError) throw scanError;
-  const eventSource = safeString(rawBody.importedFrom) ? "IMPORT" : "COLLECTOR";
-  const historyRows = changedDeviceHistory(device.id, previousDevice, deviceValues, eventSource, collectedAt);
+  });
+  if (scanError) throw scanError;
+  const historyRows = changedDeviceHistory(device.id, previousDevice, deviceValues, eventSource, collectedAt);
   await appendDeviceHistory(historyRows);
   if (!previousDevice) {
     await notify("COLLECTOR_SUBMISSION_RECEIVED", "Nouvelle machine collectee", `${deviceValues.hostname} a ete ajoutee au parc.`, {
@@ -1365,7 +1380,7 @@ async function persistScan(request: Request, user: { id: string; team_id: string
       relatedEntityId: device.id,
     });
   } else if (historyRows.some((row) => ["OS_CHANGED", "HARDWARE_CHANGED", "USER_REASSIGNED", "DEVICE_RESET", "IMPORT_UPDATE"].includes(safeString(row.event_type)))) {
-    await notify("COLLECTOR_SUBMISSION_RECEIVED", "Machine mise a jour", `${deviceValues.hostname} a remonte des changements materiels ou systeme.`, {
+    await notify("COLLECTOR_SUBMISSION_RECEIVED", "Machine mise à jour", `${deviceValues.hostname} a remonté des changements matériels ou système.`, {
       severity: "INFO",
       targetRole: "ADMIN",
       relatedEntityType: "device",
@@ -2498,7 +2513,7 @@ async function handleAdminDeviceAssignment(request: Request, id: string) {
   );
   await appendDeviceHistory(historyRows);
   if (historyRows.length > 0) {
-    await notify("DEVICE_REASSIGNED", "Affectation machine modifi?e", `La machine ${safeString(currentDevice.hostname) || id} a chang? d'affectation.`, {
+    await notify("DEVICE_REASSIGNED", "Affectation machine modifiée", `La machine ${safeString(currentDevice.hostname) || id} a changé d'affectation.`, {
       severity: "INFO",
       targetRole: "ADMIN",
       relatedEntityType: "device",

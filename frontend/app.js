@@ -517,18 +517,18 @@ const englishTranslations = {
   "Ajouter la note": "Add note",
   "Ajouter une note a l'historique...": "Add a history note...",
   "Machine créée": "Device created",
-  "Machine mise a jour": "Device updated",
+  "Machine mise à jour": "Device updated",
   "Machine sortie du parc": "Device retired",
   "Machine réactivée": "Device reactivated",
   "Utilisateur affecté": "User assigned",
   "Utilisateur réaffecté": "User reassigned",
   "Utilisateur retiré": "User removed",
-  "Équipe modifi?e": "Team changed",
-  "Établissement modifi?": "Location changed",
-  "Systeme mis a jour": "OS changed",
-  "Matériel modifi?": "Hardware changed",
-  "Statut modifi?": "Status changed",
-  "Collecte mise a jour": "Collector update",
+  "Équipe modifiée": "Team changed",
+  "Établissement modifié": "Location changed",
+  "Système mis à jour": "OS changed",
+  "Matériel modifié": "Hardware changed",
+  "Statut modifié": "Status changed",
+  "Collecte mise à jour": "Collector update",
   "Reinitialisation detectee": "Reset detected",
   "Note administrateur": "Admin note",
   "Import mis a jour": "Import updated",
@@ -582,15 +582,15 @@ const frenchNotificationTranslations = {
   "notification.tokenDeleted.message": "Un token de collecte a ete supprime.",
   "notification.tokenExpired.title": "Token expiré",
   "notification.tokenExpired.message": "Un token de collecte a expire.",
-  "notification.ownerChanged.title": "Propriétaire modifi?",
+  "notification.ownerChanged.title": "Propriétaire modifié",
   "notification.ownerChanged.message": "Le proprietaire d'une machine a change.",
-  "notification.teamChanged.title": "Équipe modifi?e",
+  "notification.teamChanged.title": "Équipe modifiée",
   "notification.teamChanged.message": "L'equipe d'une machine a change.",
-  "notification.locationChanged.title": "Établissement modifi?",
+  "notification.locationChanged.title": "Établissement modifié",
   "notification.locationChanged.message": "L'etablissement d'une machine a change.",
-  "notification.osChanged.title": "OS modifi?",
+  "notification.osChanged.title": "OS modifié",
   "notification.osChanged.message": "Le systeme d'exploitation d'une machine a change.",
-  "notification.hardwareChanged.title": "Matériel modifi?",
+  "notification.hardwareChanged.title": "Matériel modifié",
   "notification.hardwareChanged.message": "Le profil materiel d'une machine a change.",
   "notification.userRemoved.title": "Utilisateur actuel retire",
   "notification.userRemoved.message": "Une machine n'a plus d'utilisateur actuel.",
@@ -1167,6 +1167,14 @@ function renderManufacturerLogo(info) {
 function renderManufacturerBadge(device) {
   const info = normalizeManufacturer(device.manufacturer, device.model);
   return `<span class="${info.badgeClass}" title="${escapeHtml(info.rawManufacturer || info.manufacturerName)}"><span class="manufacturer-logo ${info.colorClass}">${renderManufacturerLogo(info)}</span><span>${escapeHtml(info.manufacturerName)}</span></span>`;
+}
+
+function shortDeviceModel(device = {}) {
+  return device.model || device.model_number || "-";
+}
+
+function fullDeviceModel(device = {}) {
+  return [device.model, device.model_number].filter(Boolean).join(" / ") || "-";
 }
 
 function normalizeTeamInfo(teamName, abbreviation = "") {
@@ -2243,7 +2251,7 @@ function renderDevices() {
           <td>${renderTeamBadge(device.team_name, device.team_id, device.team_color)}</td>
           <td>${renderLocationBadge(device)}</td>
           <td>${renderOsBadge(device)}</td>
-          <td class="manufacturer-cell">${renderManufacturerBadge(device)}<small>${escapeHtml([device.model, device.model_number].filter(Boolean).join(" / ") || "-")}</small></td>
+          <td class="manufacturer-cell">${renderManufacturerBadge(device)}<small title="${escapeHtml(fullDeviceModel(device))}">${escapeHtml(shortDeviceModel(device))}</small></td>
           <td>${formatDate(device.last_seen_at)}</td>
           <td><span class="${statusClass(device.status)}">${labels[device.status] || device.status || "Actif"}</span></td>
         </tr>
@@ -2275,21 +2283,21 @@ async function selectDevice(id) {
 function historyLabel(event) {
   const labels = {
     DEVICE_CREATED: "Machine créée",
-    DEVICE_UPDATED: "Machine mise a jour",
+    DEVICE_UPDATED: "Machine mise à jour",
     DEVICE_RETIRED: "Machine sortie du parc",
     DEVICE_REACTIVATED: "Machine réactivée",
     USER_ASSIGNED: "Utilisateur affecté",
     USER_REASSIGNED: "Utilisateur réaffecté",
     USER_REMOVED: "Utilisateur retiré",
-    TEAM_CHANGED: "Équipe modifi?e",
-    LOCATION_CHANGED: "Établissement modifi?",
-    OS_CHANGED: "Systeme mis a jour",
-    HARDWARE_CHANGED: "Matériel modifi?",
-    STATUS_CHANGED: "Statut modifi?",
-    COLLECTOR_UPDATE: "Collecte mise a jour",
+    TEAM_CHANGED: "Équipe modifiée",
+    LOCATION_CHANGED: "Établissement modifié",
+    OS_CHANGED: "Système mis à jour",
+    HARDWARE_CHANGED: "Matériel modifié",
+    STATUS_CHANGED: "Statut modifié",
+    COLLECTOR_UPDATE: "Collecte mise à jour",
     DEVICE_RESET: "Réinitialisation détectée",
     MANUAL_EDIT: "Note administrateur",
-    IMPORT_UPDATE: "Import mis a jour",
+    IMPORT_UPDATE: "Import mis à jour",
   };
   return labels[event.event_type] || event.event_type;
 }
@@ -2377,21 +2385,72 @@ function historyValueDisplay(event, side) {
   return cleanImportedText(value || "-");
 }
 
+function historyGroupKey(event) {
+  const groupedTypes = new Set(["HARDWARE_CHANGED", "OS_CHANGED", "IMPORT_UPDATE"]);
+  if (!groupedTypes.has(event.event_type) || event.field_name === "legacy_google_sheets_history") {
+    return `single:${event.id}`;
+  }
+  return [
+    event.event_type,
+    event.changed_at,
+    event.changed_by || "",
+    event.source || "",
+  ].join("|");
+}
+
+function groupHistoryEvents(history = []) {
+  return history.reduce((groups, event) => {
+    const key = historyGroupKey(event);
+    const last = groups[groups.length - 1];
+    if (last && last.key === key) {
+      last.events.push(event);
+    } else {
+      groups.push({ key, events: [event] });
+    }
+    return groups;
+  }, []);
+}
+
+function renderHistoryChanges(events) {
+  const changes = events.filter((event) => event.old_value !== null || event.new_value !== null);
+  if (changes.length === 0) return "";
+  if (changes.length === 1) {
+    const event = changes[0];
+    return `
+      <p class="${event.field_name === "legacy_google_sheets_history" ? "history-change legacy-history-change" : "history-change"}">
+        <span>${translate("De")}: ${escapeHtml(historyValueDisplay(event, "old"))}</span>
+        <span>${translate("Vers")}: ${escapeHtml(historyValueDisplay(event, "new"))}</span>
+      </p>
+    `;
+  }
+  return `
+    <ul class="history-change-list">
+      ${changes.map((event) => `
+        <li>
+          <strong>${escapeHtml(historyFieldLabel(event.field_name))}</strong>
+          <span>${translate("De")}: ${escapeHtml(historyValueDisplay(event, "old"))}</span>
+          <span>${translate("Vers")}: ${escapeHtml(historyValueDisplay(event, "new"))}</span>
+        </li>
+      `).join("")}
+    </ul>
+  `;
+}
+
 function renderHistoryTimeline(history) {
-  return history.map((event) => `
+  return groupHistoryEvents(history).map((group) => {
+    const event = group.events[0];
+    const fieldSummary = group.events.length > 1
+      ? `${group.events.length} ${state.language === "en" ? "fields updated" : "champs mis à jour"}`
+      : (event.field_name ? historyFieldLabel(event.field_name) : "");
+    return `
     <article class="history-event">
       <span class="history-marker"></span>
       <div>
         <time>${formatDate(event.changed_at)} (${formatRelativeDate(event.changed_at)})</time>
         <strong>${escapeHtml(translate(historyLabel(event)))}</strong>
-        ${event.field_name ? `<small>${escapeHtml(historyFieldLabel(event.field_name))}</small>` : ""}
-        ${event.old_value !== null || event.new_value !== null ? `
-          <p class="${event.field_name === "legacy_google_sheets_history" ? "history-change legacy-history-change" : "history-change"}">
-            <span>${translate("De")}: ${escapeHtml(historyValueDisplay(event, "old"))}</span>
-            <span>${translate("Vers")}: ${escapeHtml(historyValueDisplay(event, "new"))}</span>
-          </p>
-        ` : ""}
-        ${event.notes ? `<p>${escapeHtml(cleanImportedText(event.notes))}</p>` : ""}
+        ${fieldSummary ? `<small>${escapeHtml(fieldSummary)}</small>` : ""}
+        ${renderHistoryChanges(group.events)}
+        ${group.events.map((item) => item.notes ? `<p>${escapeHtml(cleanImportedText(item.notes))}</p>` : "").join("")}
         <dl class="history-meta">
           <div><dt>${translate("Qui")}</dt><dd>${escapeHtml(event.changed_by || "system")}</dd></div>
           <div><dt>${translate("Comment")}</dt><dd>${escapeHtml(sourceLabel(event.source))}</dd></div>
@@ -2399,7 +2458,8 @@ function renderHistoryTimeline(history) {
         </dl>
       </div>
     </article>
-  `).join("") || `<p class="helper">${translate("Aucun historique.")}</p>`;
+    `;
+  }).join("") || `<p class="helper">${translate("Aucun historique.")}</p>`;
 }
 
 function sourceLabel(source) {
@@ -2537,7 +2597,7 @@ function renderDetail(device, scans, history = []) {
       <span class="manufacturer-logo ${manufacturer.colorClass}">${renderManufacturerLogo(manufacturer)}</span>
       <span>
         <strong>${escapeHtml(manufacturer.manufacturerName)}${family ? ` ${escapeHtml(family)}` : ""}</strong>
-        <span>${escapeHtml([device.model, device.model_number].filter(Boolean).join(" / ") || translate("Non renseigné"))}</span>
+        <span title="${escapeHtml(fullDeviceModel(device))}">${escapeHtml(shortDeviceModel(device) || translate("Non renseigné"))}</span>
       </span>
     </div>
     <nav class="detail-tabs" aria-label="${escapeHtml(translate("Sections machine"))}">

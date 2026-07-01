@@ -2108,6 +2108,30 @@ tbody tr.is-selected {
   grid-template-columns: minmax(0, 1fr);
 }
 
+.history-change-list {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history-change-list li {
+  display: grid;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.history-change-list strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
 .legacy-history-change {
   gap: 6px;
 }
