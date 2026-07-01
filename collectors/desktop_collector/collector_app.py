@@ -51,7 +51,7 @@ else:
 
 
 DEFAULT_API_URL = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
-COLLECTOR_VERSION = "0.1.38"
+COLLECTOR_VERSION = "0.1.39"
 COLLECTOR_BUILD_CHANNEL = "github-release"
 COLLECTOR_RELEASES_URL = "https://badr-spacefoot.github.io/pc_inventory_2.0/collector-releases.json"
 DRAFT_PATH = Path.home() / ".spacefoot_it_collector.json"
@@ -492,6 +492,7 @@ class CollectorApp(tk.Tk):
         self.submitted = False
         self.submission_device_id = ""
         self.collection_token = ""
+        self.handled_launch_urls: set[str] = set()
         register_linux_url_scheme()
         self.teams: list[dict] = []
         self.establishments: list[dict] = []
@@ -532,6 +533,7 @@ class CollectorApp(tk.Tk):
         self.connection_status = tk.StringVar(value=self.t("Not validated."))
 
         self.apply_theme_colors()
+        self.register_macos_url_handler()
         self._build_ui()
         self._bind_draft_saves()
         self.after(300, self.load_organization_background)
@@ -541,6 +543,47 @@ class CollectorApp(tk.Tk):
             self.after(450, self.check_update_then_load_prefill)
         else:
             self.after(700, self.auto_load_prefill_file)
+
+    def register_macos_url_handler(self) -> None:
+        if platform.system() != "Darwin":
+            return
+        try:
+            self.tk.eval("namespace eval ::tk::mac {}")
+        except tk.TclError:
+            return
+
+        def handle_open_event(*args) -> str:
+            for value in args:
+                text = str(value or "").strip()
+                if text.startswith("spacefoot-collector://"):
+                    self.after(0, lambda launch_url=text: self.apply_launch_prefill_url(launch_url))
+            return ""
+
+        for command in ("::tk::mac::OpenURL", "::tk::mac::OpenDocument"):
+            try:
+                self.tk.createcommand(command, handle_open_event)
+            except tk.TclError:
+                pass
+
+    def apply_launch_prefill_url(self, launch_url: str) -> None:
+        launch_url = str(launch_url or "").strip()
+        if not launch_url or launch_url in self.handled_launch_urls:
+            return
+        launch_prefill = launch_prefill_from_args([sys.argv[0], launch_url])
+        prefill_code = str(launch_prefill.get("prefillCode") or "").strip()
+        if not prefill_code:
+            return
+        self.handled_launch_urls.add(launch_url)
+        self.launch_prefill_url = str(launch_prefill.get("launchUrl") or launch_url)
+        api_url = normalize_api_url(launch_prefill.get("apiUrl") or self.api_url.get() or DEFAULT_API_URL)
+        self.api_url.set(api_url)
+        self.prefill_code.set(prefill_code)
+        self.launch_prefill_requested = True
+        self.profile_visible.set(False)
+        self.status.set(self.t("Prefill link received. Loading profile..."))
+        self.mark_newest_prefill_file_seen()
+        self.persist_draft()
+        self.check_update_then_load_prefill()
 
     def t(self, text: str) -> str:
         return TRANSLATIONS.get(self.language.get(), {}).get(text, text)
