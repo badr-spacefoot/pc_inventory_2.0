@@ -80,14 +80,27 @@ jobs:
             echo "osqueryi was not found inside the downloaded osquery package."
             exit 1
           fi
+          resolved_osqueryi_path="$osqueryi_path"
+          if [ -L "$osqueryi_path" ]; then
+            osqueryi_target="$(readlink "$osqueryi_path")"
+            if [[ "$osqueryi_target" = /* ]]; then
+              resolved_osqueryi_path="installer-assets/osquery-root${osqueryi_target}"
+            else
+              resolved_osqueryi_path="$(dirname "$osqueryi_path")/${osqueryi_target}"
+            fi
+          fi
+          if [ ! -e "$resolved_osqueryi_path" ]; then
+            echo "Resolved osqueryi target was not found: $resolved_osqueryi_path"
+            exit 1
+          fi
           if [ -d installer-assets/osquery-root/opt/osquery ]; then
             cp -a installer-assets/osquery-root/opt/osquery installer-assets/bundled-tools/osquery
             find installer-assets/bundled-tools/osquery -name osqueryi -exec chmod +x {} \;
           else
-            cp "$osqueryi_path" installer-assets/bundled-tools/osqueryi
+            cp "$resolved_osqueryi_path" installer-assets/bundled-tools/osqueryi
             chmod +x installer-assets/bundled-tools/osqueryi
           fi
-          cp -L "$osqueryi_path" installer-assets/bundled-tools/osqueryi
+          cp "$resolved_osqueryi_path" installer-assets/bundled-tools/osqueryi
           chmod +x installer-assets/bundled-tools/osqueryi
 
       - name: Prepare macOS app icon
