@@ -49,7 +49,7 @@ else:
 
 
 DEFAULT_API_URL = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
-COLLECTOR_VERSION = "0.1.14"
+COLLECTOR_VERSION = "0.1.15"
 COLLECTOR_BUILD_CHANNEL = "github-release"
 DRAFT_PATH = Path.home() / ".spacefoot_it_collector.json"
 PREFILL_FILE_MAX_AGE_SECONDS = 24 * 60 * 60
