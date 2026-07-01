@@ -50,7 +50,7 @@ else:
 
 
 DEFAULT_API_URL = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
-COLLECTOR_VERSION = "0.1.23"
+COLLECTOR_VERSION = "0.1.24"
 COLLECTOR_BUILD_CHANNEL = "github-release"
 COLLECTOR_RELEASES_URL = "https://badr-spacefoot.github.io/pc_inventory_2.0/collector-releases.json"
 DRAFT_PATH = Path.home() / ".spacefoot_it_collector.json"
@@ -252,8 +252,24 @@ def save_draft(values: dict) -> None:
 
 def clear_sensitive_draft() -> None:
     draft = load_draft()
-    api_url = draft.get("apiUrl") or DEFAULT_API_URL
+    api_url = normalize_api_url(draft.get("apiUrl") or DEFAULT_API_URL)
     save_draft({"apiUrl": api_url})
+
+
+def normalize_api_url(value: str) -> str:
+    text = str(value or "").strip().strip('"')
+    if not text:
+        return DEFAULT_API_URL
+    if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", text):
+        text = f"https://{text}"
+    parsed = urllib.parse.urlparse(text)
+    host = parsed.netloc.lower()
+    scheme = parsed.scheme or "https"
+    path = parsed.path.rstrip("/")
+    if host.endswith(".supabase.co") or host == "supabase.co":
+        scheme = "https"
+        path = "/functions/v1/inventory-api"
+    return urllib.parse.urlunparse((scheme, parsed.netloc, path or "", "", "", ""))
 
 
 def version_tuple(value: str) -> tuple[int, ...]:
@@ -283,7 +299,7 @@ def download_file(url: str, destination: Path, timeout=60) -> None:
 
 
 def api_request(api_url: str, path: str, method="GET", body=None, headers=None, timeout=25):
-    url = f"{api_url.rstrip('/')}{path}"
+    url = f"{normalize_api_url(api_url).rstrip('/')}{path}"
     data = json.dumps(body).encode("utf-8") if body is not None else None
     request = urllib.request.Request(
         url,
@@ -361,7 +377,7 @@ def launch_prefill_from_args(argv: list[str]) -> dict:
         return {}
     result = {
         "prefillCode": str(args.prefill_code or "").strip(),
-        "apiUrl": str(args.api_url or "").strip(),
+        "apiUrl": normalize_api_url(args.api_url) if args.api_url else "",
         "launchUrl": "",
     }
     launch_url = str(args.launch_url or "").strip()
@@ -375,7 +391,7 @@ def launch_prefill_from_args(argv: list[str]) -> dict:
         parsed = urllib.parse.urlparse(launch_url)
         params = urllib.parse.parse_qs(parsed.query)
         result["prefillCode"] = result["prefillCode"] or (params.get("prefillCode") or [""])[0].strip()
-        result["apiUrl"] = result["apiUrl"] or (params.get("apiUrl") or [""])[0].strip()
+        result["apiUrl"] = result["apiUrl"] or normalize_api_url((params.get("apiUrl") or [""])[0])
     return {key: value for key, value in result.items() if value}
 
 
@@ -400,7 +416,7 @@ class CollectorApp(tk.Tk):
         self.launch_prefill_url = str(launch_prefill.get("launchUrl") or "")
         draft_profile = {} if launch_prefill.get("prefillCode") else draft
 
-        self.api_url = tk.StringVar(value=launch_prefill.get("apiUrl") or draft.get("apiUrl") or DEFAULT_API_URL)
+        self.api_url = tk.StringVar(value=normalize_api_url(launch_prefill.get("apiUrl") or draft.get("apiUrl") or DEFAULT_API_URL))
         self.access_token = tk.StringVar(value=draft_profile.get("accessToken") or "")
         self.first_name = tk.StringVar(value=draft_profile.get("firstName") or "")
         self.last_name = tk.StringVar(value=draft_profile.get("lastName") or "")
@@ -1249,7 +1265,7 @@ class CollectorApp(tk.Tk):
 
     def persist_draft(self) -> None:
         save_draft({
-            "apiUrl": self.api_url.get().strip(),
+            "apiUrl": normalize_api_url(self.api_url.get()),
             "accessToken": self.access_token.get().strip(),
             "firstName": self.first_name.get().strip(),
             "lastName": self.last_name.get().strip(),
@@ -1310,7 +1326,7 @@ class CollectorApp(tk.Tk):
             return self.launch_prefill_url
         params = urllib.parse.urlencode({
             "prefillCode": self.prefill_code.get().strip(),
-            "apiUrl": self.api_url.get().strip(),
+            "apiUrl": normalize_api_url(self.api_url.get()),
         })
         return f"spacefoot-collector://collect?{params}"
 
@@ -1357,7 +1373,7 @@ class CollectorApp(tk.Tk):
         if already_loaded:
             return
         if data.get("apiUrl"):
-            self.api_url.set(str(data.get("apiUrl")))
+            self.api_url.set(normalize_api_url(str(data.get("apiUrl"))))
         self.prefill_code.set(code)
         self.last_loaded_prefill_file = str(path)
         self.last_loaded_prefill_mtime = mtime
@@ -1378,7 +1394,7 @@ class CollectorApp(tk.Tk):
     def _load_prefill_background(self) -> None:
         try:
             data = api_request(
-                self.api_url.get().strip(),
+                normalize_api_url(self.api_url.get()),
                 f"/collect/prefill/{urllib.parse.quote(self.prefill_code.get().strip())}",
                 timeout=15,
             )
@@ -1388,7 +1404,7 @@ class CollectorApp(tk.Tk):
 
     def apply_prefill(self, data: dict) -> None:
         if data.get("apiUrl"):
-            self.api_url.set(data.get("apiUrl"))
+            self.api_url.set(normalize_api_url(data.get("apiUrl")))
         if data.get("accessToken"):
             self.access_token.set(data.get("accessToken"))
         for key, variable in [
@@ -1780,7 +1796,7 @@ class CollectorApp(tk.Tk):
                 raise RuntimeError(self.t("API did not return a collection token."))
             request_body = json.dumps(self.payload).encode("utf-8")
             request = urllib.request.Request(
-                f"{self.api_url.get().rstrip('/')}/collect/scan",
+                f"{normalize_api_url(self.api_url.get()).rstrip('/')}/collect/scan",
                 data=request_body,
                 headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
                 method="POST",
