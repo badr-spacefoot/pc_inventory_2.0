@@ -50,7 +50,7 @@ else:
 
 
 DEFAULT_API_URL = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
-COLLECTOR_VERSION = "0.1.30"
+COLLECTOR_VERSION = "0.1.31"
 COLLECTOR_BUILD_CHANNEL = "github-release"
 COLLECTOR_RELEASES_URL = "https://badr-spacefoot.github.io/pc_inventory_2.0/collector-releases.json"
 DRAFT_PATH = Path.home() / ".spacefoot_it_collector.json"
@@ -1679,6 +1679,9 @@ class CollectorApp(tk.Tk):
             engine_version = payload.get("osqueryVersion") or payload.get("collectorEngineVersion") or ""
             engine_label = f"{engine} {engine_version}".strip()
             self.after(0, lambda: self.append_scan_log(f"Collection engine: {engine_label}."))
+            if engine == "python-fallback" and payload.get("collectorEngineMessage"):
+                fallback_message = str(payload.get("collectorEngineMessage"))[:220]
+                self.after(0, lambda: self.append_scan_log(f"Fallback reason: {fallback_message}"))
             self.after(0, lambda: self.append_scan_log("Scan completed. Review the summary below."))
             self.after(0, self.render_scan_summary)
             self.after(0, self.update_primary_action)

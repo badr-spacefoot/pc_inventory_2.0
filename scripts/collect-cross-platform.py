@@ -10,6 +10,7 @@ import re
 import shutil
 import socket
 import subprocess
+import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -218,14 +219,14 @@ def find_osqueryi():
         frozen_bundle_root = Path(getattr(sys, "_MEIPASS", "")) / "bundled-tools"
         executable_bundle_root = Path(sys.executable).resolve().parent / "bundled-tools"
         bundled_candidates.extend([
-            frozen_bundle_root / "osqueryi",
             frozen_bundle_root / "osquery" / "bin" / "osqueryi",
             frozen_bundle_root / "osquery" / "usr" / "bin" / "osqueryi",
             frozen_bundle_root / "osquery" / "opt" / "osquery" / "bin" / "osqueryi",
-            executable_bundle_root / "osqueryi",
+            frozen_bundle_root / "osqueryi",
             executable_bundle_root / "osquery" / "bin" / "osqueryi",
             executable_bundle_root / "osquery" / "usr" / "bin" / "osqueryi",
             executable_bundle_root / "osquery" / "opt" / "osquery" / "bin" / "osqueryi",
+            executable_bundle_root / "osqueryi",
         ])
         for root in [frozen_bundle_root, executable_bundle_root]:
             if root.exists():
@@ -233,10 +234,10 @@ def find_osqueryi():
     else:
         repo_bundle_root = Path(__file__).resolve().parents[1] / "installer-assets" / "bundled-tools"
         bundled_candidates.extend([
-            repo_bundle_root / "osqueryi",
             repo_bundle_root / "osquery" / "bin" / "osqueryi",
             repo_bundle_root / "osquery" / "usr" / "bin" / "osqueryi",
             repo_bundle_root / "osquery" / "opt" / "osquery" / "bin" / "osqueryi",
+            repo_bundle_root / "osqueryi",
         ])
         if repo_bundle_root.exists():
             bundled_candidates.extend(repo_bundle_root.rglob("osqueryi"))
