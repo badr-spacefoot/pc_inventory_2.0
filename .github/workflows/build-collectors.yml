@@ -75,7 +75,7 @@ jobs:
           curl -fsSL "$osquery_deb_url" -o installer-assets/osquery.deb
           mkdir -p installer-assets/osquery-root
           dpkg-deb -x installer-assets/osquery.deb installer-assets/osquery-root
-          osqueryi_path="$(find installer-assets/osquery-root -type f -name osqueryi | head -n 1)"
+          osqueryi_path="$(find installer-assets/osquery-root -name osqueryi | head -n 1)"
           if [ -z "$osqueryi_path" ]; then
             echo "osqueryi was not found inside the downloaded osquery package."
             exit 1
