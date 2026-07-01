@@ -51,7 +51,7 @@ else:
 
 
 DEFAULT_API_URL = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
-COLLECTOR_VERSION = "0.1.33"
+COLLECTOR_VERSION = "0.1.34"
 COLLECTOR_BUILD_CHANNEL = "github-release"
 COLLECTOR_RELEASES_URL = "https://badr-spacefoot.github.io/pc_inventory_2.0/collector-releases.json"
 DRAFT_PATH = Path.home() / ".spacefoot_it_collector.json"
@@ -203,6 +203,8 @@ TRANSLATIONS = {
         "A new collector version has been downloaded. Windows will now ask for permission to run the installer. Click Yes or Run. The collector will reopen automatically with the prefilled profile.": "Une nouvelle version du collecteur a été téléchargée. Windows va maintenant demander l'autorisation d'exécuter l'installateur. Cliquez sur Oui ou Exécuter. Le collecteur se rouvrira automatiquement avec le profil pré-rempli.",
         "A new collector version has been downloaded. Ubuntu will now ask for your password in a terminal to install the update. The collector will reopen automatically with the prefilled profile.": "Une nouvelle version du collecteur a été téléchargée. Ubuntu va maintenant demander votre mot de passe dans un terminal pour installer la mise à jour. Le collecteur se rouvrira automatiquement avec le profil pré-rempli.",
         "Unable to open a terminal for the update. Run this command, then reopen the collector from the web page:": "Impossible d'ouvrir un terminal pour la mise à jour. Lancez cette commande, puis rouvrez le collecteur depuis la page web :",
+        "Waiting for Ubuntu to finish installing the update...": "En attente de la fin d'installation de la mise à jour Ubuntu...",
+        "Update did not finish. Loading current collector.": "La mise à jour n'a pas abouti. Chargement avec le collecteur actuel.",
         "Update check failed. Loading current collector.": "Vérification de mise à jour impossible. Chargement avec le collecteur actuel.",
         "Update collector automatically before loading a prefilled profile": "Mettre à jour automatiquement le collecteur avant de charger un profil pré-rempli",
         "Collector purpose": "Objectif du collecteur",
@@ -289,7 +291,13 @@ def is_newer_version(candidate: str, current: str) -> bool:
 
 
 def fetch_json_url(url: str, timeout=10) -> dict:
-    request = urllib.request.Request(url, headers={"User-Agent": f"spacefoot-it-collector/{COLLECTOR_VERSION}"})
+    separator = "&" if "?" in url else "?"
+    uncached_url = f"{url}{separator}v={int(time.time())}"
+    request = urllib.request.Request(uncached_url, headers={
+        "User-Agent": f"spacefoot-it-collector/{COLLECTOR_VERSION}",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+    })
     with urllib.request.urlopen(request, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
 
@@ -1397,7 +1405,7 @@ class CollectorApp(tk.Tk):
             self.after(0, lambda: self.status.set(self.t("Downloading collector update...")))
             download_file(download_url, installer_path, timeout=120)
             if platform_key == "linux":
-                self.after(0, lambda: self.install_linux_update_and_relaunch(installer_path))
+                self.after(0, lambda: self.install_linux_update_and_relaunch(installer_path, latest))
             else:
                 self.after(0, lambda: self.install_update_and_relaunch(installer_path))
         except Exception:
@@ -1416,31 +1424,35 @@ class CollectorApp(tk.Tk):
     def linux_update_command(self, installer_path: Path) -> str:
         return f"sudo apt install -y {shlex.quote(str(installer_path))}"
 
-    def launch_linux_update_terminal(self, installer_path: Path, launch_url: str) -> bool:
+    def launch_linux_update_terminal(self, installer_path: Path) -> bool:
         script_path = Path(tempfile.gettempdir()) / "spacefoot-it-collector-update.sh"
         script = "\n".join([
             "#!/bin/sh",
-            "set -e",
             "echo 'Installing Spacefoot IT Collector update...'",
             'sudo apt install -y "$1"',
-            "echo 'Reopening Spacefoot IT Collector...'",
-            'if [ -x /opt/spacefoot-it-collector/spacefoot-it-collector ]; then',
-            '  nohup /opt/spacefoot-it-collector/spacefoot-it-collector "$2" >/dev/null 2>&1 &',
-            "elif command -v xdg-open >/dev/null 2>&1; then",
-            '  nohup xdg-open "$2" >/dev/null 2>&1 &',
+            "status=$?",
+            'if [ "$status" -ne 0 ]; then',
+            "  echo",
+            "  echo 'Update failed. Please keep this terminal open and copy the error for IT support.'",
+            "  echo 'Command:'",
+            '  echo "sudo apt install -y $1"',
+            "  read -r _",
+            '  exit "$status"',
             "fi",
-            "echo 'Update complete. You can close this terminal.'",
-            "sleep 2",
+            "echo",
+            "echo 'Update installed. The collector will reopen automatically.'",
+            "sleep 4",
             "",
         ])
         script_path.write_text(script, encoding="utf-8")
         script_path.chmod(0o755)
         commands = [
-            ["x-terminal-emulator", "-e", "sh", str(script_path), str(installer_path), launch_url],
-            ["gnome-terminal", "--", "sh", str(script_path), str(installer_path), launch_url],
-            ["konsole", "-e", "sh", str(script_path), str(installer_path), launch_url],
-            ["xfce4-terminal", "-e", f"sh {shlex.quote(str(script_path))} {shlex.quote(str(installer_path))} {shlex.quote(launch_url)}"],
-            ["xterm", "-e", "sh", str(script_path), str(installer_path), launch_url],
+            ["gnome-terminal", "--wait", "--", "sh", str(script_path), str(installer_path)],
+            ["kgx", "--wait", "--", "sh", str(script_path), str(installer_path)],
+            ["x-terminal-emulator", "-e", "sh", str(script_path), str(installer_path)],
+            ["konsole", "-e", "sh", str(script_path), str(installer_path)],
+            ["xfce4-terminal", "-e", f"sh {shlex.quote(str(script_path))} {shlex.quote(str(installer_path))}"],
+            ["xterm", "-e", "sh", str(script_path), str(installer_path)],
         ]
         for command in commands:
             if not shutil.which(command[0]):
@@ -1452,7 +1464,37 @@ class CollectorApp(tk.Tk):
                 continue
         return False
 
-    def install_linux_update_and_relaunch(self, installer_path: Path) -> None:
+    def installed_linux_collector_version(self) -> str:
+        try:
+            result = subprocess.run(
+                ["dpkg-query", "-W", "-f=${Version}", "spacefoot-it-collector"],
+                capture_output=True,
+                text=True,
+                timeout=4,
+                check=False,
+            )
+            return result.stdout.strip() if result.returncode == 0 else ""
+        except Exception:
+            return ""
+
+    def wait_for_linux_update_and_relaunch(self, expected_version: str, launch_url: str, deadline: float) -> None:
+        installed = self.installed_linux_collector_version()
+        if installed and is_newer_version(installed, COLLECTOR_VERSION) and not is_newer_version(expected_version, installed):
+            executable = Path("/opt/spacefoot-it-collector/spacefoot-it-collector")
+            try:
+                subprocess.Popen([str(executable), launch_url] if executable.exists() else ["xdg-open", launch_url])
+            except Exception:
+                pass
+            self.destroy()
+            return
+        if time.time() < deadline:
+            self.status.set(self.t("Waiting for Ubuntu to finish installing the update..."))
+            self.after(2000, lambda: self.wait_for_linux_update_and_relaunch(expected_version, launch_url, deadline))
+            return
+        self.status.set(self.t("Update did not finish. Loading current collector."))
+        self.after(1000, self.load_prefill)
+
+    def install_linux_update_and_relaunch(self, installer_path: Path, latest_version: str) -> None:
         self.status.set(self.t("Installing update. The collector will reopen automatically."))
         launch_url = self.launch_url_for_reopen()
         messagebox.showinfo(
@@ -1460,8 +1502,9 @@ class CollectorApp(tk.Tk):
             self.t("A new collector version has been downloaded. Ubuntu will now ask for your password in a terminal to install the update. The collector will reopen automatically with the prefilled profile."),
         )
         try:
-            if self.launch_linux_update_terminal(installer_path, launch_url):
-                self.after(800, self.destroy)
+            if self.launch_linux_update_terminal(installer_path):
+                self.status.set(self.t("Waiting for Ubuntu to finish installing the update..."))
+                self.after(2000, lambda: self.wait_for_linux_update_and_relaunch(latest_version, launch_url, time.time() + 180))
                 return
             command = self.linux_update_command(installer_path)
             messagebox.showwarning(
