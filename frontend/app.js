@@ -3105,6 +3105,24 @@ function updateUbuntuInstallGuide() {
   code.textContent = ubuntuInstallCommand();
 }
 
+function macosInstallCommand() {
+  return [
+    'app="/Applications/spacefoot-it-collector-macos.app"',
+    'if [ ! -d "$app" ]; then app="$HOME/Downloads/spacefoot-it-collector-macos.app"; fi',
+    'xattr -dr com.apple.quarantine "$app"',
+    'open "$app"',
+  ].join("\n");
+}
+
+function updateMacosInstallGuide() {
+  const guide = $("#macos-install-guide");
+  const code = $("#macos-install-command");
+  if (!guide || !code) return;
+  const shouldShow = state.detectedPlatform === "macos" && Boolean(collectorAsset("macos"));
+  guide.classList.toggle("is-hidden", !shouldShow);
+  code.textContent = macosInstallCommand();
+}
+
 function osIconSvg(platform) {
   if (platform === "windows") {
     return `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1"></rect><rect x="13" y="3" width="8" height="8" rx="1"></rect><rect x="3" y="13" width="8" height="8" rx="1"></rect><rect x="13" y="13" width="8" height="8" rx="1"></rect></svg>`;
@@ -3203,6 +3221,7 @@ function updateCollectorDownloadUi() {
     else link.removeAttribute("download");
   });
   updateUbuntuInstallGuide();
+  updateMacosInstallGuide();
 }
 
 async function loadScriptPreview() {
@@ -3885,6 +3904,9 @@ function bindEvents() {
   });
   $("#copy-ubuntu-command")?.addEventListener("click", async () => {
     await copyText($("#ubuntu-install-command")?.textContent, "Commande Ubuntu copiee.", "Aucune commande Ubuntu a copier");
+  });
+  $("#copy-macos-command")?.addEventListener("click", async () => {
+    await copyText($("#macos-install-command")?.textContent, "Commande macOS copiee.", "Aucune commande macOS a copier");
   });
   $("#download-prefill-file").addEventListener("click", downloadPrefillFile);
   $("#collector-download-primary")?.addEventListener("click", () => {

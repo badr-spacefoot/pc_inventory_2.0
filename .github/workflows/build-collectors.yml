@@ -323,7 +323,12 @@ jobs:
           MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
         run: |
           if [ -z "$MACOS_CERTIFICATE_BASE64" ] || [ -z "$MACOS_CODESIGN_IDENTITY" ]; then
-            echo "No macOS signing certificate configured. Skipping signing."
+            echo "No macOS signing certificate configured. Applying ad-hoc signature for internal builds."
+            SIGN_TARGET="dist/${{ matrix.artifact }}"
+            if [ -d "dist/${{ matrix.artifact }}.app" ]; then
+              SIGN_TARGET="dist/${{ matrix.artifact }}.app"
+            fi
+            codesign --force --deep --sign - "$SIGN_TARGET"
             exit 0
           fi
           CERT_PATH="$RUNNER_TEMP/spacefoot-codesign.p12"

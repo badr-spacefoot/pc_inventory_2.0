@@ -210,13 +210,13 @@ Commande Ubuntu utilisateur:
 ```bash
 downloads="$(xdg-user-dir DOWNLOAD 2>/dev/null || echo "$HOME/Téléchargements")"
 cd "$downloads" || cd "$HOME/Downloads"
-sudo apt install ./spacefoot-it-collector-linux-0.1.37.deb
+sudo apt install ./spacefoot-it-collector-linux-0.1.38.deb
 ```
 
 macOS:
 
 - Sans Apple Developer ID + notarisation, Gatekeeper peut bloquer ou avertir l'utilisateur.
-- Phase 1: installation manuelle/interne avec documentation.
+- Phase 1: installation manuelle/interne avec documentation. Si Safari indique que l'app est endommagee, placer l'app dans Applications puis executer `xattr -dr com.apple.quarantine /Applications/spacefoot-it-collector-macos.app`.
 - Phase future: Apple Developer Program, certificat Developer ID Application, `codesign`, `notarytool`, puis stapling.
 
 Regles de securite du collecteur:
