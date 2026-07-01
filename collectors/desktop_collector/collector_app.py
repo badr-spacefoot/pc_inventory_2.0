@@ -50,7 +50,7 @@ else:
 
 
 DEFAULT_API_URL = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
-COLLECTOR_VERSION = "0.1.22"
+COLLECTOR_VERSION = "0.1.23"
 COLLECTOR_BUILD_CHANNEL = "github-release"
 COLLECTOR_RELEASES_URL = "https://badr-spacefoot.github.io/pc_inventory_2.0/collector-releases.json"
 DRAFT_PATH = Path.home() / ".spacefoot_it_collector.json"
@@ -198,6 +198,8 @@ TRANSLATIONS = {
         "Checking collector version...": "Vérification de la version du collecteur...",
         "Downloading collector update...": "Téléchargement de la mise à jour du collecteur...",
         "Installing update. The collector will reopen automatically.": "Installation de la mise à jour. Le collecteur se rouvrira automatiquement.",
+        "Collector update ready": "Mise à jour du collecteur prête",
+        "A new collector version has been downloaded. Windows will now ask for permission to run the installer. Click Yes or Run. The collector will reopen automatically with the prefilled profile.": "Une nouvelle version du collecteur a été téléchargée. Windows va maintenant demander l'autorisation d'exécuter l'installateur. Cliquez sur Oui ou Exécuter. Le collecteur se rouvrira automatiquement avec le profil pré-rempli.",
         "Update check failed. Loading current collector.": "Vérification de mise à jour impossible. Chargement avec le collecteur actuel.",
         "Update collector automatically before loading a prefilled profile": "Mettre à jour automatiquement le collecteur avant de charger un profil pré-rempli",
         "Collector purpose": "Objectif du collecteur",
@@ -1314,6 +1316,10 @@ class CollectorApp(tk.Tk):
 
     def install_update_and_relaunch(self, installer_path: Path) -> None:
         self.status.set(self.t("Installing update. The collector will reopen automatically."))
+        messagebox.showinfo(
+            self.t("Collector update ready"),
+            self.t("A new collector version has been downloaded. Windows will now ask for permission to run the installer. Click Yes or Run. The collector will reopen automatically with the prefilled profile."),
+        )
         prefill_code = self.prefill_code.get().strip()
         try:
             subprocess.Popen([
