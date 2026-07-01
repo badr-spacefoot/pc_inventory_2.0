@@ -9,6 +9,7 @@ const CONFIG = {
 };
 
 const COLLECTOR_INSTALL_STATE_KEY = "it_inventory_collector_install_state";
+const COLLECTOR_DOWNLOAD_STATE_KEY = "it_inventory_collector_download_state";
 
 const state = {
   adminToken: localStorage.getItem("it_inventory_admin_token") || "",
@@ -45,6 +46,7 @@ const state = {
   prefillCode: "",
   collectorLaunchUrl: "",
   collectorInstallState: JSON.parse(localStorage.getItem(COLLECTOR_INSTALL_STATE_KEY) || "null"),
+  collectorDownloadState: JSON.parse(localStorage.getItem(COLLECTOR_DOWNLOAD_STATE_KEY) || "null"),
   mapProvider: "openstreetmap",
 };
 let pendingRetirement = null;
@@ -2981,6 +2983,27 @@ function hasKnownCompatibleCollector(asset = collectorAsset()) {
   );
 }
 
+function hasDownloadedExpectedCollector(asset = collectorAsset()) {
+  const saved = state.collectorDownloadState || {};
+  return Boolean(
+    asset
+    && saved.platform === state.detectedPlatform
+    && saved.version
+    && saved.version === expectedCollectorVersion(asset),
+  );
+}
+
+function rememberCollectorDownload(asset = collectorAsset()) {
+  const version = expectedCollectorVersion(asset);
+  if (!version || state.detectedPlatform === "unknown") return;
+  state.collectorDownloadState = {
+    platform: state.detectedPlatform,
+    version,
+    downloadedAt: new Date().toISOString(),
+  };
+  localStorage.setItem(COLLECTOR_DOWNLOAD_STATE_KEY, JSON.stringify(state.collectorDownloadState));
+}
+
 function rememberCollectorLaunch(asset = collectorAsset()) {
   const version = expectedCollectorVersion(asset);
   if (!version || state.detectedPlatform === "unknown") return;
@@ -3049,16 +3072,29 @@ function updateCollectorDownloadUi() {
   const asset = collectorAsset(detected);
   const canLaunch = Boolean(state.collectorLaunchUrl);
   const compatibleCollectorKnown = canLaunch && hasKnownCompatibleCollector(asset);
+  const downloadedExpectedCollector = canLaunch && hasDownloadedExpectedCollector(asset);
+  const shouldPrioritizeOpen = compatibleCollectorKnown || downloadedExpectedCollector;
   if (asset) {
     primary.href = asset.downloadUrl;
     primary.setAttribute("download", asset.fileName || "");
-    primary.querySelector("span:not(.collector-os-icon)").textContent = downloadLabel(detected);
+    primary.querySelector("span:not(.collector-os-icon)").textContent = downloadedExpectedCollector
+      ? (state.language === "en" ? "Download again" : "Telecharger a nouveau")
+      : downloadLabel(detected);
     $("#collector-os-icon").innerHTML = osIconSvg(detected);
     $("#collector-platform-copy").textContent = compatibleCollectorKnown
       ? (state.language === "en"
         ? `Collector ${asset.version || ""} already opened from this browser. Launch it to load the profile.`
         : `Collecteur ${asset.version || ""} déjà lancé depuis ce navigateur. Ouvrez-le pour charger le profil.`)
       : `${translate("Collecteur detecte pour")} ${platformLabel(detected)} (${asset.version || ""}).`;
+    if (!compatibleCollectorKnown) {
+      $("#collector-platform-copy").textContent = downloadedExpectedCollector
+        ? (state.language === "en"
+          ? "Installer finished? Click Open collector here to load the prefilled profile."
+          : "Installation terminee ? Cliquez sur Ouvrir le collecteur ici pour charger le profil pre-rempli.")
+        : (state.language === "en"
+          ? `Step 1: download and install the ${platformLabel(detected)} collector. Then return here for step 2.`
+          : `Etape 1 : telechargez et installez le collecteur ${platformLabel(detected)}. Revenez ensuite ici pour l'etape 2.`);
+    }
   } else {
     primary.href = releasePage;
     primary.removeAttribute("download");
@@ -3071,11 +3107,14 @@ function updateCollectorDownloadUi() {
   if (openApp) {
     openApp.disabled = !canLaunch;
     openApp.classList.toggle("is-disabled", !canLaunch);
-    openApp.classList.toggle("primary", compatibleCollectorKnown);
-    openApp.classList.toggle("secondary", !compatibleCollectorKnown);
-    primary.classList.toggle("primary", !compatibleCollectorKnown);
-    primary.classList.toggle("secondary", compatibleCollectorKnown);
-    launcher?.classList.toggle("is-ready-to-open", compatibleCollectorKnown);
+    openApp.classList.toggle("primary", shouldPrioritizeOpen);
+    openApp.classList.toggle("secondary", !shouldPrioritizeOpen);
+    openApp.textContent = shouldPrioritizeOpen && state.language !== "en"
+      ? "Ouvrir le collecteur pre-rempli"
+      : translate("Ouvrir le collecteur");
+    primary.classList.toggle("primary", !shouldPrioritizeOpen);
+    primary.classList.toggle("secondary", shouldPrioritizeOpen);
+    launcher?.classList.toggle("is-ready-to-open", shouldPrioritizeOpen);
   }
   $$("[data-platform-download]").forEach((link) => {
     const platform = link.dataset.platformDownload;
@@ -3765,6 +3804,10 @@ function bindEvents() {
     await copyText($("#collector-prefill-code").textContent, "Code copie.", "Aucun code a copier");
   });
   $("#download-prefill-file").addEventListener("click", downloadPrefillFile);
+  $("#collector-download-primary")?.addEventListener("click", () => {
+    rememberCollectorDownload();
+    window.setTimeout(updateCollectorDownloadUi, 250);
+  });
   $("#collector-open-app")?.addEventListener("click", () => {
     if (!state.collectorLaunchUrl) {
       toast("Aucun code de pré-remplissage", "error");
