@@ -15,7 +15,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-SCRIPT_VERSION = "1.5.1"
+SCRIPT_VERSION = "1.5.2"
 OSQUERY_ENGINE_VERSION = "0.1.0"
 
 PLACEHOLDER_VALUES = {
@@ -80,6 +80,100 @@ def first_clean(*values):
         cleaned = clean_identifier(value)
         if cleaned:
             return cleaned
+    return ""
+
+
+def read_first_text(*paths):
+    return first_clean(*(read_text(path) for path in paths))
+
+
+def linux_dmi_value(name):
+    return read_first_text(f"/sys/class/dmi/id/{name}", f"/sys/devices/virtual/dmi/id/{name}")
+
+
+def linux_dmi_info():
+    info = {
+        "manufacturer": linux_dmi_value("sys_vendor"),
+        "productName": linux_dmi_value("product_name"),
+        "productVersion": linux_dmi_value("product_version"),
+        "productSku": linux_dmi_value("product_sku"),
+        "productFamily": linux_dmi_value("product_family"),
+        "productSerial": linux_dmi_value("product_serial"),
+        "productUuid": linux_dmi_value("product_uuid"),
+        "boardVendor": linux_dmi_value("board_vendor"),
+        "boardName": linux_dmi_value("board_name"),
+        "boardSerial": linux_dmi_value("board_serial"),
+        "chassisSerial": linux_dmi_value("chassis_serial"),
+        "chassisAssetTag": linux_dmi_value("chassis_asset_tag"),
+    }
+    if not info["productSerial"] and shutil.which("dmidecode") and hasattr(os, "geteuid") and os.geteuid() == 0:
+        info["productSerial"] = first_clean(
+            run(["dmidecode", "-s", "system-serial-number"]),
+            run(["dmidecode", "-s", "baseboard-serial-number"]),
+            run(["dmidecode", "-s", "chassis-serial-number"]),
+        )
+    return info
+
+
+def clean_linux_gpu(raw):
+    text = clean_identifier(raw)
+    if not text:
+        return ""
+    controller_match = re.search(r"\b(?:VGA compatible controller|3D controller|Display controller):\s*(.+)$", text, flags=re.I)
+    if controller_match:
+        text = controller_match.group(1).strip()
+    else:
+        text = re.sub(r"^[0-9a-f:.]+\s+", "", text, flags=re.I).strip()
+    text = re.sub(r"\s*\(rev\s+[0-9a-f]+\)\s*$", "", text, flags=re.I)
+    text = re.sub(r"\[[0-9a-f]{4}:[0-9a-f]{4}\]", "", text, flags=re.I)
+
+    vendor = ""
+    vendor_patterns = [
+        (r"^advanced micro devices,\s*inc\.\s*\[amd/ati\]\s*", "AMD"),
+        (r"^advanced micro devices,\s*inc\.\s*", "AMD"),
+        (r"^\[amd/ati\]\s*", "AMD"),
+        (r"^intel corporation\s*", "Intel"),
+        (r"^nvidia corporation\s*", "NVIDIA"),
+    ]
+    for pattern, label in vendor_patterns:
+        if re.search(pattern, text, flags=re.I):
+            text = re.sub(pattern, "", text, flags=re.I).strip(" -:")
+            vendor = label
+            break
+
+    bracket_names = [
+        match.strip()
+        for match in re.findall(r"\[([^\]]+)\]", text)
+        if re.search(r"radeon|geforce|rtx|gtx|iris|uhd|arc|graphics", match, flags=re.I)
+    ]
+    if bracket_names:
+        text = bracket_names[-1]
+    else:
+        text = re.sub(r"\[[^\]]+\]", "", text).strip()
+
+    text = re.sub(r"\bcompatible controller\b", "", text, flags=re.I)
+    text = re.sub(r"\bcontroller\b", "", text, flags=re.I)
+    text = re.sub(r"\s+", " ", text).strip(" -:")
+    if vendor and text and not text.lower().startswith(vendor.lower()):
+        return f"{vendor} {text}".strip()
+    return text
+
+
+def linux_gpu_name():
+    if shutil.which("lspci"):
+        output = run(["lspci", "-nn"])
+        for line in output.splitlines():
+            if re.search(r"\b(vga|3d|display)\b", line, flags=re.I):
+                gpu = clean_linux_gpu(line)
+                if gpu:
+                    return gpu
+    cpu = ""
+    for line in read_text("/proc/cpuinfo").splitlines():
+        if line.lower().startswith("model name"):
+            cpu = line.split(":", 1)[-1].strip()
+            break
+    if re.search(r"\bradeon graphics\b", cpu, flags=re.I):
+        return "AMD Radeon Graphics"
     return ""
 
 
@@ -159,11 +253,11 @@ def linux_info():
     memory_kb = re.search(r"MemTotal:\s+(\d+)", read_text("/proc/meminfo"))
     disk = shutil.disk_usage("/")
     physical_storage = linux_physical_storage_summary()
-    manufacturer = read_text("/sys/class/dmi/id/sys_vendor")
-    model = read_text("/sys/class/dmi/id/product_name")
-    serial = read_text("/sys/class/dmi/id/product_serial")
-    if not serial and shutil.which("dmidecode") and hasattr(os, "geteuid") and os.geteuid() == 0:
-        serial = run(["dmidecode", "-s", "system-serial-number"])
+    dmi = linux_dmi_info()
+    manufacturer = dmi.get("manufacturer")
+    model = first_clean(dmi.get("productName"), dmi.get("boardName"), platform.machine())
+    model_number = first_clean(dmi.get("productSku"), dmi.get("productVersion"))
+    serial = first_clean(dmi.get("productSerial"), dmi.get("boardSerial"), dmi.get("chassisSerial"))
     cpu = ""
     for line in read_text("/proc/cpuinfo").splitlines():
         if line.lower().startswith("model name"):
@@ -178,14 +272,31 @@ def linux_info():
         "osName": release.get("NAME", "Linux"),
         "osVersion": release.get("PRETTY_NAME", platform.platform()),
         "manufacturer": manufacturer,
-        "model": model or platform.machine(),
+        "model": model,
+        "modelNumber": model_number,
         "serialNumber": serial,
+        "serviceTag": serial,
         "cpu": cpu or platform.processor(),
-        "gpu": run(["sh", "-c", "lspci 2>/dev/null | grep -Ei 'vga|3d|display' | head -1"]),
+        "gpu": linux_gpu_name(),
         "ramTotalGb": normalized_memory_gb(round(int(memory_kb.group(1)) / 1024 / 1024, 2)) if memory_kb else None,
         "storageTotalGb": physical_storage.get("storageTotalGb") or bytes_to_gb(disk.total),
         "storageFreeGb": physical_storage.get("storageFreeGb") or bytes_to_gb(disk.free),
         "storageType": physical_storage.get("storageType") or storage_type,
+        "hardwareIdentity": {
+            "manufacturer": manufacturer,
+            "model": model,
+            "systemFamily": dmi.get("productFamily"),
+            "systemSku": dmi.get("productSku"),
+            "productName": dmi.get("productName"),
+            "productNumber": dmi.get("productVersion"),
+            "baseboardProduct": dmi.get("boardName"),
+            "baseboardManufacturer": dmi.get("boardVendor"),
+            "biosSerialNumber": dmi.get("productSerial"),
+            "chassisSerialNumber": dmi.get("chassisSerial"),
+            "assetTag": dmi.get("chassisAssetTag"),
+            "serviceTag": serial,
+            "uuid": dmi.get("productUuid"),
+        },
     }
 
 
@@ -415,6 +526,7 @@ def collect_with_osquery(include_mac):
     storage = osquery_storage_summary(mounts)
     logical_drives = mounts
     linux_details = linux_info() if system == "Linux" else {}
+    linux_identity = linux_details.get("hardwareIdentity") if isinstance(linux_details.get("hardwareIdentity"), dict) else {}
     if system == "Linux":
         physical_storage = linux_physical_storage_summary()
         if physical_storage.get("storageTotalGb"):
@@ -448,6 +560,7 @@ def collect_with_osquery(include_mac):
     )
     serial = first_clean(
         linux_details.get("serialNumber"),
+        linux_details.get("serviceTag"),
         system_info.get("hardware_serial"),
         system_info.get("serial_number"),
         system_info.get("uuid") if system != "Linux" else "",
@@ -475,29 +588,30 @@ def collect_with_osquery(include_mac):
     hardware_identity = {
         "manufacturer": manufacturer,
         "model": model,
-        "systemFamily": clean_identifier(system_info.get("hardware_family")),
-        "systemSku": clean_identifier(system_info.get("hardware_sku")),
+        "systemFamily": first_clean(linux_identity.get("systemFamily"), system_info.get("hardware_family")),
+        "systemSku": first_clean(linux_identity.get("systemSku"), linux_details.get("modelNumber"), system_info.get("hardware_sku")),
         "productName": model,
-        "productNumber": clean_identifier(system_info.get("hardware_version")),
-        "baseboardProduct": "",
-        "baseboardManufacturer": manufacturer,
-        "biosSerialNumber": serial,
-        "chassisSerialNumber": "",
-        "assetTag": "",
+        "productNumber": first_clean(linux_identity.get("productNumber"), system_info.get("hardware_version")),
+        "baseboardProduct": clean_identifier(linux_identity.get("baseboardProduct")),
+        "baseboardManufacturer": first_clean(linux_identity.get("baseboardManufacturer"), manufacturer),
+        "biosSerialNumber": first_clean(linux_identity.get("biosSerialNumber"), serial),
+        "chassisSerialNumber": clean_identifier(linux_identity.get("chassisSerialNumber")),
+        "assetTag": clean_identifier(linux_identity.get("assetTag")),
         "serviceTag": serial,
-        "uuid": clean_identifier(system_info.get("uuid")),
+        "uuid": first_clean(linux_identity.get("uuid"), system_info.get("uuid")),
     }
+    gpu = first_clean(linux_details.get("gpu")) if system == "Linux" else ""
     return {
         "osName": first_clean(os_version.get("name"), "macOS" if system == "Darwin" else system or "Unknown"),
         "osVersion": first_clean(os_version.get("version"), os_version.get("major"), platform.platform()),
         "manufacturer": manufacturer,
         "model": model,
-        "modelNumber": first_clean(hardware_identity.get("systemSku"), hardware_identity.get("productNumber")),
+        "modelNumber": first_clean(linux_details.get("modelNumber"), hardware_identity.get("systemSku"), hardware_identity.get("productNumber")),
         "serialNumber": serial,
         "serviceTag": serial,
         "cpu": first_clean(system_info.get("cpu_brand"), platform.processor()),
-        "gpu": first_clean(linux_details.get("gpu")) if system == "Linux" else "",
-        "gpus": [{"name": first_clean(linux_details.get("gpu"))}] if system == "Linux" and first_clean(linux_details.get("gpu")) else [],
+        "gpu": gpu,
+        "gpus": [{"name": gpu}] if gpu else [],
         "ramTotalGb": ram_total_gb,
         "memoryModules": memory_modules,
         **storage,
