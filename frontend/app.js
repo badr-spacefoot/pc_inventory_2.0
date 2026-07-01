@@ -3087,6 +3087,24 @@ function downloadLabel(platform) {
   return translate("Télécharger le collecteur");
 }
 
+function ubuntuInstallCommand(asset = collectorAsset("linux")) {
+  const fileName = asset?.fileName || "spacefoot-it-collector-linux.deb";
+  return [
+    'downloads="$(xdg-user-dir DOWNLOAD 2>/dev/null || echo "$HOME/Téléchargements")"',
+    'cd "$downloads" || cd "$HOME/Downloads"',
+    `sudo apt install ./${fileName}`,
+  ].join("\n");
+}
+
+function updateUbuntuInstallGuide() {
+  const guide = $("#ubuntu-install-guide");
+  const code = $("#ubuntu-install-command");
+  if (!guide || !code) return;
+  const shouldShow = state.detectedPlatform === "linux" && Boolean(collectorAsset("linux"));
+  guide.classList.toggle("is-hidden", !shouldShow);
+  code.textContent = ubuntuInstallCommand();
+}
+
 function osIconSvg(platform) {
   if (platform === "windows") {
     return `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1"></rect><rect x="13" y="3" width="8" height="8" rx="1"></rect><rect x="3" y="13" width="8" height="8" rx="1"></rect><rect x="13" y="13" width="8" height="8" rx="1"></rect></svg>`;
@@ -3184,6 +3202,7 @@ function updateCollectorDownloadUi() {
     if (item?.fileName) link.setAttribute("download", item.fileName);
     else link.removeAttribute("download");
   });
+  updateUbuntuInstallGuide();
 }
 
 async function loadScriptPreview() {
@@ -3863,6 +3882,9 @@ function bindEvents() {
   });
   $("#copy-prefill-code").addEventListener("click", async () => {
     await copyText($("#collector-prefill-code").textContent, "Code copie.", "Aucun code a copier");
+  });
+  $("#copy-ubuntu-command")?.addEventListener("click", async () => {
+    await copyText($("#ubuntu-install-command")?.textContent, "Commande Ubuntu copiee.", "Aucune commande Ubuntu a copier");
   });
   $("#download-prefill-file").addEventListener("click", downloadPrefillFile);
   $("#collector-download-primary")?.addEventListener("click", () => {

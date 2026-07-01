@@ -205,6 +205,14 @@ Linux:
 - Si osquery n'est pas exploitable sur un poste, le collecteur bascule sur sa collecte Python locale au lieu de bloquer l'utilisateur.
 - Verifier `SHA256SUMS.txt`; ajouter une signature GPG ou un dépôt APT signe plus tard si nécessaire.
 
+Commande Ubuntu utilisateur:
+
+```bash
+downloads="$(xdg-user-dir DOWNLOAD 2>/dev/null || echo "$HOME/Téléchargements")"
+cd "$downloads" || cd "$HOME/Downloads"
+sudo apt install ./spacefoot-it-collector-linux-0.1.29.deb
+```
+
 macOS:
 
 - Sans Apple Developer ID + notarisation, Gatekeeper peut bloquer ou avertir l'utilisateur.

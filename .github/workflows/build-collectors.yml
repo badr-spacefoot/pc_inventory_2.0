@@ -87,6 +87,8 @@ jobs:
             cp "$osqueryi_path" installer-assets/bundled-tools/osqueryi
             chmod +x installer-assets/bundled-tools/osqueryi
           fi
+          cp -L "$osqueryi_path" installer-assets/bundled-tools/osqueryi
+          chmod +x installer-assets/bundled-tools/osqueryi
 
       - name: Prepare macOS app icon
         if: matrix.name == 'macos'

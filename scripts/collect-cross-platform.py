@@ -215,17 +215,31 @@ def find_osqueryi():
     configured = os.environ.get("SPACEFOOT_OSQUERYI")
     bundled_candidates = []
     if getattr(sys, "frozen", False):
+        frozen_bundle_root = Path(getattr(sys, "_MEIPASS", "")) / "bundled-tools"
+        executable_bundle_root = Path(sys.executable).resolve().parent / "bundled-tools"
         bundled_candidates.extend([
-            Path(getattr(sys, "_MEIPASS", "")) / "bundled-tools" / "osquery" / "bin" / "osqueryi",
-            Path(getattr(sys, "_MEIPASS", "")) / "bundled-tools" / "osqueryi",
-            Path(sys.executable).resolve().parent / "bundled-tools" / "osquery" / "bin" / "osqueryi",
-            Path(sys.executable).resolve().parent / "bundled-tools" / "osqueryi",
+            frozen_bundle_root / "osqueryi",
+            frozen_bundle_root / "osquery" / "bin" / "osqueryi",
+            frozen_bundle_root / "osquery" / "usr" / "bin" / "osqueryi",
+            frozen_bundle_root / "osquery" / "opt" / "osquery" / "bin" / "osqueryi",
+            executable_bundle_root / "osqueryi",
+            executable_bundle_root / "osquery" / "bin" / "osqueryi",
+            executable_bundle_root / "osquery" / "usr" / "bin" / "osqueryi",
+            executable_bundle_root / "osquery" / "opt" / "osquery" / "bin" / "osqueryi",
         ])
+        for root in [frozen_bundle_root, executable_bundle_root]:
+            if root.exists():
+                bundled_candidates.extend(root.rglob("osqueryi"))
     else:
+        repo_bundle_root = Path(__file__).resolve().parents[1] / "installer-assets" / "bundled-tools"
         bundled_candidates.extend([
-            Path(__file__).resolve().parents[1] / "installer-assets" / "bundled-tools" / "osquery" / "bin" / "osqueryi",
-            Path(__file__).resolve().parents[1] / "installer-assets" / "bundled-tools" / "osqueryi",
+            repo_bundle_root / "osqueryi",
+            repo_bundle_root / "osquery" / "bin" / "osqueryi",
+            repo_bundle_root / "osquery" / "usr" / "bin" / "osqueryi",
+            repo_bundle_root / "osquery" / "opt" / "osquery" / "bin" / "osqueryi",
         ])
+        if repo_bundle_root.exists():
+            bundled_candidates.extend(repo_bundle_root.rglob("osqueryi"))
     candidates = [
         configured,
         *[str(path) for path in bundled_candidates],

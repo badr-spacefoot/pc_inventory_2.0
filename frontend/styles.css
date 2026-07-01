@@ -1105,6 +1105,42 @@ pre {
   color: var(--accent);
 }
 
+.ubuntu-install-guide {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 16px;
+}
+
+.ubuntu-install-guide h4 {
+  font-size: 0.95rem;
+  margin: 0 0 4px;
+}
+
+.ubuntu-install-guide p {
+  margin: 0;
+}
+
+.ubuntu-install-guide pre {
+  background: color-mix(in srgb, var(--bg), #000 6%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 0;
+  overflow-x: auto;
+  padding: 12px;
+}
+
+.ubuntu-install-guide code {
+  color: var(--text);
+  font-size: 0.88rem;
+  white-space: pre;
+}
+
+.ubuntu-install-guide button {
+  justify-self: start;
+}
+
 .script-preview {
   margin-top: 14px;
 }
