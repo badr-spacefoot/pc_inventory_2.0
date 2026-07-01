@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Spacefoot IT Inventory</title>
+    <link rel="icon" type="image/svg+xml" href="./assets/brand/favicon.svg" />
     <script>
       document.documentElement.dataset.theme =
         localStorage.getItem("it_inventory_theme") ||
@@ -14,9 +15,14 @@
   </head>
   <body>
     <header class="topbar">
-      <div>
-        <p class="eyebrow">Spacefoot</p>
-        <h1>Inventaire IT</h1>
+      <div class="brand-title">
+        <a class="brand-lockup" href="./" aria-label="Spacefoot">
+          <img src="./assets/brand/spacefoot-logo.svg" alt="Spacefoot" />
+        </a>
+        <div>
+          <p class="eyebrow">Inventaire IT</p>
+          <h1>Collecte & parc informatique</h1>
+        </div>
       </div>
       <div class="topbar-actions">
         <nav class="tabs" aria-label="Navigation principale">
@@ -166,7 +172,7 @@
               <button id="download-prefill-file" class="secondary support-only is-hidden" type="button">Télécharger le fichier de pré-remplissage</button>
               <div class="collector-options">
                 <article>
-                  <h3>Application native recommandee</h3>
+                  <h3>Application native recommandée</h3>
                   <p id="collector-platform-copy">Detection du systeme en cours...</p>
                   <div class="launcher-downloads">
                     <a id="collector-download-primary" class="primary action-button" href="https://github.com/badr-spacefoot/pc_inventory_2.0/releases" rel="noopener">

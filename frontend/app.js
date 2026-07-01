@@ -8,6 +8,8 @@ const CONFIG = {
   weatherLocationLabel: window.IT_INVENTORY_WEATHER_LOCATION || "Levallois-Perret",
 };
 
+const COLLECTOR_INSTALL_STATE_KEY = "it_inventory_collector_install_state";
+
 const state = {
   adminToken: localStorage.getItem("it_inventory_admin_token") || "",
   currentAdmin: JSON.parse(localStorage.getItem("it_inventory_admin_user") || "null"),
@@ -41,6 +43,7 @@ const state = {
   detectedPlatform: "unknown",
   prefillCode: "",
   collectorLaunchUrl: "",
+  collectorInstallState: JSON.parse(localStorage.getItem(COLLECTOR_INSTALL_STATE_KEY) || "null"),
   mapProvider: "openstreetmap",
 };
 let pendingRetirement = null;
@@ -1402,10 +1405,18 @@ function updateWeatherDisplay() {
     icon.innerHTML = weatherIcon(null);
     value.textContent = "--";
     button.title = translate("Meteo indisponible");
+    button.setAttribute("aria-label", button.title);
     return;
   }
   const unit = state.temperatureUnit === "fahrenheit" ? "°F" : "°C";
   const temperature = Math.round(Number(state.weather.temperature));
+  if (!Number.isFinite(temperature)) {
+    icon.innerHTML = weatherIcon(null);
+    value.textContent = "--";
+    button.title = translate("Meteo indisponible");
+    button.setAttribute("aria-label", button.title);
+    return;
+  }
   const label = weatherLabel(state.weather.weatherCode);
   icon.innerHTML = weatherIcon(state.weather.weatherCode, state.weather.isDay);
   value.textContent = `${temperature}${unit}`;
@@ -1415,7 +1426,7 @@ function updateWeatherDisplay() {
 
 async function loadWeather() {
   const unit = state.temperatureUnit === "fahrenheit" ? "fahrenheit" : "celsius";
-  const url = new URL("https://api.open-météo.com/v1/forecast");
+  const url = new URL("https://api.open-meteo.com/v1/forecast");
   url.searchParams.set("latitude", String(CONFIG.weatherLatitude));
   url.searchParams.set("longitude", String(CONFIG.weatherLongitude));
   url.searchParams.set("current", "temperature_2m,weather_code,is_day");
@@ -2903,6 +2914,31 @@ function collectorAsset(platform = state.detectedPlatform) {
   return state.collectorReleases?.assets?.[platform] || null;
 }
 
+function expectedCollectorVersion(asset = collectorAsset()) {
+  return asset?.version || state.collectorReleases?.latestVersion || "";
+}
+
+function hasKnownCompatibleCollector(asset = collectorAsset()) {
+  const saved = state.collectorInstallState || {};
+  return Boolean(
+    asset
+    && saved.platform === state.detectedPlatform
+    && saved.version
+    && saved.version === expectedCollectorVersion(asset),
+  );
+}
+
+function rememberCollectorLaunch(asset = collectorAsset()) {
+  const version = expectedCollectorVersion(asset);
+  if (!version || state.detectedPlatform === "unknown") return;
+  state.collectorInstallState = {
+    platform: state.detectedPlatform,
+    version,
+    launchedAt: new Date().toISOString(),
+  };
+  localStorage.setItem(COLLECTOR_INSTALL_STATE_KEY, JSON.stringify(state.collectorInstallState));
+}
+
 function platformLabel(platform) {
   return { windows: "Windows", macos: "macOS", linux: "Linux" }[platform] || "";
 }
@@ -2916,7 +2952,7 @@ function downloadLabel(platform) {
 
 function osIconSvg(platform) {
   if (platform === "windows") {
-    return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5.5 10.5 4v7H3V5.5Zm9-1.8L21 2v9h-9V3.7ZM3 13h7.5v7L3 18.5V13Zm9 0h9v9l-9-1.7V13Z"></path></svg>`;
+    return `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1"></rect><rect x="13" y="3" width="8" height="8" rx="1"></rect><rect x="3" y="13" width="8" height="8" rx="1"></rect><rect x="13" y="13" width="8" height="8" rx="1"></rect></svg>`;
   }
   if (platform === "macos") {
     return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.6 13.1c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.7-1.8-3.2-1.8-1.4-.1-2.7.8-3.4.8-.7 0-1.8-.8-3-.8-1.5 0-3 .9-3.8 2.2-1.6 2.8-.4 7 1.1 9.3.8 1.1 1.7 2.4 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7c1.3 0 2.1-1.1 2.8-2.2.9-1.3 1.2-2.5 1.3-2.6 0 0-2.7-1-2.7-3.7ZM15.5 6.2c.6-.8 1.1-1.8.9-2.9-.9 0-2 .6-2.7 1.4-.6.7-1.1 1.8-.9 2.8 1 .1 2-.5 2.7-1.3Z"></path></svg>`;
@@ -2950,6 +2986,7 @@ function updateCollectorDownloadUi() {
   const primary = $("#collector-download-primary");
   const releases = $("#collector-releases-link");
   const openApp = $("#collector-open-app");
+  const launcher = primary?.closest(".launcher-downloads");
   if (!primary || !releases) return;
   const releasePage = state.collectorReleases?.releasePageUrl
     || state.collectorReleases?.fallbackReleasePageUrl
@@ -2957,12 +2994,18 @@ function updateCollectorDownloadUi() {
   releases.href = state.collectorReleases?.fallbackReleasePageUrl || "https://github.com/badr-spacefoot/pc_inventory_2.0/releases";
   const detected = state.detectedPlatform;
   const asset = collectorAsset(detected);
+  const canLaunch = Boolean(state.collectorLaunchUrl);
+  const compatibleCollectorKnown = canLaunch && hasKnownCompatibleCollector(asset);
   if (asset) {
     primary.href = asset.downloadUrl;
     primary.setAttribute("download", asset.fileName || "");
     primary.querySelector("span:not(.collector-os-icon)").textContent = downloadLabel(detected);
     $("#collector-os-icon").innerHTML = osIconSvg(detected);
-    $("#collector-platform-copy").textContent = `${translate("Collecteur detecte pour")} ${platformLabel(detected)} (${asset.version || ""}).`;
+    $("#collector-platform-copy").textContent = compatibleCollectorKnown
+      ? (state.language === "en"
+        ? `Collector ${asset.version || ""} already opened from this browser. Launch it to load the profile.`
+        : `Collecteur ${asset.version || ""} déjà lancé depuis ce navigateur. Ouvrez-le pour charger le profil.`)
+      : `${translate("Collecteur detecte pour")} ${platformLabel(detected)} (${asset.version || ""}).`;
   } else {
     primary.href = releasePage;
     primary.removeAttribute("download");
@@ -2973,8 +3016,13 @@ function updateCollectorDownloadUi() {
       : translate("Aucun asset collecteur disponible pour cette plateforme.");
   }
   if (openApp) {
-    openApp.disabled = !state.collectorLaunchUrl;
-    openApp.classList.toggle("is-disabled", !state.collectorLaunchUrl);
+    openApp.disabled = !canLaunch;
+    openApp.classList.toggle("is-disabled", !canLaunch);
+    openApp.classList.toggle("primary", compatibleCollectorKnown);
+    openApp.classList.toggle("secondary", !compatibleCollectorKnown);
+    primary.classList.toggle("primary", !compatibleCollectorKnown);
+    primary.classList.toggle("secondary", compatibleCollectorKnown);
+    launcher?.classList.toggle("is-ready-to-open", compatibleCollectorKnown);
   }
   $$("[data-platform-download]").forEach((link) => {
     const platform = link.dataset.platformDownload;
@@ -3637,7 +3685,12 @@ function bindEvents() {
         ? "Use the native collector app. Install it once, then open it from this page to load the profile automatically. The script fallback is reserved for IT support."
         : "Utilisez l'application collecteur native. Installez-la une fois, puis ouvrez-la depuis cette page pour charger le profil automatiquement. Le script fallback reste réservé au support IT.";
       updateCollectorDownloadUi();
-      toast(translate("Preparation terminee. Telechargez le collecteur."), "success");
+      toast(
+        hasKnownCompatibleCollector()
+          ? (state.language === "en" ? "Preparation complete. Open the collector." : "Préparation terminée. Ouvrez le collecteur.")
+          : translate("Preparation terminee. Telechargez le collecteur."),
+        "success",
+      );
     } catch (error) {
       saveCollectionDraft();
       toast(error.message, "error");
@@ -3659,6 +3712,8 @@ function bindEvents() {
       toast("Aucun code de pré-remplissage", "error");
       return;
     }
+    rememberCollectorLaunch();
+    updateCollectorDownloadUi();
     window.location.href = state.collectorLaunchUrl;
     toast(
       state.language === "en"

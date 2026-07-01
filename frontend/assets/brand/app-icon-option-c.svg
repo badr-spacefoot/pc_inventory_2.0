@@ -1,0 +1,9 @@
+<svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Spacefoot IT Collector icon option C">
+  <rect width="128" height="128" rx="26" fill="#0f1511"/>
+  <path d="M32 36h64v44H32z" fill="#18231d" stroke="#38a98e" stroke-width="4"/>
+  <path d="M50 96h28M64 80v16" stroke="#38a98e" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="48" cy="52" r="7" fill="#43bccd"/>
+  <circle cx="64" cy="52" r="7" fill="#f9c80e"/>
+  <circle cx="80" cy="52" r="7" fill="#ea3546"/>
+  <path d="M46 66h36" stroke="#ff7e02" stroke-width="5" stroke-linecap="round"/>
+</svg>

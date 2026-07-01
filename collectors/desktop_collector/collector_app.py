@@ -108,6 +108,7 @@ TRANSLATIONS = {
         "No passwords are read.": "Aucun mot de passe n'est lu.",
         "No remote control is installed.": "Aucun contrôle à distance n'est installé.",
         "Data is submitted only after user confirmation.": "Les données sont envoyées uniquement après confirmation.",
+        "User": "Utilisateur",
         "User assignment": "Affectation utilisateur",
         "Teams and locations are loaded from the admin-managed values.": "Les équipes et établissements sont chargés depuis les valeurs admin.",
         "First name": "Prénom",
@@ -334,6 +335,7 @@ class CollectorApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("Spacefoot IT Collector")
+        self._set_window_icon()
         self.geometry("1180x840")
         self.minsize(1040, 760)
         self.configure(bg=COLORS["bg"])
@@ -385,6 +387,45 @@ class CollectorApp(tk.Tk):
     def t(self, text: str) -> str:
         return TRANSLATIONS.get(self.language.get(), {}).get(text, text)
 
+    def _set_window_icon(self) -> None:
+        try:
+            photo = tk.PhotoImage(width=32, height=32)
+            photo.put("#101310", to=(0, 0, 32, 32))
+            colors = [
+                "#ff7e02", "#662e9b", "#ea3546",
+                "#43bccd", "#f9c80e", "#ff7e02",
+                "#662e9b", "#ea3546", "#43bccd",
+            ]
+            index = 0
+            for y in (7, 13, 19):
+                for x in (7, 13, 19):
+                    photo.put(colors[index], to=(x, y, x + 5, y + 5))
+                    index += 1
+            self.app_icon_photo = photo
+            self.iconphoto(True, photo)
+        except tk.TclError:
+            pass
+
+    def brand_mark(self, parent, size=38):
+        canvas = tk.Canvas(parent, width=size, height=size, bg=parent["bg"], highlightthickness=0, borderwidth=0)
+        colors = [
+            "#ff7e02", "#662e9b", "#ea3546",
+            "#43bccd", "#f9c80e", "#ff7e02",
+            "#662e9b", "#ea3546", "#43bccd",
+        ]
+        dot = max(5, size // 6)
+        gap = max(3, size // 12)
+        grid = dot * 3 + gap * 2
+        start = (size - grid) // 2
+        index = 0
+        for row in range(3):
+            for column in range(3):
+                x = start + column * (dot + gap)
+                y = start + row * (dot + gap)
+                canvas.create_oval(x, y, x + dot, y + dot, fill=colors[index], outline="")
+                index += 1
+        return canvas
+
     def system_theme(self) -> str:
         if platform.system() == "Windows" and winreg:
             try:
@@ -429,15 +470,28 @@ class CollectorApp(tk.Tk):
         header = tk.Frame(shell, bg=COLORS["bg"])
         header.grid(row=0, column=0, sticky="ew")
         header.columnconfigure(0, weight=1)
-        tk.Label(header, text="SPACEFOOT", fg=COLORS["brand_2"], bg=COLORS["bg"], font=("Segoe UI", 9, "bold")).grid(row=0, column=0, sticky="w")
-        tk.Label(header, text=self.t("IT Collector"), fg=COLORS["text"], bg=COLORS["bg"], font=("Segoe UI", 26, "bold")).grid(row=1, column=0, sticky="w")
+        header.columnconfigure(1, weight=0)
+        brand = tk.Frame(header, bg=COLORS["bg"])
+        brand.grid(row=0, column=0, sticky="w")
+        self.brand_mark(brand, 38).grid(row=0, column=0, rowspan=2, sticky="w", padx=(0, 10))
+        tk.Label(brand, text="SPACEFOOT", fg=COLORS["brand_2"], bg=COLORS["bg"], font=("Segoe UI", 9, "bold")).grid(row=0, column=1, sticky="w")
+        tk.Label(brand, text=self.t("IT Collector"), fg=COLORS["text"], bg=COLORS["bg"], font=("Segoe UI", 26, "bold")).grid(row=1, column=1, sticky="w")
+        tk.Label(
+            header,
+            text=f"{self.t('Version')} {COLLECTOR_VERSION}",
+            fg=COLORS["text"],
+            bg=COLORS["panel_2"],
+            padx=12,
+            pady=7,
+            font=("Segoe UI", 9, "bold"),
+        ).grid(row=0, column=1, sticky="ne")
         tk.Label(
             header,
             text=self.t("This collector gathers only inventory information needed by the IT team."),
             fg=COLORS["muted"],
             bg=COLORS["bg"],
             font=("Segoe UI", 10),
-        ).grid(row=2, column=0, sticky="w", pady=(4, 0))
+        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
         self.step_nav = tk.Frame(shell, bg=COLORS["bg"])
         self.step_nav.grid(row=1, column=0, sticky="ew", pady=(18, 0))
@@ -493,9 +547,8 @@ class CollectorApp(tk.Tk):
         self.language_button.grid(row=0, column=1, padx=(8, 8))
         self.theme_button = self.button(footer, self.theme_label(), self.toggle_theme, secondary=True)
         self.theme_button.grid(row=0, column=2, padx=(0, 8))
-        tk.Label(footer, text=f"{self.t('Version')} {COLLECTOR_VERSION}", fg=COLORS["muted"], bg=COLORS["bg"], font=("Segoe UI", 9, "bold")).grid(row=0, column=3, padx=(0, 8))
         action_bar = tk.Frame(footer, bg=COLORS["bg"])
-        action_bar.grid(row=0, column=4, sticky="e")
+        action_bar.grid(row=0, column=3, sticky="e")
         self.back_button = self.button(action_bar, self.t("Back"), self.previous_step, secondary=True)
         self.back_button.grid(row=0, column=0, padx=(0, 8))
         self.next_button = self.button(action_bar, self.t("Next"), self.primary_action)
@@ -639,6 +692,15 @@ class CollectorApp(tk.Tk):
         parts = [part for part in [name, email, team, site] if part]
         return " · ".join(parts) if parts else self.t("Waiting for prefill")
 
+    def profile_summary_parts(self) -> list[tuple[str, str]]:
+        name = " ".join(part for part in [self.first_name.get().strip(), self.last_name.get().strip()] if part)
+        return [
+            (self.t("User"), name),
+            (self.t("Email"), self.email.get().strip()),
+            (self.t("Team"), self.team.get().strip() or self.proposed_team.get().strip()),
+            (self.t("Location"), self.establishment.get().strip() or self.proposed_establishment.get().strip()),
+        ]
+
     def toggle_profile_visible(self) -> None:
         self.profile_visible.set(not self.profile_visible.get())
         self.persist_draft()
@@ -664,16 +726,19 @@ class CollectorApp(tk.Tk):
         state_text = self.t("Profile ready") if profile_ready else self.t("Missing profile information")
         self.label(hero, state_text, 18, bold=True).grid(row=0, column=0, sticky="w")
         self.label(hero, self.t("Check profile information before continuing."), 11, muted=True).grid(row=1, column=0, sticky="w", pady=(6, 10))
-        tk.Label(
-            hero,
-            text=self.profile_summary_text(),
-            fg=COLORS["text"],
-            bg=COLORS["panel"],
-            wraplength=980,
-            justify="left",
-            anchor="w",
-            font=("Segoe UI", 11, "bold"),
-        ).grid(row=2, column=0, sticky="ew")
+        summary = tk.Frame(hero, bg=COLORS["panel"])
+        summary.grid(row=2, column=0, sticky="ew")
+        summary.columnconfigure(0, weight=1)
+        summary_parts = [(label, value) for label, value in self.profile_summary_parts() if value]
+        if summary_parts:
+            for index, (label, value) in enumerate(summary_parts):
+                chip = tk.Frame(summary, bg=COLORS["panel_2"], padx=12, pady=8)
+                chip.grid(row=index // 2, column=index % 2, sticky="ew", padx=(0, 8), pady=(0, 8))
+                summary.columnconfigure(index % 2, weight=1)
+                tk.Label(chip, text=label.upper(), fg=COLORS["muted"], bg=COLORS["panel_2"], font=("Segoe UI", 8, "bold")).grid(row=0, column=0, sticky="w")
+                tk.Label(chip, text=value, fg=COLORS["text"], bg=COLORS["panel_2"], font=("Segoe UI", 10, "bold"), wraplength=430, justify="left").grid(row=1, column=0, sticky="w", pady=(3, 0))
+        else:
+            tk.Label(summary, text=self.t("Waiting for prefill"), fg=COLORS["muted"], bg=COLORS["panel"], font=("Segoe UI", 11, "bold")).grid(row=0, column=0, sticky="w")
         if missing:
             self.label(hero, f"{self.t('Please complete')}: {', '.join(missing)}", muted=True).grid(row=3, column=0, sticky="w", pady=(8, 0))
         action_row = tk.Frame(hero, bg=COLORS["panel"])

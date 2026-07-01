@@ -251,6 +251,7 @@ a.secondary {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 24px;
   padding: 24px clamp(16px, 4vw, 48px);
   border-bottom: 1px solid var(--line);
@@ -261,9 +262,45 @@ a.secondary {
   backdrop-filter: blur(14px);
 }
 
+.brand-title {
+  flex: 1 1 430px;
+  min-width: min(100%, 430px);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+}
+
+.brand-title h1 {
+  max-width: 520px;
+  font-size: clamp(30px, 4vw, 50px);
+  line-height: 0.96;
+}
+
+.brand-lockup {
+  width: clamp(132px, 14vw, 176px);
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--line), transparent 15%);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(24, 32, 27, 0.08);
+}
+
+.brand-lockup img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 .topbar-actions {
+  flex: 1 1 540px;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -1009,12 +1046,18 @@ pre {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 10px;
-  max-width: 420px;
+  max-width: 720px;
+  width: 100%;
 }
 
 .launcher-downloads .action-button {
   min-height: 48px;
   justify-content: center;
+  width: 100%;
+}
+
+.launcher-downloads.is-ready-to-open #collector-open-app {
+  order: -1;
 }
 
 .collector-os-icon {
@@ -1091,7 +1134,11 @@ pre {
 
 @media (min-width: 720px) {
   .launcher-downloads {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(300px, max-content) minmax(220px, max-content);
+  }
+
+  .launcher-downloads .action-button {
+    width: auto;
   }
 }
 
@@ -2284,11 +2331,39 @@ tbody tr.is-selected {
   }
 }
 
+@media (max-width: 1180px) {
+  .topbar {
+    align-items: flex-start;
+  }
+
+  .brand-title {
+    flex-basis: 100%;
+  }
+
+  .brand-title h1 {
+    max-width: none;
+  }
+
+  .topbar-actions {
+    flex-basis: 100%;
+    justify-content: flex-start;
+  }
+}
+
 @media (max-width: 680px) {
   .topbar,
   .dashboard-head {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .brand-title {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .brand-lockup {
+    width: min(188px, 100%);
   }
 
   .topbar-actions {
