@@ -51,7 +51,7 @@ else:
 
 
 DEFAULT_API_URL = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
-COLLECTOR_VERSION = "0.1.34"
+COLLECTOR_VERSION = "0.1.35"
 COLLECTOR_BUILD_CHANNEL = "github-release"
 COLLECTOR_RELEASES_URL = "https://badr-spacefoot.github.io/pc_inventory_2.0/collector-releases.json"
 DRAFT_PATH = Path.home() / ".spacefoot_it_collector.json"
@@ -1446,20 +1446,23 @@ class CollectorApp(tk.Tk):
         ])
         script_path.write_text(script, encoding="utf-8")
         script_path.chmod(0o755)
+        shell_command = f"sh {shlex.quote(str(script_path))} {shlex.quote(str(installer_path))}"
         commands = [
-            ["gnome-terminal", "--wait", "--", "sh", str(script_path), str(installer_path)],
-            ["kgx", "--wait", "--", "sh", str(script_path), str(installer_path)],
-            ["x-terminal-emulator", "-e", "sh", str(script_path), str(installer_path)],
-            ["konsole", "-e", "sh", str(script_path), str(installer_path)],
-            ["xfce4-terminal", "-e", f"sh {shlex.quote(str(script_path))} {shlex.quote(str(installer_path))}"],
-            ["xterm", "-e", "sh", str(script_path), str(installer_path)],
+            ["gnome-terminal", "--wait", "--", "bash", "-lc", shell_command],
+            ["kgx", "--wait", "--", "bash", "-lc", shell_command],
+            ["x-terminal-emulator", "-e", "bash", "-lc", shell_command],
+            ["konsole", "-e", "bash", "-lc", shell_command],
+            ["xfce4-terminal", "-e", f"bash -lc {shlex.quote(shell_command)}"],
+            ["xterm", "-e", "bash", "-lc", shell_command],
         ]
         for command in commands:
             if not shutil.which(command[0]):
                 continue
             try:
-                subprocess.Popen(command)
-                return True
+                process = subprocess.Popen(command)
+                time.sleep(0.8)
+                if process.poll() is None:
+                    return True
             except Exception:
                 continue
         return False
