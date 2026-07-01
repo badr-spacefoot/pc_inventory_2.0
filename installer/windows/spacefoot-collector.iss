@@ -47,7 +47,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Run]
 Filename: "msiexec.exe"; Parameters: "/i ""{app}\dependencies\osquery.msi"" /quiet /norestart"; StatusMsg: "Installing osquery inventory engine..."; Flags: waituntilterminated runhidden; Check: ShouldInstallOsquery
-Filename: "{app}\spacefoot-it-collector-windows.exe"; Parameters: """{param:LaunchUrl|}"""; Flags: nowait runasoriginaluser; Check: ShouldLaunchAfterInstall
+Filename: "{app}\spacefoot-it-collector-windows.exe"; Parameters: """{param:LaunchUrl|}"" --prefill-code ""{param:PrefillCode|}"""; Flags: nowait runasoriginaluser; Check: ShouldLaunchAfterInstall
 
 [Code]
 function ShouldInstallOsquery(): Boolean;

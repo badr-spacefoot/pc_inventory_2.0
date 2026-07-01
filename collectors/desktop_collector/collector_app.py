@@ -50,7 +50,7 @@ else:
 
 
 DEFAULT_API_URL = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
-COLLECTOR_VERSION = "0.1.21"
+COLLECTOR_VERSION = "0.1.22"
 COLLECTOR_BUILD_CHANNEL = "github-release"
 COLLECTOR_RELEASES_URL = "https://badr-spacefoot.github.io/pc_inventory_2.0/collector-releases.json"
 DRAFT_PATH = Path.home() / ".spacefoot_it_collector.json"
@@ -354,7 +354,7 @@ def launch_prefill_from_args(argv: list[str]) -> dict:
     parser.add_argument("--prefill-code", dest="prefill_code")
     parser.add_argument("--api-url", dest="api_url")
     try:
-        args, _ = parser.parse_known_args(argv[1:])
+        args, remaining = parser.parse_known_args(argv[1:])
     except SystemExit:
         return {}
     result = {
@@ -363,6 +363,11 @@ def launch_prefill_from_args(argv: list[str]) -> dict:
         "launchUrl": "",
     }
     launch_url = str(args.launch_url or "").strip()
+    for value in [*remaining, *argv[1:]]:
+        text = str(value or "").strip()
+        if text.lower().startswith("/launchurl="):
+            launch_url = text.split("=", 1)[1].strip().strip('"')
+            break
     if launch_url.startswith("spacefoot-collector://"):
         result["launchUrl"] = launch_url
         parsed = urllib.parse.urlparse(launch_url)
@@ -1309,7 +1314,7 @@ class CollectorApp(tk.Tk):
 
     def install_update_and_relaunch(self, installer_path: Path) -> None:
         self.status.set(self.t("Installing update. The collector will reopen automatically."))
-        launch_url = self.launch_url_for_reopen()
+        prefill_code = self.prefill_code.get().strip()
         try:
             subprocess.Popen([
                 str(installer_path),
@@ -1318,7 +1323,7 @@ class CollectorApp(tk.Tk):
                 "/NORESTART",
                 "/CLOSEAPPLICATIONS",
                 "/LaunchAfterInstall=1",
-                f"/LaunchUrl={launch_url}",
+                f"/PrefillCode={prefill_code}",
             ])
             self.after(800, self.destroy)
         except Exception as exc:
