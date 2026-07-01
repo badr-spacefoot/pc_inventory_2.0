@@ -50,7 +50,7 @@ else:
 
 
 DEFAULT_API_URL = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
-COLLECTOR_VERSION = "0.1.24"
+COLLECTOR_VERSION = "0.1.25"
 COLLECTOR_BUILD_CHANNEL = "github-release"
 COLLECTOR_RELEASES_URL = "https://badr-spacefoot.github.io/pc_inventory_2.0/collector-releases.json"
 DRAFT_PATH = Path.home() / ".spacefoot_it_collector.json"
@@ -344,12 +344,39 @@ def compact_number(value, digits=0):
     return f"{number:.{digits}f}".rstrip("0").rstrip(".")
 
 
-def downloads_dir() -> Path:
-    return Path.home() / "Downloads"
+def downloads_dirs() -> list[Path]:
+    home = Path.home()
+    candidates = [
+        home / "Downloads",
+        home / "Téléchargements",
+        home / "Telechargements",
+    ]
+    user_dirs = home / ".config" / "user-dirs.dirs"
+    try:
+        content = user_dirs.read_text(encoding="utf-8")
+    except OSError:
+        content = ""
+    match = re.search(r'^XDG_DOWNLOAD_DIR=(?P<quote>["\'])(?P<path>.*?)(?P=quote)', content, flags=re.MULTILINE)
+    if match:
+        xdg_path = match.group("path").replace("$HOME", str(home))
+        candidates.insert(0, Path(os.path.expandvars(os.path.expanduser(xdg_path))))
+    unique: list[Path] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key not in seen:
+            unique.append(candidate)
+            seen.add(key)
+    return unique
 
 
 def newest_prefill_file() -> Path | None:
-    candidates = list(downloads_dir().glob("spacefoot-collector-prefill*.json"))
+    candidates: list[Path] = []
+    for directory in downloads_dirs():
+        try:
+            candidates.extend(directory.glob("spacefoot-collector-prefill*.json"))
+        except OSError:
+            continue
     if not candidates:
         return None
     return max(candidates, key=lambda path: path.stat().st_mtime)
@@ -364,6 +391,53 @@ def os_icon_name(os_name: str) -> str:
     if "linux" in text:
         return "LNX"
     return "OS"
+
+
+def linux_desktop_exec_path() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve()
+    return Path(__file__).resolve()
+
+
+def desktop_exec_quote(value: str) -> str:
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def register_linux_url_scheme() -> None:
+    if platform.system() != "Linux":
+        return
+    executable = linux_desktop_exec_path()
+    if not executable.exists():
+        return
+    applications_dir = Path.home() / ".local" / "share" / "applications"
+    desktop_file = applications_dir / "spacefoot-it-collector.desktop"
+    exec_line = f"{desktop_exec_quote(str(executable))} %u"
+    if not getattr(sys, "frozen", False):
+        exec_line = f"{desktop_exec_quote(sys.executable)} {desktop_exec_quote(str(executable))} %u"
+    content = "\n".join([
+        "[Desktop Entry]",
+        "Type=Application",
+        "Name=Spacefoot IT Collector",
+        "Comment=Spacefoot hardware inventory collector",
+        f"Exec={exec_line}",
+        "Terminal=false",
+        "Categories=Utility;",
+        "MimeType=x-scheme-handler/spacefoot-collector;",
+        "",
+    ])
+    try:
+        applications_dir.mkdir(parents=True, exist_ok=True)
+        if not desktop_file.exists() or desktop_file.read_text(encoding="utf-8") != content:
+            desktop_file.write_text(content, encoding="utf-8")
+        subprocess.run(
+            ["xdg-mime", "default", desktop_file.name, "x-scheme-handler/spacefoot-collector"],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=3,
+        )
+    except Exception:
+        pass
 
 
 def launch_prefill_from_args(argv: list[str]) -> dict:
@@ -407,6 +481,7 @@ class CollectorApp(tk.Tk):
         self.submitted = False
         self.submission_device_id = ""
         self.collection_token = ""
+        register_linux_url_scheme()
         self.teams: list[dict] = []
         self.establishments: list[dict] = []
         self.step_index = 0
