@@ -51,7 +51,7 @@ else:
 
 
 DEFAULT_API_URL = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
-COLLECTOR_VERSION = "0.1.36"
+COLLECTOR_VERSION = "0.1.37"
 COLLECTOR_BUILD_CHANNEL = "github-release"
 COLLECTOR_RELEASES_URL = "https://badr-spacefoot.github.io/pc_inventory_2.0/collector-releases.json"
 DRAFT_PATH = Path.home() / ".spacefoot_it_collector.json"
@@ -1424,6 +1424,22 @@ class CollectorApp(tk.Tk):
     def linux_update_command(self, installer_path: Path) -> str:
         return f"sudo apt install -y {shlex.quote(str(installer_path))}"
 
+    def linux_executable(self, name: str) -> str:
+        found = shutil.which(name)
+        if found:
+            return found
+        for directory in ("/usr/local/bin", "/usr/bin", "/bin", "/snap/bin", "/var/lib/flatpak/exports/bin"):
+            candidate = Path(directory) / name
+            if candidate.exists():
+                return str(candidate)
+        return ""
+
+    def linux_process_env(self) -> dict:
+        env = os.environ.copy()
+        default_path = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin"
+        env["PATH"] = f"{env.get('PATH')}:{default_path}" if env.get("PATH") else default_path
+        return env
+
     def launch_linux_update_terminal(self, installer_path: Path) -> bool:
         script_path = Path(tempfile.gettempdir()) / "spacefoot-it-collector-update.sh"
         script = "\n".join([
@@ -1447,21 +1463,31 @@ class CollectorApp(tk.Tk):
         script_path.write_text(script, encoding="utf-8")
         script_path.chmod(0o755)
         shell_command = f"sh {shlex.quote(str(script_path))} {shlex.quote(str(installer_path))}"
-        commands = [
+        terminal_commands = [
             ["gnome-terminal", "--wait", "--", "bash", "-lc", shell_command],
+            ["gnome-terminal", "--", "bash", "-lc", shell_command],
+            ["ptyxis", "--wait", "--", "bash", "-lc", shell_command],
             ["kgx", "--wait", "--", "bash", "-lc", shell_command],
             ["x-terminal-emulator", "-e", "bash", "-lc", shell_command],
             ["konsole", "-e", "bash", "-lc", shell_command],
             ["xfce4-terminal", "-e", f"bash -lc {shlex.quote(shell_command)}"],
+            ["mate-terminal", "--wait", "--", "bash", "-lc", shell_command],
+            ["tilix", "-e", "bash", "-lc", shell_command],
+            ["alacritty", "-e", "bash", "-lc", shell_command],
+            ["kitty", "bash", "-lc", shell_command],
             ["xterm", "-e", "bash", "-lc", shell_command],
         ]
-        for command in commands:
-            if not shutil.which(command[0]):
+        env = self.linux_process_env()
+        for command in terminal_commands:
+            executable = self.linux_executable(command[0])
+            if not executable:
                 continue
+            command = [executable, *command[1:]]
             try:
-                process = subprocess.Popen(command)
+                process = subprocess.Popen(command, env=env)
                 time.sleep(0.8)
-                if process.poll() is None:
+                status = process.poll()
+                if status is None or status == 0:
                     return True
             except Exception:
                 continue
@@ -1485,7 +1511,8 @@ class CollectorApp(tk.Tk):
         if installed and is_newer_version(installed, COLLECTOR_VERSION) and not is_newer_version(expected_version, installed):
             executable = Path("/opt/spacefoot-it-collector/spacefoot-it-collector")
             try:
-                subprocess.Popen([str(executable), launch_url] if executable.exists() else ["xdg-open", launch_url])
+                xdg_open = self.linux_executable("xdg-open")
+                subprocess.Popen([str(executable), launch_url] if executable.exists() else [xdg_open or "xdg-open", launch_url], env=self.linux_process_env())
             except Exception:
                 pass
             self.destroy()
