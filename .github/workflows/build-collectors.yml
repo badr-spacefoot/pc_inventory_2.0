@@ -296,6 +296,17 @@ jobs:
             xcrun notarytool submit "dist/${{ matrix.artifact }}.zip" --apple-id "$MACOS_NOTARY_APPLE_ID" --password "$MACOS_NOTARY_PASSWORD" --team-id "$MACOS_NOTARY_TEAM_ID" --wait
           fi
 
+      - name: Package macOS app
+        if: matrix.name == 'macos'
+        shell: bash
+        run: |
+          if [ ! -d "dist/${{ matrix.artifact }}.app" ]; then
+            echo "No macOS .app bundle found to package."
+            exit 0
+          fi
+          chmod +x "dist/${{ matrix.artifact }}.app/Contents/MacOS/"*
+          ditto -c -k --sequesterRsrc --keepParent "dist/${{ matrix.artifact }}.app" "dist/${{ matrix.artifact }}.app.zip"
+
       - name: Upload collector artifact
         uses: actions/upload-artifact@v4
         with:
@@ -326,8 +337,10 @@ jobs:
             -name "Spacefoot-IT-Collector-*-Setup.exe" -o \
             -name "spacefoot-it-collector-linux" -o \
             -name "spacefoot-it-collector-macos" -o \
+            -name "spacefoot-it-collector-macos.app.zip" -o \
             -name "*.cer" \
           \) -exec cp {} release-upload/ \;
+          find release-assets -type f -path "*.app/Contents/MacOS/*" -exec chmod 755 {} \;
           find release-assets -maxdepth 1 -type d -name "*.app" -print0 | while IFS= read -r -d '' app; do
             name="$(basename "$app")"
             (cd "$(dirname "$app")" && zip -qry "$GITHUB_WORKSPACE/release-upload/${name}.zip" "$name")
