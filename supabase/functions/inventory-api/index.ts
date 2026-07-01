@@ -412,13 +412,31 @@ function historyValue(value: unknown) {
   return typeof value === "object" ? JSON.stringify(value) : String(value);
 }
 
-async function appendDeviceHistory(rows: Json[]) {
+async function appendDeviceHistory(rows: Json[]) {
   if (rows.length === 0) return;
   const { error } = await supabase.from("device_history").insert(rows);
   if (error) throw error;
-}
-
-function eventSource(value: string) {
+}
+
+function collectorApiUrl(request: Request) {
+  const url = new URL(request.url);
+  url.search = "";
+  url.hash = "";
+  url.pathname = url.pathname
+    .replace(/\/collect\/invite\/[^/]+\/prefill$/i, "")
+    .replace(/\/collect\/prefill$/i, "");
+  return url.toString().replace(/\/$/, "");
+}
+
+function collectorLaunchUrl(request: Request, prefillCode: string) {
+  const params = new URLSearchParams({
+    prefillCode,
+    apiUrl: collectorApiUrl(request),
+  });
+  return `spacefoot-collector://collect?${params.toString()}`;
+}
+
+function eventSource(value: string) {
   const normalized = safeString(value, 80).toUpperCase().replace(/[^A-Z0-9_]+/g, "_");
   if (["MANUAL_ADMIN", "COLLECTOR", "IMPORT", "SYSTEM"].includes(normalized)) return normalized;
   if (normalized === "MANUAL") return "MANUAL_ADMIN";
@@ -765,7 +783,9 @@ async function handleCreateCollectionPrefill(request: Request) {
   return json(request, {
     prefillCode,
     expiresAt,
-    launchUrl: `spacefoot-collector://collect?prefillCode=${encodeURIComponent(prefillCode)}`,
+    apiUrl: collectorApiUrl(request),
+
+    launchUrl: collectorLaunchUrl(request, prefillCode),
   }, 201);
 }
 
@@ -785,7 +805,9 @@ async function handleGetCollectionPrefill(request: Request, code: string) {
   return json(request, {
     prefillCode: data.prefill_code,
     accessToken: data.collection_access_token,
-    expiresAt: data.expires_at,
+    expiresAt: data.expires_at,
+
+    apiUrl: collectorApiUrl(request),
     ...((data.payload && typeof data.payload === "object") ? (data.payload as Json) : {}),
   });
 }
@@ -840,7 +862,9 @@ async function handleCreateInvitePrefill(request: Request, code: string) {
     prefillCode,
     expiresAt,
     inviteCode: safeString(invite.invite_code),
-    launchUrl: `spacefoot-collector://collect?prefillCode=${encodeURIComponent(prefillCode)}`,
+    apiUrl: collectorApiUrl(request),
+
+    launchUrl: collectorLaunchUrl(request, prefillCode),
   }, 201);
 }
 

@@ -86,111 +86,136 @@ COLORS = DARK_COLORS.copy()
 TRANSLATIONS = {
     "fr": {
         "IT Collector": "Collecteur IT",
-        "This collector gathers only inventory information needed by the IT team.": "Ce collecteur recupere uniquement les informations d'inventaire utiles a l'equipe IT.",
+        "This collector gathers only inventory information needed by the IT team.": "Ce collecteur récupère uniquement les informations d'inventaire utiles à l'équipe IT.",
         "Connection": "Connexion",
         "Assignment": "Affectation",
-        "Hardware scan": "Scan mat?riel",
+        "Hardware scan": "Scan matériel",
         "Review & submit": "Relecture & envoi",
-        "Validate the API and collection access token before creating the scan token.": "Validez l'API et le token temporaire avant de cr?er le token de scan.",
+        "Validate the API and collection access token before creating the scan token.": "Validez l'API et le token temporaire avant de créer le token de scan.",
         "API URL": "URL API",
         "Collection access token": "Token temporaire de collecte",
-        "Use an admin-generated temporary token, not the collector token shown after web collection.": "Utilisez un token temporaire g?n?r? dans l'admin, pas le token collecteur affiche apres la collecte web.",
-        "Include MAC address if authorized": "Inclure l'adresse MAC si autorisee",
+        "Use an admin-generated temporary token, not the collector token shown after web collection.": "Utilisez un token temporaire généré dans l'admin, pas le token collecteur affiché après la collecte web.",
+        "Include MAC address if authorized": "Inclure l'adresse MAC si autorisée",
         "Validate token": "Valider le token",
         "Token required": "Token requis",
         "Please enter the collection access token.": "Veuillez saisir le token temporaire de collecte.",
         "Validating...": "Validation...",
         "Token valid": "Token valide",
-        "Invalid collection access token. Generate a temporary token in Admin > Collection tokens.": "Token temporaire invalide. Generez un token dans Admin > Tokens temporaires.",
-        "Data transparency": "Transparence des donn?es",
+        "Invalid collection access token. Generate a temporary token in Admin > Collection tokens.": "Token temporaire invalide. Générez un token dans Admin > Tokens temporaires.",
+        "Data transparency": "Transparence des données",
         "No personal files are read.": "Aucun fichier personnel n'est lu.",
         "No browser history is read.": "Aucun historique navigateur n'est lu.",
         "No passwords are read.": "Aucun mot de passe n'est lu.",
-        "No remote control is installed.": "Aucun controle a distance n'est installe.",
-        "Data is submitted only after user confirmation.": "Les donn?es sont envoy?es uniquement apres confirmation.",
+        "No remote control is installed.": "Aucun contrôle à distance n'est installé.",
+        "Data is submitted only after user confirmation.": "Les données sont envoyées uniquement après confirmation.",
         "User assignment": "Affectation utilisateur",
-        "Teams and locations are loaded from the admin-managed values.": "Les ?quipes et etablissements sont charges depuis les valeurs admin.",
-        "First name": "Pr?nom",
+        "Teams and locations are loaded from the admin-managed values.": "Les équipes et établissements sont chargés depuis les valeurs admin.",
+        "First name": "Prénom",
         "Last name": "Nom",
         "Email": "Email",
-        "Team": "?quipe",
-        "Other team proposal": "Proposition autre ?quipe",
-        "Location": "?tablissement",
-        "Other location proposal": "Proposition autre ?tablissement",
+        "Team": "Équipe",
+        "Other team proposal": "Proposition autre équipe",
+        "Location": "Établissement",
+        "Other location proposal": "Proposition autre établissement",
         "Comment": "Commentaire",
         "Other": "Autre",
-        "Scan this computer, then review the summary before submission.": "Scannez cet ordinateur, puis relisez le resume avant envoi.",
+        "Scan this computer, then review the summary before submission.": "Scannez cet ordinateur, puis relisez le résumé avant envoi.",
         "Scan this computer": "Scanner cet ordinateur",
         "Review & submit": "Relecture & envoi",
-        "Create the collection profile, then submit the reviewed scan.": "Creez le profil de collecte, puis envoyez le scan relu.",
+        "Create the collection profile, then submit the reviewed scan.": "Créez le profil de collecte, puis envoyez le scan relu.",
         "Submit inventory": "Envoyer l'inventaire",
-        "Show Advanced / Raw JSON": "Afficher avanc? / JSON brut",
-        "Hide Advanced / Raw JSON": "Masquer avanc? / JSON brut",
-        "Advanced / Raw JSON": "Avance / JSON brut",
-        "Ready.": "Pr?t.",
+        "Show Advanced / Raw JSON": "Afficher avancé / JSON brut",
+        "Hide Advanced / Raw JSON": "Masquer avancé / JSON brut",
+        "Advanced / Raw JSON": "Avancé / JSON brut",
+        "Ready.": "Prêt.",
         "Not validated.": "Non valide.",
         "Back": "Retour",
         "Next": "Suivant",
-        "Done": "Termin?",
+        "Done": "Terminé",
         "API URL required": "URL API requise",
         "Please enter the API URL.": "Veuillez saisir l'URL API.",
-        "Loaded": "Charg?",
-        "teams and": "?quipes et",
-        "locations.": "?tablissements.",
+        "Loaded": "Chargé",
+        "teams and": "équipes et",
+        "locations.": "établissements.",
         "Collector unavailable": "Collecteur indisponible",
         "Unable to load collector": "Impossible de charger le collecteur",
-        "Scanning hardware...": "Scan mat?riel...",
-        "Scan failed": "Scan ?chou?",
+        "Scanning hardware...": "Scan matériel...",
+        "Scan failed": "Scan échoué",
         "OS": "OS",
         "Manufacturer": "Fabricant",
-        "Model": "Mod?le",
-        "Model number / SKU": "Num?ro mod?le / SKU",
+        "Model": "Modèle",
+        "Model number / SKU": "Numéro modèle / SKU",
         "Serial / Service tag": "Série / Service tag",
         "CPU": "CPU",
         "RAM": "RAM",
         "Memory details": "Détails mémoire",
         "Storage": "Stockage",
         "GPU": "GPU",
-        "Network": "R?seau",
+        "Network": "Réseau",
         "total": "total",
         "free": "libres",
+        "usable": "utilisables",
+        "installed": "installés",
         "IP": "IP",
         "MAC": "MAC",
-        "Scan completed.": "Scan termin?.",
-        "Scan completed with unavailable fields": "Scan termin? avec champs indisponibles",
+        "Scan completed.": "Scan terminé.",
+        "Scan completed with unavailable fields": "Scan terminé avec champs indisponibles",
         "No scan": "Aucun scan",
         "Scan this computer before submitting.": "Scannez cet ordinateur avant l'envoi.",
         "Missing fields": "Champs manquants",
         "Please complete": "Veuillez compléter",
-        "team or other team proposal": "?quipe ou proposition autre ?quipe",
-        "location or other location proposal": "?tablissement ou proposition autre ?tablissement",
-        "Creating collection profile...": "Creation du profil de collecte...",
-        "API did not return a collection token.": "L'API n'a pas retourne de token de scan.",
-        "Succ?ss": "Succ?s",
-        "Inventory submitted successfully.": "Inventaire envoy? avec succ?s.",
+        "team or other team proposal": "équipe ou proposition autre équipe",
+        "location or other location proposal": "établissement ou proposition autre établissement",
+        "Creating collection profile...": "Création du profil de collecte...",
+        "API did not return a collection token.": "L'API n'a pas retourné de token de scan.",
+        "Success": "Succès",
+        "Inventory submitted successfully.": "Inventaire envoyé avec succès.",
         "Submission complete. You can close the collector.": "Envoi terminé. Vous pouvez fermer le collecteur.",
-        "Submission successful. Device": "Envoi reussi. Machine",
-        "Submission failed": "?chec de l'envoi",
-        "Theme": "Theme",
-        "System": "Syst?me",
+        "Submission successful. Device": "Envoi réussi. Machine",
+        "Submission sent": "Envoi réussi",
+        "Device ID": "ID machine",
+        "The inventory was received by Spacefoot. You can close the collector.": "L'inventaire a bien été reçu par Spacefoot. Vous pouvez fermer le collecteur.",
+        "Submission failed": "Échec de l'envoi",
+        "Theme": "Thème",
+        "System": "Système",
         "Dark": "Sombre",
         "Light": "Clair",
         "Version": "Version",
-        "Prefill code": "Code de pr?-remplissage",
-        "Please enter the prefill code.": "Veuillez saisir le code de pr?-remplissage.",
-        "Load prefill": "Charg?r le pre-remplissage",
-        "Prefilled from the web page. You can edit before submitting.": "Pr?-rempli depuis la page web. Vous pouvez modifier avant l'envoi.",
+        "Prefill code": "Code de pré-remplissage",
+        "Please enter the prefill code.": "Veuillez saisir le code de pré-remplissage.",
+        "Load prefill": "Charger le pré-remplissage",
+        "Prefilled from the web page. You can edit before submitting.": "Pré-rempli depuis la page web. Vous pouvez modifier avant l'envoi.",
+        "Prefill link received. Loading profile...": "Lien de pré-remplissage reçu. Chargement du profil...",
         "Collector purpose": "Objectif du collecteur",
-        "The IT team uses this tool to keep the fleet inventory accurate. Review everything before sending.": "L'?quipe IT utilise cet outil pour maintenir l'inventaire du parc ? jour. Relisez tout avant l'envoi.",
-        "Collected data": "Donnees collectees",
-        "Connection settings": "R?glages de connexion",
-        "Show connection settings": "Afficher les reglages de connexion",
-        "Hide connection settings": "Masquer les reglages de connexion",
-        "Prefill file loaded automatically. You can edit before submitting.": "Fichier de pre-remplissage charge automatiquement. Vous pouvez modifier avant l'envoi.",
+        "The IT team uses this tool to keep the fleet inventory accurate. Review everything before sending.": "L'équipe IT utilise cet outil pour maintenir l'inventaire du parc à jour. Relisez tout avant l'envoi.",
+        "Collected data": "Données collectées",
+        "Connection settings": "Réglages de connexion",
+        "Show connection settings": "Afficher les réglages de connexion",
+        "Hide connection settings": "Masquer les réglages de connexion",
+        "Prefill file loaded automatically. You can edit before submitting.": "Fichier de pré-remplissage chargé automatiquement. Vous pouvez modifier avant l'envoi.",
         "Scan log": "Journal du scan",
-        "Hostname, OS, manufacturer, model, serial/service tag": "Hostname, OS, fabricant, modele, numero de serie/service tag",
+        "Hostname, OS, manufacturer, model, serial/service tag": "Hostname, OS, fabricant, modèle, numéro de série/service tag",
         "CPU, RAM, storage, GPU if available": "CPU, RAM, stockage, GPU si disponible",
-        "Local IP, MAC if authorized, logged-in OS user": "IP locale, MAC si autorisee, utilisateur OS connecte",
+        "Local IP, MAC if authorized, logged-in OS user": "IP locale, MAC si autorisée, utilisateur OS connecté",
+        "Ready to scan": "Prêt à scanner",
+        "Profile ready": "Profil prêt",
+        "Missing profile information": "Informations de profil manquantes",
+        "Edit profile": "Modifier le profil",
+        "Hide profile": "Masquer le profil",
+        "Advanced options": "Options avancées",
+        "Hide advanced options": "Masquer les options avancées",
+        "Scan summary": "Résumé du scan",
+        "Inventory ready to submit.": "Inventaire prêt à envoyer.",
+        "Scan again": "Scanner à nouveau",
+        "Connection ready": "Connexion prête",
+        "Waiting for prefill": "En attente du pré-remplissage",
+        "Loaded profile": "Profil chargé",
+        "Review the information, scan this computer, then submit.": "Vérifiez les informations, scannez cet ordinateur, puis envoyez.",
+        "Only missing information is shown. Advanced settings stay available for support.": "Seules les informations manquantes sont affichées. Les réglages avancés restent disponibles pour le support.",
+        "Profile": "Profil",
+        "Scan": "Scan",
+        "Submit": "Envoi",
+        "Check profile information before continuing.": "Vérifiez le profil avant de continuer.",
     }
 }
 
@@ -245,6 +270,22 @@ def money_text(value):
     return "-" if value in (None, "") else str(value)
 
 
+def as_float(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def compact_number(value, digits=0):
+    number = as_float(value)
+    if number is None:
+        return ""
+    if digits == 0:
+        return str(int(round(number)))
+    return f"{number:.{digits}f}".rstrip("0").rstrip(".")
+
+
 def downloads_dir() -> Path:
     return Path.home() / "Downloads"
 
@@ -267,6 +308,28 @@ def os_icon_name(os_name: str) -> str:
     return "OS"
 
 
+def launch_prefill_from_args(argv: list[str]) -> dict:
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("launch_url", nargs="?")
+    parser.add_argument("--prefill-code", dest="prefill_code")
+    parser.add_argument("--api-url", dest="api_url")
+    try:
+        args, _ = parser.parse_known_args(argv[1:])
+    except SystemExit:
+        return {}
+    result = {
+        "prefillCode": str(args.prefill_code or "").strip(),
+        "apiUrl": str(args.api_url or "").strip(),
+    }
+    launch_url = str(args.launch_url or "").strip()
+    if launch_url.startswith("spacefoot-collector://"):
+        parsed = urllib.parse.urlparse(launch_url)
+        params = urllib.parse.parse_qs(parsed.query)
+        result["prefillCode"] = result["prefillCode"] or (params.get("prefillCode") or [""])[0].strip()
+        result["apiUrl"] = result["apiUrl"] or (params.get("apiUrl") or [""])[0].strip()
+    return {key: value for key, value in result.items() if value}
+
+
 class CollectorApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
@@ -275,14 +338,17 @@ class CollectorApp(tk.Tk):
         self.minsize(1040, 760)
         self.configure(bg=COLORS["bg"])
         self.payload: dict = {}
+        self.submitted = False
+        self.submission_device_id = ""
         self.collection_token = ""
         self.teams: list[dict] = []
         self.establishments: list[dict] = []
         self.step_index = 0
         self.step_frames: list[tk.Frame] = []
         draft = load_draft()
+        launch_prefill = launch_prefill_from_args(sys.argv)
 
-        self.api_url = tk.StringVar(value=draft.get("apiUrl") or DEFAULT_API_URL)
+        self.api_url = tk.StringVar(value=launch_prefill.get("apiUrl") or draft.get("apiUrl") or DEFAULT_API_URL)
         self.access_token = tk.StringVar(value=draft.get("accessToken") or "")
         self.first_name = tk.StringVar(value=draft.get("firstName") or "")
         self.last_name = tk.StringVar(value=draft.get("lastName") or "")
@@ -295,8 +361,11 @@ class CollectorApp(tk.Tk):
         self.include_mac = tk.BooleanVar(value=bool(draft.get("includeMac", True)))
         self.language = tk.StringVar(value=draft.get("language") or "en")
         self.theme_preference = tk.StringVar(value=draft.get("themePreference") or "system")
-        self.prefill_code = tk.StringVar(value=draft.get("prefillCode") or "")
+        self.prefill_code = tk.StringVar(value=launch_prefill.get("prefillCode") or draft.get("prefillCode") or "")
+        self.launch_prefill_requested = bool(launch_prefill.get("prefillCode"))
         self.connection_visible = tk.BooleanVar(value=bool(draft.get("connectionVisible", False)))
+        self.profile_visible = tk.BooleanVar(value=bool(draft.get("profileVisible", False)))
+        self.advanced_visible = tk.BooleanVar(value=bool(draft.get("advancedVisible", False)))
         self.last_loaded_prefill_file = str(draft.get("prefillFilePath") or "")
         self.last_loaded_prefill_mtime = float(draft.get("prefillFileMtime") or 0)
         self.scan_log = tk.StringVar(value="")
@@ -308,6 +377,9 @@ class CollectorApp(tk.Tk):
         self._build_ui()
         self._bind_draft_saves()
         self.after(300, self.load_organization_background)
+        if self.launch_prefill_requested:
+            self.status.set(self.t("Prefill link received. Loading profile..."))
+            self.after(450, self.load_prefill)
         self.after(700, self.auto_load_prefill_file)
 
     def t(self, text: str) -> str:
@@ -368,14 +440,14 @@ class CollectorApp(tk.Tk):
         ).grid(row=2, column=0, sticky="w", pady=(4, 0))
 
         self.step_nav = tk.Frame(shell, bg=COLORS["bg"])
-        self.step_nav.grid(row=1, column=0, sticky="ew", pady=(18, 14))
-        for index, label in enumerate(["Connection", "Assignment", "Hardware scan", "Review & submit"]):
+        self.step_nav.grid(row=1, column=0, sticky="ew", pady=(18, 0))
+        for index, label in enumerate(["Profile", "Scan"]):
             chip = tk.Label(self.step_nav, text=f"{index + 1}. {self.t(label)}", padx=14, pady=8, font=("Segoe UI", 10, "bold"))
             chip.grid(row=0, column=index, sticky="w", padx=(0, 8))
             setattr(self, f"step_chip_{index}", chip)
 
         self.content_shell = tk.Frame(shell, bg=COLORS["bg"])
-        self.content_shell.grid(row=2, column=0, sticky="nsew")
+        self.content_shell.grid(row=2, column=0, sticky="nsew", pady=(14, 0))
         self.content_shell.columnconfigure(0, weight=1)
         self.content_shell.rowconfigure(0, weight=1)
         self.content_canvas = tk.Canvas(
@@ -386,41 +458,48 @@ class CollectorApp(tk.Tk):
             yscrollincrement=24,
         )
         self.content_scrollbar = tk.Scrollbar(self.content_shell, orient="vertical", command=self.content_canvas.yview)
-        self.content_canvas.configure(yscrollcommand=self.content_scrollbar.set)
         self.content_canvas.grid(row=0, column=0, sticky="nsew")
-        self.content_scrollbar.grid(row=0, column=1, sticky="ns")
         self.content = tk.Frame(self.content_canvas, bg=COLORS["bg"])
         self.content.columnconfigure(0, weight=1)
         self.content_window = self.content_canvas.create_window((0, 0), window=self.content, anchor="nw")
         self.content.bind(
             "<Configure>",
-            lambda event: self.content_canvas.configure(scrollregion=self.content_canvas.bbox("all")),
+            lambda event: self.sync_content_scroll(),
         )
         self.content_canvas.bind(
             "<Configure>",
-            lambda event: self.content_canvas.itemconfigure(self.content_window, width=event.width),
+            lambda event: self.resize_content_window(event),
         )
         self.content_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
 
         self.step_frames = [
-            self._connection_step(),
-            self._assignment_step(),
+            self._profile_step(),
             self._scan_step(),
-            self._review_step(),
         ]
         footer = tk.Frame(shell, bg=COLORS["bg"])
         footer.grid(row=3, column=0, sticky="ew", pady=(14, 0))
-        footer.columnconfigure(1, weight=1)
-        self.back_button = self.button(footer, self.t("Back"), self.previous_step, secondary=True)
-        self.back_button.grid(row=0, column=0, padx=(0, 8))
-        tk.Label(footer, textvariable=self.status, fg=COLORS["muted"], bg=COLORS["bg"], font=("Segoe UI", 10)).grid(row=0, column=1, sticky="w")
+        footer.columnconfigure(0, weight=1)
+        tk.Label(
+            footer,
+            textvariable=self.status,
+            fg=COLORS["muted"],
+            bg=COLORS["bg"],
+            font=("Segoe UI", 10),
+            anchor="w",
+            justify="left",
+            wraplength=620,
+        ).grid(row=0, column=0, sticky="ew", padx=(0, 12))
         self.language_button = self.button(footer, self.language_label(), self.toggle_language, secondary=True)
-        self.language_button.grid(row=0, column=2, padx=(8, 8))
+        self.language_button.grid(row=0, column=1, padx=(8, 8))
         self.theme_button = self.button(footer, self.theme_label(), self.toggle_theme, secondary=True)
-        self.theme_button.grid(row=0, column=3, padx=(0, 8))
-        tk.Label(footer, text=f"{self.t('Version')} {COLLECTOR_VERSION}", fg=COLORS["muted"], bg=COLORS["bg"], font=("Segoe UI", 9, "bold")).grid(row=0, column=4, padx=(0, 8))
-        self.next_button = self.button(footer, self.t("Next"), self.next_step)
-        self.next_button.grid(row=0, column=5)
+        self.theme_button.grid(row=0, column=2, padx=(0, 8))
+        tk.Label(footer, text=f"{self.t('Version')} {COLLECTOR_VERSION}", fg=COLORS["muted"], bg=COLORS["bg"], font=("Segoe UI", 9, "bold")).grid(row=0, column=3, padx=(0, 8))
+        action_bar = tk.Frame(footer, bg=COLORS["bg"])
+        action_bar.grid(row=0, column=4, sticky="e")
+        self.back_button = self.button(action_bar, self.t("Back"), self.previous_step, secondary=True)
+        self.back_button.grid(row=0, column=0, padx=(0, 8))
+        self.next_button = self.button(action_bar, self.t("Next"), self.primary_action)
+        self.next_button.grid(row=0, column=1)
         if self.teams or self.establishments:
             self.after(0, self.update_org_controls)
         self.after(0, self.update_proposal_visibility)
@@ -429,7 +508,7 @@ class CollectorApp(tk.Tk):
         self.after(50, self.apply_title_bar_theme)
 
     def language_label(self) -> str:
-        return "\U0001F310 FR" if self.language.get() == "en" else "\U0001F310 EN"
+        return "FR" if self.language.get() == "en" else "EN"
 
     def toggle_language(self) -> None:
         self.language.set("fr" if self.language.get() == "en" else "en")
@@ -446,7 +525,29 @@ class CollectorApp(tk.Tk):
 
     def _on_mousewheel(self, event) -> None:
         if hasattr(self, "content_canvas"):
-            self.content_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            bbox = self.content_canvas.bbox("all") or (0, 0, 0, 0)
+            if (bbox[3] - bbox[1]) > self.content_canvas.winfo_height() + 2:
+                self.content_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+    def resize_content_window(self, event) -> None:
+        self.content_canvas.itemconfigure(self.content_window, width=event.width)
+        self.sync_content_scroll()
+
+    def sync_content_scroll(self) -> None:
+        if not hasattr(self, "content_canvas") or not hasattr(self, "content_scrollbar"):
+            return
+        bbox = self.content_canvas.bbox("all") or (0, 0, 0, 0)
+        canvas_height = self.content_canvas.winfo_height()
+        content_height = bbox[3] - bbox[1]
+        self.content_canvas.configure(scrollregion=(0, 0, max(bbox[2], self.content_canvas.winfo_width()), max(content_height, canvas_height)))
+        if content_height > canvas_height + 2:
+            self.content_canvas.configure(yscrollcommand=self.content_scrollbar.set)
+            if not self.content_scrollbar.winfo_ismapped():
+                self.content_scrollbar.grid(row=0, column=1, sticky="ns")
+        else:
+            self.content_canvas.configure(yscrollcommand=lambda *_: None)
+            self.content_scrollbar.grid_remove()
+            self.content_canvas.yview_moveto(0)
 
     def toggle_theme(self) -> None:
         order = ["system", "dark", "light"]
@@ -515,6 +616,269 @@ class CollectorApp(tk.Tk):
             font=("Segoe UI", 10, "bold"),
             cursor="hand2",
         )
+
+    def profile_missing_fields(self) -> list[str]:
+        body = self.profile_body()
+        required = [
+            ("firstName", "First name"),
+            ("lastName", "Last name"),
+            ("email", "Email"),
+        ]
+        missing = [self.t(label) for key, label in required if not body.get(key)]
+        if not body["team"] and not body["proposedTeam"]:
+            missing.append(self.t("Team"))
+        if not body["establishment"] and not body["proposedEstablishment"]:
+            missing.append(self.t("Location"))
+        return missing
+
+    def profile_summary_text(self) -> str:
+        name = " ".join(part for part in [self.first_name.get().strip(), self.last_name.get().strip()] if part)
+        email = self.email.get().strip()
+        team = self.team.get().strip() or self.proposed_team.get().strip()
+        site = self.establishment.get().strip() or self.proposed_establishment.get().strip()
+        parts = [part for part in [name, email, team, site] if part]
+        return " · ".join(parts) if parts else self.t("Waiting for prefill")
+
+    def toggle_profile_visible(self) -> None:
+        self.profile_visible.set(not self.profile_visible.get())
+        self.persist_draft()
+        self._build_ui()
+
+    def toggle_advanced_visible(self) -> None:
+        self.advanced_visible.set(not self.advanced_visible.get())
+        self.connection_visible.set(self.advanced_visible.get())
+        self.persist_draft()
+        self._build_ui()
+
+    def _profile_step(self):
+        frame = tk.Frame(self.content, bg=COLORS["bg"])
+        frame.grid(row=0, column=0, sticky="nsew")
+        frame.columnconfigure(0, weight=1)
+
+        missing = self.profile_missing_fields()
+        profile_ready = not missing and bool(self.access_token.get().strip())
+
+        hero = self.card(frame)
+        hero.grid(row=0, column=0, sticky="ew")
+        hero.columnconfigure(0, weight=1)
+        state_text = self.t("Profile ready") if profile_ready else self.t("Missing profile information")
+        self.label(hero, state_text, 18, bold=True).grid(row=0, column=0, sticky="w")
+        self.label(hero, self.t("Check profile information before continuing."), 11, muted=True).grid(row=1, column=0, sticky="w", pady=(6, 10))
+        tk.Label(
+            hero,
+            text=self.profile_summary_text(),
+            fg=COLORS["text"],
+            bg=COLORS["panel"],
+            wraplength=980,
+            justify="left",
+            anchor="w",
+            font=("Segoe UI", 11, "bold"),
+        ).grid(row=2, column=0, sticky="ew")
+        if missing:
+            self.label(hero, f"{self.t('Please complete')}: {', '.join(missing)}", muted=True).grid(row=3, column=0, sticky="w", pady=(8, 0))
+        action_row = tk.Frame(hero, bg=COLORS["panel"])
+        action_row.grid(row=4, column=0, sticky="w", pady=(14, 0))
+        profile_label = self.t("Hide profile") if self.profile_visible.get() else self.t("Edit profile")
+        self.button(action_row, profile_label, self.toggle_profile_visible, secondary=True).grid(row=0, column=0, padx=(0, 8))
+        advanced_label = self.t("Hide advanced options") if self.advanced_visible.get() else self.t("Advanced options")
+        self.button(action_row, advanced_label, self.toggle_advanced_visible, secondary=True).grid(row=0, column=1)
+
+        if self.profile_visible.get() or missing:
+            profile_card = self.card(frame)
+            profile_card.grid(row=1, column=0, sticky="ew", pady=(14, 0))
+            profile_card.columnconfigure(1, weight=1)
+            self.label(profile_card, self.t("User assignment"), 14, bold=True).grid(row=0, column=0, columnspan=2, sticky="w")
+            fields = [
+                ("First name", self.first_name),
+                ("Last name", self.last_name),
+                ("Email", self.email),
+            ]
+            for row, (label, variable) in enumerate(fields, start=1):
+                self.label(profile_card, self.t(label), bold=True).grid(row=row, column=0, sticky="w", padx=(0, 12), pady=8)
+                self.entry(profile_card, variable).grid(row=row, column=1, sticky="ew", pady=8)
+            self.label(profile_card, self.t("Team"), bold=True).grid(row=4, column=0, sticky="w", padx=(0, 12), pady=8)
+            self.team_combo = self.combo(profile_card, self.team, [])
+            self.team_combo.grid(row=4, column=1, sticky="ew", pady=8)
+            self.other_team_label = self.label(profile_card, self.t("Other team proposal"), bold=True)
+            self.other_team_label.grid(row=5, column=0, sticky="w", padx=(0, 12), pady=8)
+            self.other_team_entry = self.entry(profile_card, self.proposed_team)
+            self.other_team_entry.grid(row=5, column=1, sticky="ew", pady=8)
+            self.label(profile_card, self.t("Location"), bold=True).grid(row=6, column=0, sticky="w", padx=(0, 12), pady=8)
+            self.establishment_combo = self.combo(profile_card, self.establishment, [])
+            self.establishment_combo.grid(row=6, column=1, sticky="ew", pady=8)
+            self.other_site_label = self.label(profile_card, self.t("Other location proposal"), bold=True)
+            self.other_site_label.grid(row=7, column=0, sticky="w", padx=(0, 12), pady=8)
+            self.other_site_entry = self.entry(profile_card, self.proposed_establishment)
+            self.other_site_entry.grid(row=7, column=1, sticky="ew", pady=8)
+            self.label(profile_card, self.t("Comment"), bold=True).grid(row=8, column=0, sticky="w", padx=(0, 12), pady=8)
+            self.entry(profile_card, self.comment).grid(row=8, column=1, sticky="ew", pady=8)
+
+        if self.advanced_visible.get() or not self.access_token.get().strip():
+            advanced = self.card(frame)
+            advanced.grid(row=2, column=0, sticky="ew", pady=(14, 0))
+            advanced.columnconfigure(1, weight=1)
+            self.label(advanced, self.t("Advanced options"), 14, bold=True).grid(row=0, column=0, columnspan=2, sticky="w")
+            self.label(advanced, self.t("Prefill code"), bold=True).grid(row=1, column=0, sticky="w", padx=(0, 12), pady=8)
+            prefill_row = tk.Frame(advanced, bg=COLORS["panel"])
+            prefill_row.grid(row=1, column=1, sticky="ew", pady=8)
+            prefill_row.columnconfigure(0, weight=1)
+            self.entry(prefill_row, self.prefill_code).grid(row=0, column=0, sticky="ew", padx=(0, 8))
+            self.button(prefill_row, self.t("Load prefill"), self.load_prefill, secondary=True).grid(row=0, column=1)
+            self.label(advanced, self.t("API URL"), bold=True).grid(row=2, column=0, sticky="w", padx=(0, 12), pady=8)
+            self.entry(advanced, self.api_url).grid(row=2, column=1, sticky="ew", pady=8)
+            self.label(advanced, self.t("Collection access token"), bold=True).grid(row=3, column=0, sticky="w", padx=(0, 12), pady=8)
+            self.entry(advanced, self.access_token, show="*").grid(row=3, column=1, sticky="ew", pady=8)
+            tk.Checkbutton(
+                advanced,
+                text=self.t("Include MAC address if authorized"),
+                variable=self.include_mac,
+                bg=COLORS["panel"],
+                fg=COLORS["text"],
+                activebackground=COLORS["panel"],
+                activeforeground=COLORS["text"],
+                selectcolor=COLORS["input"],
+            ).grid(row=4, column=1, sticky="w", pady=(6, 12))
+            self.button(advanced, self.t("Validate token"), self.validate_token, secondary=True).grid(row=5, column=0, sticky="w", pady=(8, 0))
+            tk.Label(advanced, textvariable=self.connection_status, fg=COLORS["brand_2"], bg=COLORS["panel"], font=("Segoe UI", 10, "bold")).grid(row=5, column=1, sticky="w", padx=(10, 0), pady=(8, 0))
+
+        self.after(0, self.update_proposal_visibility)
+        return frame
+
+    def _express_step(self):
+        frame = tk.Frame(self.content, bg=COLORS["bg"])
+        frame.grid(row=0, column=0, sticky="nsew")
+        frame.columnconfigure(0, weight=1)
+
+        missing = self.profile_missing_fields()
+        profile_ready = not missing and bool(self.access_token.get().strip())
+
+        hero = self.card(frame)
+        hero.grid(row=0, column=0, sticky="ew")
+        hero.columnconfigure(0, weight=1)
+        state_text = self.t("Profile ready") if profile_ready else self.t("Missing profile information")
+        self.label(hero, self.t("Ready to scan") if profile_ready else state_text, 18, bold=True).grid(row=0, column=0, sticky="w")
+        self.label(hero, self.t("Review the information, scan this computer, then submit."), 11, muted=True).grid(row=1, column=0, sticky="w", pady=(6, 10))
+        tk.Label(
+            hero,
+            text=self.profile_summary_text(),
+            fg=COLORS["text"],
+            bg=COLORS["panel"],
+            wraplength=980,
+            justify="left",
+            font=("Segoe UI", 11, "bold"),
+        ).grid(row=2, column=0, sticky="ew")
+        if missing:
+            self.label(hero, f"{self.t('Please complete')}: {', '.join(missing)}", muted=True).grid(row=3, column=0, sticky="w", pady=(8, 0))
+        action_row = tk.Frame(hero, bg=COLORS["panel"])
+        action_row.grid(row=4, column=0, sticky="w", pady=(14, 0))
+        profile_label = self.t("Hide profile") if self.profile_visible.get() else self.t("Edit profile")
+        self.button(action_row, profile_label, self.toggle_profile_visible, secondary=True).grid(row=0, column=0, padx=(0, 8))
+        advanced_label = self.t("Hide advanced options") if self.advanced_visible.get() else self.t("Advanced options")
+        self.button(action_row, advanced_label, self.toggle_advanced_visible, secondary=True).grid(row=0, column=1)
+
+        if self.profile_visible.get() or missing:
+            profile_card = self.card(frame)
+            profile_card.grid(row=1, column=0, sticky="ew", pady=(14, 0))
+            profile_card.columnconfigure(1, weight=1)
+            self.label(profile_card, self.t("User assignment"), 14, bold=True).grid(row=0, column=0, columnspan=2, sticky="w")
+            self.label(profile_card, self.t("Only missing information is shown. Advanced settings stay available for support."), muted=True).grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 12))
+            fields = [
+                ("First name", self.first_name),
+                ("Last name", self.last_name),
+                ("Email", self.email),
+            ]
+            for row, (label, variable) in enumerate(fields, start=2):
+                self.label(profile_card, self.t(label), bold=True).grid(row=row, column=0, sticky="w", padx=(0, 12), pady=8)
+                self.entry(profile_card, variable).grid(row=row, column=1, sticky="ew", pady=8)
+            self.label(profile_card, self.t("Team"), bold=True).grid(row=5, column=0, sticky="w", padx=(0, 12), pady=8)
+            self.team_combo = self.combo(profile_card, self.team, [])
+            self.team_combo.grid(row=5, column=1, sticky="ew", pady=8)
+            self.other_team_label = self.label(profile_card, self.t("Other team proposal"), bold=True)
+            self.other_team_label.grid(row=6, column=0, sticky="w", padx=(0, 12), pady=8)
+            self.other_team_entry = self.entry(profile_card, self.proposed_team)
+            self.other_team_entry.grid(row=6, column=1, sticky="ew", pady=8)
+            self.label(profile_card, self.t("Location"), bold=True).grid(row=7, column=0, sticky="w", padx=(0, 12), pady=8)
+            self.establishment_combo = self.combo(profile_card, self.establishment, [])
+            self.establishment_combo.grid(row=7, column=1, sticky="ew", pady=8)
+            self.other_site_label = self.label(profile_card, self.t("Other location proposal"), bold=True)
+            self.other_site_label.grid(row=8, column=0, sticky="w", padx=(0, 12), pady=8)
+            self.other_site_entry = self.entry(profile_card, self.proposed_establishment)
+            self.other_site_entry.grid(row=8, column=1, sticky="ew", pady=8)
+            self.label(profile_card, self.t("Comment"), bold=True).grid(row=9, column=0, sticky="w", padx=(0, 12), pady=8)
+            self.entry(profile_card, self.comment).grid(row=9, column=1, sticky="ew", pady=8)
+
+        if self.advanced_visible.get():
+            quick = self.card(frame)
+            quick.grid(row=2, column=0, sticky="ew", pady=(14, 0))
+            quick.columnconfigure(1, weight=1)
+            self.label(quick, self.t("Advanced options"), 14, bold=True).grid(row=0, column=0, columnspan=2, sticky="w")
+            self.label(quick, self.t("Prefill code"), bold=True).grid(row=1, column=0, sticky="w", padx=(0, 12), pady=8)
+            prefill_row = tk.Frame(quick, bg=COLORS["panel"])
+            prefill_row.grid(row=1, column=1, sticky="ew", pady=8)
+            prefill_row.columnconfigure(0, weight=1)
+            self.entry(prefill_row, self.prefill_code).grid(row=0, column=0, sticky="ew", padx=(0, 8))
+            self.button(prefill_row, self.t("Load prefill"), self.load_prefill, secondary=True).grid(row=0, column=1)
+            self.label(quick, self.t("API URL"), bold=True).grid(row=2, column=0, sticky="w", padx=(0, 12), pady=8)
+            self.entry(quick, self.api_url).grid(row=2, column=1, sticky="ew", pady=8)
+            self.label(quick, self.t("Collection access token"), bold=True).grid(row=3, column=0, sticky="w", padx=(0, 12), pady=8)
+            self.entry(quick, self.access_token, show="*").grid(row=3, column=1, sticky="ew", pady=8)
+            tk.Checkbutton(
+                quick,
+                text=self.t("Include MAC address if authorized"),
+                variable=self.include_mac,
+                bg=COLORS["panel"],
+                fg=COLORS["text"],
+                activebackground=COLORS["panel"],
+                activeforeground=COLORS["text"],
+                selectcolor=COLORS["input"],
+            ).grid(row=4, column=1, sticky="w", pady=(6, 12))
+            self.button(quick, self.t("Validate token"), self.validate_token, secondary=True).grid(row=5, column=0, sticky="w", pady=(8, 0))
+            tk.Label(quick, textvariable=self.connection_status, fg=COLORS["brand_2"], bg=COLORS["panel"], font=("Segoe UI", 10, "bold")).grid(row=5, column=1, sticky="w", padx=(10, 0), pady=(8, 0))
+
+        scan_card = self.card(frame)
+        scan_card.grid(row=3, column=0, sticky="ew", pady=(14, 0))
+        scan_card.columnconfigure(0, weight=1)
+        self.label(scan_card, self.t("Hardware scan"), 16, bold=True).grid(row=0, column=0, sticky="w")
+        self.label(scan_card, self.t("Scan this computer, then review the summary before submission."), muted=True).grid(row=1, column=0, sticky="w", pady=(4, 12))
+        scan_text = self.t("Scan again") if self.payload else self.t("Scan this computer")
+        self.scan_button = self.button(scan_card, scan_text, self.scan_computer)
+        self.scan_button.grid(row=2, column=0, sticky="w")
+        self.scan_log_output = scrolledtext.ScrolledText(scan_card, height=4, bg=COLORS["input"], fg=COLORS["text"], insertbackground=COLORS["text"], relief="flat")
+        self.scan_log_output.grid(row=3, column=0, sticky="ew", pady=(12, 0))
+        if self.scan_log.get():
+            self.scan_log_output.insert(tk.END, self.scan_log.get())
+            self.scan_log_output.see(tk.END)
+
+        self.summary = tk.Frame(frame, bg=COLORS["bg"])
+        self.summary.grid(row=4, column=0, sticky="nsew", pady=(14, 0))
+        self.summary.columnconfigure(0, weight=1)
+
+        submit_card = self.card(frame)
+        submit_card.grid(row=5, column=0, sticky="ew", pady=(14, 0))
+        self.label(submit_card, self.t("Review & submit"), 16, bold=True).grid(row=0, column=0, sticky="w")
+        self.label(submit_card, self.t("Inventory ready to submit.") if self.payload else self.t("Scan this computer before submitting."), muted=True).grid(row=1, column=0, sticky="w", pady=(4, 12))
+        self.submit_button = self.button(submit_card, self.t("Submit inventory"), self.submit_inventory)
+        self.submit_button.grid(row=2, column=0, sticky="w")
+        if not self.payload:
+            self.submit_button.configure(state="disabled")
+
+        self.raw_visible = tk.BooleanVar(value=self.raw_json_visible)
+        self.raw_toggle = self.button(frame, self.t("Hide Advanced / Raw JSON") if self.raw_json_visible else self.t("Show Advanced / Raw JSON"), self.toggle_raw_json, secondary=True)
+        self.raw_toggle.grid(row=6, column=0, sticky="w", pady=(14, 0))
+        self.raw_card = self.card(frame)
+        self.raw_card.grid(row=7, column=0, sticky="nsew", pady=(10, 0))
+        if not self.raw_json_visible:
+            self.raw_card.grid_remove()
+        self.raw_card.columnconfigure(0, weight=1)
+        self.raw_card.rowconfigure(1, weight=1)
+        self.label(self.raw_card, self.t("Advanced / Raw JSON"), 14, bold=True).grid(row=0, column=0, sticky="w")
+        self.raw_output = scrolledtext.ScrolledText(self.raw_card, height=14, bg=COLORS["input"], fg=COLORS["text"], insertbackground=COLORS["text"], relief="flat")
+        self.raw_output.grid(row=1, column=0, sticky="nsew", pady=(10, 0))
+        if self.payload:
+            self.raw_output.insert(tk.END, json.dumps(self.payload, indent=2, ensure_ascii=False))
+            self.after(0, self.render_scan_summary)
+        self.after(0, self.update_proposal_visibility)
+        return frame
 
     def _connection_step(self):
         frame = tk.Frame(self.content, bg=COLORS["bg"])
@@ -639,10 +1003,29 @@ class CollectorApp(tk.Tk):
         card = self.card(frame)
         card.grid(row=0, column=0, sticky="ew")
         self.label(card, self.t("Hardware scan"), 17, bold=True).grid(row=0, column=0, sticky="w")
-        self.label(card, self.t("Scan this computer, then review the summary before submission."), muted=True).grid(row=1, column=0, sticky="w", pady=(4, 12))
-        self.button(card, self.t("Scan this computer"), self.scan_computer).grid(row=2, column=0, sticky="w")
+        scan_message = self.t("Inventory ready to submit.") if self.payload else self.t("Ready to scan")
+        self.label(card, scan_message, muted=True).grid(row=1, column=0, sticky="w", pady=(4, 0))
+        next_row = 1
+        if self.submitted:
+            success = self.card(frame)
+            success.grid(row=next_row, column=0, sticky="ew", pady=(14, 0))
+            success.columnconfigure(0, weight=1)
+            self.label(success, self.t("Submission sent"), 17, bold=True).grid(row=0, column=0, sticky="w")
+            self.label(success, self.t("The inventory was received by Spacefoot. You can close the collector."), muted=True).grid(row=1, column=0, sticky="w", pady=(4, 10))
+            if self.submission_device_id:
+                tk.Label(
+                    success,
+                    text=f"{self.t('Device ID')}: {self.submission_device_id}",
+                    fg=COLORS["brand_2"],
+                    bg=COLORS["panel"],
+                    wraplength=980,
+                    justify="left",
+                    anchor="w",
+                    font=("Segoe UI", 10, "bold"),
+                ).grid(row=2, column=0, sticky="ew")
+            next_row += 1
         log_card = self.card(frame)
-        log_card.grid(row=1, column=0, sticky="ew", pady=(14, 0))
+        log_card.grid(row=next_row, column=0, sticky="ew", pady=(14, 0))
         log_card.columnconfigure(0, weight=1)
         self.label(log_card, self.t("Scan log"), 13, bold=True).grid(row=0, column=0, sticky="w")
         self.scan_log_output = scrolledtext.ScrolledText(log_card, height=5, bg=COLORS["input"], fg=COLORS["text"], insertbackground=COLORS["text"], relief="flat")
@@ -651,7 +1034,7 @@ class CollectorApp(tk.Tk):
             self.scan_log_output.insert(tk.END, self.scan_log.get())
             self.scan_log_output.see(tk.END)
         self.summary = tk.Frame(frame, bg=COLORS["bg"])
-        self.summary.grid(row=2, column=0, sticky="nsew", pady=(14, 0))
+        self.summary.grid(row=next_row + 1, column=0, sticky="nsew", pady=(14, 0))
         self.summary.columnconfigure(0, weight=1)
         return frame
 
@@ -739,6 +1122,8 @@ class CollectorApp(tk.Tk):
             "themePreference": self.theme_preference.get(),
             "prefillCode": self.prefill_code.get().strip(),
             "connectionVisible": self.connection_visible.get(),
+            "profileVisible": self.profile_visible.get(),
+            "advancedVisible": self.advanced_visible.get(),
             "prefillFilePath": self.last_loaded_prefill_file,
             "prefillFileMtime": self.last_loaded_prefill_mtime,
         })
@@ -812,6 +1197,10 @@ class CollectorApp(tk.Tk):
             self.language.set(data.get("language"))
         if data.get("theme") in ("dark", "light", "system"):
             self.theme_preference.set(data.get("theme"))
+        self.profile_visible.set(bool(self.profile_missing_fields()))
+        self.step_index = 0
+        if self.access_token.get().strip():
+            self.connection_status.set(self.t("Connection ready"))
         self.persist_draft()
         self.status.set(self.t("Prefilled from the web page. You can edit before submitting."))
         self._build_ui()
@@ -823,19 +1212,63 @@ class CollectorApp(tk.Tk):
         self.step_frames[self.step_index].grid()
         if hasattr(self, "content_canvas"):
             self.content_canvas.yview_moveto(0)
-        for index, chip in enumerate(getattr(self, f"step_chip_{i}") for i in range(4)):
-            active = index == self.step_index
+        for chip_index in range(len(self.step_frames)):
+            chip = getattr(self, f"step_chip_{chip_index}", None)
+            if not chip:
+                continue
+            active = chip_index == self.step_index
             chip.configure(bg=COLORS["brand"] if active else COLORS["panel"], fg=COLORS["text"] if active else COLORS["muted"])
-        self.back_button.configure(state="normal" if self.step_index > 0 else "disabled")
-        self.next_button.configure(text=self.t("Next") if self.step_index < 3 else self.t("Done"), state="normal")
+        if hasattr(self, "back_button"):
+            self.back_button.configure(state="normal" if self.step_index > 0 else "disabled")
+        self.update_primary_action()
 
-    def next_step(self) -> None:
-        if self.step_index >= 3:
+    def update_primary_action(self) -> None:
+        if not hasattr(self, "next_button"):
+            return
+        if self.submitted:
+            self.next_button.configure(text=self.t("Done"), state="normal")
+            return
+        if self.step_index == 0:
+            self.next_button.configure(text=self.t("Next"), state="normal")
+            return
+        if self.payload:
+            self.next_button.configure(text=self.t("Submit inventory"), state="normal")
+        else:
+            self.next_button.configure(text=self.t("Scan this computer"), state="normal")
+
+    def primary_action(self) -> None:
+        if self.submitted:
             self.destroy()
             return
-        if self.step_index == 0 and not self.api_url.get().strip():
-            messagebox.showwarning(self.t("API URL required"), self.t("Please enter the API URL."))
+        if self.step_index == 0:
+            self.next_step()
             return
+        if self.payload:
+            self.submit_inventory()
+        else:
+            self.scan_computer()
+
+    def next_step(self) -> None:
+        if self.step_index == 0:
+            missing = self.profile_missing_fields()
+            if missing:
+                self.profile_visible.set(True)
+                self.persist_draft()
+                self._build_ui()
+                messagebox.showwarning(self.t("Missing fields"), f"{self.t('Please complete')}: {', '.join(missing)}")
+                return
+            if not self.api_url.get().strip():
+                self.advanced_visible.set(True)
+                self.persist_draft()
+                self._build_ui()
+                messagebox.showwarning(self.t("API URL required"), self.t("Please enter the API URL."))
+                return
+            if not self.access_token.get().strip():
+                self.advanced_visible.set(True)
+                self.persist_draft()
+                self._build_ui()
+                messagebox.showwarning(self.t("Token required"), self.t("Please enter the collection access token."))
+                return
         self.show_step(self.step_index + 1)
 
     def previous_step(self) -> None:
@@ -856,8 +1289,10 @@ class CollectorApp(tk.Tk):
     def update_org_controls(self) -> None:
         team_values = [self.org_label(item) for item in self.teams if item.get("name")] + [self.t("Other")]
         site_values = [self.org_label(item) for item in self.establishments if item.get("name")] + [self.t("Other")]
-        self.team_combo.configure(values=team_values)
-        self.establishment_combo.configure(values=site_values)
+        if hasattr(self, "team_combo"):
+            self.team_combo.configure(values=team_values)
+        if hasattr(self, "establishment_combo"):
+            self.establishment_combo.configure(values=site_values)
         self.normalize_selected_org_labels()
         self.status.set(f"{self.t('Loaded')} {len(self.teams)} {self.t('teams and')} {len(self.establishments)} {self.t('locations.')}")
 
@@ -919,7 +1354,10 @@ class CollectorApp(tk.Tk):
         if collector is None:
             messagebox.showerror(self.t("Collector unavailable"), f"{self.t('Unable to load collector')}: {COLLECTOR_IMPORT_ERROR}")
             return
+        self.submitted = False
         self.status.set(self.t("Scanning hardware..."))
+        if hasattr(self, "next_button"):
+            self.next_button.configure(state="disabled", text=self.t("Scanning hardware..."))
         if hasattr(self, "scan_log_output"):
             self.scan_log_output.delete("1.0", tk.END)
         self.scan_log.set("")
@@ -935,12 +1373,18 @@ class CollectorApp(tk.Tk):
             payload["collectorOs"] = platform.platform()
             payload["collectorBuildChannel"] = COLLECTOR_BUILD_CHANNEL
             self.payload = payload
+            engine = payload.get("collectorEngine") or "unknown"
+            engine_version = payload.get("osqueryVersion") or payload.get("collectorEngineVersion") or ""
+            engine_label = f"{engine} {engine_version}".strip()
+            self.after(0, lambda: self.append_scan_log(f"Collection engine: {engine_label}."))
             self.after(0, lambda: self.append_scan_log("Scan completed. Review the summary below."))
             self.after(0, self.render_scan_summary)
+            self.after(0, self.update_primary_action)
         except Exception as exc:
             self.after(0, lambda: self.append_scan_log(f"Scan failed: {exc}"))
             self.after(0, lambda: messagebox.showerror(self.t("Scan failed"), str(exc)))
             self.after(0, lambda: self.status.set(self.t("Scan failed")))
+            self.after(0, self.update_primary_action)
 
     def value_card(self, parent, row, column, title, value, accent=False):
         card = self.card(parent)
@@ -957,28 +1401,101 @@ class CollectorApp(tk.Tk):
             font=("Segoe UI", 11, "bold" if accent else "normal"),
         ).grid(row=1, column=0, sticky="w", pady=(6, 0))
 
+    def gb_unit(self) -> str:
+        return "Go" if self.language.get() == "fr" else "GB"
+
+    def tb_unit(self) -> str:
+        return "To" if self.language.get() == "fr" else "TB"
+
+    def format_gb(self, value, digits=0) -> str:
+        number = as_float(value)
+        if number is None:
+            return ""
+        return f"{compact_number(number, digits)} {self.gb_unit()}"
+
+    def marketed_storage_label(self, usable_gib) -> str:
+        gib = as_float(usable_gib)
+        if gib is None:
+            return ""
+        marketed_gb = gib * 1.073741824
+        common_gb = [128, 256, 512, 1000, 2000, 4000, 8000]
+        nearest = min(common_gb, key=lambda item: abs(item - marketed_gb))
+        if abs(nearest - marketed_gb) / nearest > 0.16:
+            return self.format_gb(gib)
+        if nearest >= 1000:
+            return f"{compact_number(nearest / 1000, 1)} {self.tb_unit()}"
+        return f"{nearest} {self.gb_unit()}"
+
+    def format_storage_summary(self, payload: dict) -> str:
+        total = payload.get("storageTotalGb")
+        free = payload.get("storageFreeGb")
+        if total is None and free is None:
+            return ""
+        label = self.marketed_storage_label(total)
+        usable = self.format_gb(total)
+        free_text = self.format_gb(free)
+        storage_type = str(payload.get("storageType") or "").strip()
+        parts = [part for part in [label, storage_type] if part]
+        if usable:
+            parts.append(f"({usable} {self.t('usable')})")
+        if free_text:
+            parts.append(f"/ {free_text} {self.t('free')}")
+        return " ".join(parts)
+
+    def format_cpu_summary(self, payload: dict) -> str:
+        cpu = str(payload.get("cpu") or "").strip()
+        speed = as_float(payload.get("cpuMaxClockGhz") or payload.get("cpuCurrentClockGhz"))
+        if cpu and speed and not re.search(r"\d+(\.\d+)?\s*GHz", cpu, re.I):
+            return f"{cpu} ({speed:.2f} GHz)"
+        return cpu
+
+    def format_gpu_summary(self, payload: dict) -> str:
+        gpu = str(payload.get("gpu") or "").strip()
+        gpus = payload.get("gpus") if isinstance(payload.get("gpus"), list) else []
+        if not gpu and gpus:
+            gpu = " | ".join(str(item.get("name") or "").strip() for item in gpus if item.get("name"))
+        return gpu
+
+    def format_memory_details(self, payload: dict) -> str:
+        modules = payload.get("memoryModules") if isinstance(payload.get("memoryModules"), list) else []
+        populated = [item for item in modules if as_float(item.get("capacityGb"))]
+        useful_modules = populated or modules
+        types = sorted({str(item.get("memoryType") or item.get("type") or "").strip() for item in useful_modules if item.get("memoryType") or item.get("type")})
+        speeds = sorted({int(speed) for item in useful_modules for speed in [as_float(item.get("configuredSpeedMhz") or item.get("speedMhz"))] if speed})
+        capacities = [as_float(item.get("capacityGb")) for item in populated if as_float(item.get("capacityGb"))]
+        parts = []
+        if capacities and len(capacities) > 1:
+            parts.append(" + ".join(self.format_gb(value) for value in capacities))
+        if types:
+            parts.append(" + ".join(types))
+        if speeds:
+            parts.append(f"{' / '.join(str(speed) for speed in speeds)} MHz")
+        if populated and len(populated) > 1:
+            parts.append(f"{len(populated)} modules")
+        if parts:
+            return " · ".join(parts)
+        if payload.get("ramTotalGb"):
+            return f"{self.format_gb(payload.get('ramTotalGb'), 1)} {self.t('installed')}"
+        return ""
+
     def render_scan_summary(self) -> None:
         for child in self.summary.winfo_children():
             child.destroy()
         p = self.payload
         identity = p.get("hardwareIdentity") or {}
-        memory_modules = p.get("memoryModules") if isinstance(p.get("memoryModules"), list) else []
-        memory_summary = ""
-        if memory_modules:
-            types = sorted({str(item.get("memoryType") or item.get("type") or "").strip() for item in memory_modules if item.get("memoryType") or item.get("type")})
-            speeds = sorted({str(item.get("configuredSpeedMhz") or item.get("speedMhz") or "").strip() for item in memory_modules if item.get("configuredSpeedMhz") or item.get("speedMhz")})
-            memory_summary = " · ".join(part for part in [f"{len(memory_modules)} slots", " + ".join(types), f"{' / '.join(speeds)} MHz" if speeds else ""] if part)
+        memory_summary = self.format_memory_details(p)
         items = [
+            (self.t("Collection engine"), " ".join(str(part) for part in [p.get("collectorEngine"), p.get("osqueryVersion") or p.get("collectorEngineVersion")] if part)),
             (self.t("OS"), f"{os_icon_name(p.get('osName'))}  {p.get('osName', '')} {p.get('osVersion', '')}".strip()),
             (self.t("Manufacturer"), p.get("manufacturer")),
             (self.t("Model"), p.get("model"), True),
             (self.t("Model number / SKU"), p.get("modelNumber") or identity.get("systemSku")),
             (self.t("Serial / Service tag"), p.get("serialNumber") or p.get("serviceTag") or identity.get("serviceTag")),
-            (self.t("CPU"), p.get("cpu")),
-            (self.t("RAM"), f"{p.get('ramTotalGb')} GB" if p.get("ramTotalGb") else ""),
+            (self.t("CPU"), self.format_cpu_summary(p)),
+            (self.t("RAM"), self.format_gb(p.get("ramTotalGb"), 1) if p.get("ramTotalGb") else ""),
             (self.t("Memory details"), memory_summary),
-            (self.t("Storage"), f"{p.get('storageTotalGb')} GB {self.t('total')} / {p.get('storageFreeGb')} GB {self.t('free')}"),
-            (self.t("GPU"), p.get("gpu")),
+            (self.t("Storage"), self.format_storage_summary(p)),
+            (self.t("GPU"), self.format_gpu_summary(p)),
             (self.t("Network"), f"{self.t('IP')} {p.get('localIp') or '-'} / {self.t('MAC')} {p.get('macAddress') or '-'}"),
         ]
         for index, item in enumerate(items):
@@ -989,8 +1506,11 @@ class CollectorApp(tk.Tk):
             self.status.set(f"{self.t('Scan completed with unavailable fields')}: {', '.join(missing)}.")
         else:
             self.status.set(self.t("Scan completed."))
-        self.raw_output.delete("1.0", tk.END)
-        self.raw_output.insert(tk.END, json.dumps(self.payload, indent=2, ensure_ascii=False))
+        if hasattr(self, "submit_button"):
+            self.submit_button.configure(state="normal")
+        if hasattr(self, "raw_output"):
+            self.raw_output.delete("1.0", tk.END)
+            self.raw_output.insert(tk.END, json.dumps(self.payload, indent=2, ensure_ascii=False))
 
     def profile_body(self) -> dict:
         team = self.org_name_from_label(self.team.get().strip(), self.teams)
@@ -1017,10 +1537,23 @@ class CollectorApp(tk.Tk):
         if not body["establishment"] and not body["proposedEstablishment"]:
             missing.append(self.t("location or other location proposal"))
         if missing:
+            self.profile_visible.set(True)
+            self.persist_draft()
+            self._build_ui()
             messagebox.showwarning(self.t("Missing fields"), f"{self.t('Please complete')}: {', '.join(missing)}")
             return
+        self.submitted = False
         self.status.set(self.t("Creating collection profile..."))
+        if hasattr(self, "next_button"):
+            self.next_button.configure(state="disabled", text=self.t("Creating collection profile..."))
         threading.Thread(target=self._submit_background, daemon=True).start()
+
+    def show_submission_success(self) -> None:
+        self.status.set(self.t("Submission sent"))
+        self.step_index = 1
+        self._build_ui()
+        if hasattr(self, "content_canvas"):
+            self.content_canvas.yview_moveto(0)
 
     def _submit_background(self) -> None:
         try:
@@ -1044,10 +1577,13 @@ class CollectorApp(tk.Tk):
             with urllib.request.urlopen(request, timeout=25) as response:
                 result = json.loads(response.read().decode("utf-8"))
             clear_sensitive_draft()
-            self.after(0, lambda: self.status.set(f"{self.t('Submission successful. Device')}: {result.get('deviceId', 'unknown')} · {self.t('Submission complete. You can close the collector.')}"))
+            self.submitted = True
+            self.submission_device_id = str(result.get("deviceId") or "")
+            self.after(0, self.show_submission_success)
         except Exception as exc:
             self.after(0, lambda: self.status.set(f"{self.t('Submission failed')}: {api_error_message(exc)}"))
             self.after(0, lambda: messagebox.showerror(self.t("Submission failed"), api_error_message(exc)))
+            self.after(0, self.update_primary_action)
 
 
 if __name__ == "__main__":

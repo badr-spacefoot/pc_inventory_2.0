@@ -983,32 +983,38 @@ pre {
 }
 
 .collector-options {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin: 14px 0;
+  display: block;
+  margin: 16px 0 12px;
 }
 
-.collector-options article {
+.collector-options article:first-child {
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 14px;
-  background: var(--surface);
+  padding: 18px;
+  background: color-mix(in srgb, var(--surface), var(--brand) 5%);
+}
+
+.collector-options article:nth-child(2),
+.collector-options .platform-downloads,
+#collector-releases-link {
+  display: none;
 }
 
 .collector-options p {
-  margin: 0 0 10px;
+  margin: 0 0 14px;
   color: var(--muted);
 }
 
 .launcher-downloads {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  max-width: 420px;
 }
 
 .launcher-downloads .action-button {
-  min-height: 42px;
+  min-height: 48px;
+  justify-content: center;
 }
 
 .collector-os-icon {
@@ -1060,9 +1066,33 @@ pre {
   margin-top: 14px;
 }
 
-.script-preview summary {
+.script-preview summary,
+.support-tools summary {
   cursor: pointer;
   font-weight: 800;
+}
+
+.support-tools {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.support-tools > summary {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  min-height: 44px;
+}
+
+.support-tools[open] > summary {
+  color: var(--ink);
+}
+
+@media (min-width: 720px) {
+  .launcher-downloads {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .pending-changes-list {

@@ -15,6 +15,7 @@ import urllib.request
 from pathlib import Path
 
 SCRIPT_VERSION = "1.5.0"
+OSQUERY_ENGINE_VERSION = "0.1.0"
 
 PLACEHOLDER_VALUES = {
     "",
@@ -30,6 +31,7 @@ PLACEHOLDER_VALUES = {
     "to be filled by oem",
     "not specified",
     "unknown",
+    "-1",
 }
 
 
@@ -191,6 +193,298 @@ def parse_json_object(raw):
             except json.JSONDecodeError:
                 return None
     return None
+
+
+def parse_json_array(raw):
+    try:
+        data = json.loads(raw)
+        return data if isinstance(data, list) else []
+    except json.JSONDecodeError:
+        start = raw.find("[")
+        end = raw.rfind("]")
+        if start >= 0 and end > start:
+            try:
+                data = json.loads(raw[start:end + 1])
+                return data if isinstance(data, list) else []
+            except json.JSONDecodeError:
+                return []
+    return []
+
+
+def find_osqueryi():
+    configured = os.environ.get("SPACEFOOT_OSQUERYI")
+    candidates = [
+        configured,
+        shutil.which("osqueryi"),
+        shutil.which("osqueryi.exe"),
+        r"C:\Program Files\osquery\osqueryi.exe",
+        r"C:\Program Files (x86)\osquery\osqueryi.exe",
+        "/usr/bin/osqueryi",
+        "/usr/local/bin/osqueryi",
+        "/opt/osquery/bin/osqueryi",
+    ]
+    for candidate in candidates:
+        if candidate and Path(candidate).exists():
+            return str(candidate)
+    return ""
+
+
+def osquery_json(osqueryi, sql, timeout=12):
+    raw = run([osqueryi, "--json", sql], timeout=timeout)
+    return parse_json_array(raw)
+
+
+def first_row(rows):
+    return rows[0] if rows else {}
+
+
+def as_int(value):
+    try:
+        return int(float(str(value)))
+    except (TypeError, ValueError):
+        return None
+
+
+def osquery_storage_summary(mounts):
+    totals = []
+    frees = []
+    for row in mounts:
+        total_blocks = as_int(row.get("blocks") or row.get("blocks_count"))
+        available_blocks = as_int(row.get("blocks_available") or row.get("blocks_free"))
+        block_size = as_int(row.get("blocks_size") or row.get("block_size"))
+        if total_blocks and block_size:
+            totals.append(total_blocks * block_size)
+        if available_blocks and block_size:
+            frees.append(available_blocks * block_size)
+    return {
+        "storageTotalGb": bytes_to_gb(sum(totals)) if totals else None,
+        "storageFreeGb": bytes_to_gb(sum(frees)) if frees else None,
+    }
+
+
+def fallback_logical_storage():
+    if platform.system() == "Windows":
+        drives = windows_logical_drives()
+        total = sum(item["totalGb"] or 0 for item in drives) if drives else None
+        free = sum(item["freeGb"] or 0 for item in drives) if drives else None
+        return {
+            "storage": {
+                "storageTotalGb": round(total, 2) if total is not None else None,
+                "storageFreeGb": round(free, 2) if free is not None else None,
+            },
+            "logicalDrives": drives,
+        }
+
+    try:
+        disk = shutil.disk_usage(Path.home().anchor or "/")
+        return {
+            "storage": {
+                "storageTotalGb": bytes_to_gb(disk.total),
+                "storageFreeGb": bytes_to_gb(disk.free),
+            },
+            "logicalDrives": [],
+        }
+    except OSError:
+        return {"storage": {"storageTotalGb": None, "storageFreeGb": None}, "logicalDrives": []}
+
+
+def osquery_network(include_mac, interface_details, interface_addresses):
+    ip = ""
+    mac = ""
+    for row in interface_addresses:
+        address = clean_identifier(row.get("address"))
+        if address and "." in address and not address.startswith("127."):
+            ip = address
+            interface = row.get("interface")
+            if include_mac and interface:
+                detail = next((item for item in interface_details if item.get("interface") == interface), {})
+                mac = clean_identifier(detail.get("mac"))
+            break
+    if include_mac and not mac:
+        for row in interface_details:
+            value = clean_identifier(row.get("mac"))
+            if value and value != "00:00:00:00:00:00":
+                mac = value
+                break
+    return {"localIp": ip or local_ip(), "macAddress": mac if include_mac else ""}
+
+
+def collect_with_osquery(include_mac):
+    osqueryi = find_osqueryi()
+    if not osqueryi:
+        raise RuntimeError(
+            "osquery is required for Spacefoot Inventory collection. "
+            "Install osquery or use a Spacefoot installer that bundles it."
+        )
+
+    system_info = first_row(osquery_json(osqueryi, "select * from system_info limit 1;"))
+    os_version = first_row(osquery_json(osqueryi, "select * from os_version limit 1;"))
+    osquery_info = first_row(osquery_json(osqueryi, "select version from osquery_info limit 1;"))
+    mounts = osquery_json(osqueryi, "select * from mounts;")
+    interface_details = osquery_json(osqueryi, "select * from interface_details;")
+    interface_addresses = osquery_json(osqueryi, "select * from interface_addresses;")
+    logged_in_users = osquery_json(osqueryi, "select user,tty,host,time from logged_in_users;")
+    memory_devices = osquery_json(osqueryi, "select * from memory_devices;")
+    disk_info = osquery_json(osqueryi, "select * from disk_info;")
+
+    if not system_info and not os_version:
+        raise RuntimeError("osquery is installed but did not return system inventory data.")
+
+    system = platform.system()
+    storage = osquery_storage_summary(mounts)
+    logical_drives = mounts
+    if storage.get("storageTotalGb") is None:
+        fallback_storage = fallback_logical_storage()
+        storage = fallback_storage["storage"]
+        logical_drives = fallback_storage["logicalDrives"]
+    network = osquery_network(include_mac, interface_details, interface_addresses)
+    os_user = clean_identifier(first_row(logged_in_users).get("user")) or getpass.getuser()
+    physical_memory = as_int(system_info.get("physical_memory") or system_info.get("memory_total"))
+    ram_total_gb = bytes_to_gb(physical_memory)
+    if ram_total_gb is None and system == "Windows":
+        ram_total_gb = windows_memory_gb()
+    manufacturer = first_clean(
+        system_info.get("hardware_vendor"),
+        system_info.get("vendor"),
+        system_info.get("computer_name"),
+    )
+    model = first_clean(
+        system_info.get("hardware_model"),
+        system_info.get("hardware_version"),
+        system_info.get("model"),
+        platform.machine(),
+    )
+    serial = first_clean(
+        system_info.get("hardware_serial"),
+        system_info.get("serial_number"),
+        system_info.get("uuid"),
+    )
+    storage_types = sorted(
+        {
+            clean_identifier(row.get("type") or row.get("model") or row.get("name"))
+            for row in disk_info
+            if clean_identifier(row.get("type") or row.get("model") or row.get("name"))
+        }
+    )
+    memory_modules = [
+        {
+            "bankLabel": clean_identifier(row.get("bank_locator")),
+            "slot": clean_identifier(row.get("device_locator")),
+            "manufacturer": clean_identifier(row.get("manufacturer")),
+            "partNumber": clean_identifier(row.get("part_number")),
+            "serialNumber": clean_identifier(row.get("serial_number")),
+            "capacityGb": bytes_to_gb(row.get("size")),
+            "speedMhz": as_int(row.get("speed")),
+            "memoryType": clean_identifier(row.get("memory_type") or row.get("type")),
+        }
+        for row in memory_devices
+    ]
+    hardware_identity = {
+        "manufacturer": manufacturer,
+        "model": model,
+        "systemFamily": clean_identifier(system_info.get("hardware_family")),
+        "systemSku": clean_identifier(system_info.get("hardware_sku")),
+        "productName": model,
+        "productNumber": clean_identifier(system_info.get("hardware_version")),
+        "baseboardProduct": "",
+        "baseboardManufacturer": manufacturer,
+        "biosSerialNumber": serial,
+        "chassisSerialNumber": "",
+        "assetTag": "",
+        "serviceTag": serial,
+        "uuid": clean_identifier(system_info.get("uuid")),
+    }
+    return {
+        "osName": first_clean(os_version.get("name"), "macOS" if system == "Darwin" else system or "Unknown"),
+        "osVersion": first_clean(os_version.get("version"), os_version.get("major"), platform.platform()),
+        "manufacturer": manufacturer,
+        "model": model,
+        "modelNumber": first_clean(hardware_identity.get("systemSku"), hardware_identity.get("productNumber")),
+        "serialNumber": serial,
+        "serviceTag": serial,
+        "cpu": first_clean(system_info.get("cpu_brand"), platform.processor()),
+        "gpu": "",
+        "gpus": [],
+        "ramTotalGb": ram_total_gb,
+        "memoryModules": memory_modules,
+        **storage,
+        "storageType": " + ".join(storage_types[:4]),
+        "logicalDrives": logical_drives,
+        "physicalDisks": disk_info,
+        "hardwareIdentity": hardware_identity,
+        "osType": "macOS" if system == "Darwin" else system or "Unknown",
+        "hostname": first_clean(system_info.get("hostname"), socket.gethostname()),
+        **network,
+        "osUser": os_user,
+        "windowsUser": os_user,
+        "collectorEngine": "osquery",
+        "collectorEngineVersion": OSQUERY_ENGINE_VERSION,
+        "collectorEnginePath": osqueryi,
+        "osqueryVersion": clean_identifier(osquery_info.get("version")),
+    }
+
+
+def prefer_richer_value(current, candidate):
+    current_clean = clean_identifier(current)
+    candidate_clean = clean_identifier(candidate)
+    if not candidate_clean:
+        return current
+    if not current_clean:
+        return candidate
+    if current_clean.lower() in {"x64", "amd64", "intel64"} and len(candidate_clean) > len(current_clean):
+        return candidate
+    if candidate_clean != current_clean and len(candidate_clean) > len(current_clean) + 8:
+        return candidate
+    return current
+
+
+def merge_windows_details(details):
+    if platform.system() != "Windows":
+        return details
+    windows = windows_info()
+    merged = dict(details)
+    hostname = clean_identifier(merged.get("hostname") or socket.gethostname()).lower()
+    for key in (
+        "manufacturer",
+        "model",
+        "modelNumber",
+        "serialNumber",
+        "serviceTag",
+        "cpu",
+        "gpu",
+        "ramTotalGb",
+        "storageType",
+    ):
+        if key == "manufacturer" and clean_identifier(merged.get(key)).lower() == hostname:
+            merged[key] = windows.get(key) or merged.get(key)
+        else:
+            merged[key] = prefer_richer_value(merged.get(key), windows.get(key))
+    for key in ("gpus", "memoryModules", "logicalDrives", "physicalDisks"):
+        if windows.get(key):
+            merged[key] = windows.get(key)
+    for key in ("storageTotalGb", "storageFreeGb"):
+        if windows.get(key) is not None:
+            merged[key] = windows.get(key)
+    if windows.get("hardwareIdentity"):
+        identity = dict(merged.get("hardwareIdentity") or {})
+        for key, value in windows["hardwareIdentity"].items():
+            if key in ("manufacturer", "baseboardManufacturer") and clean_identifier(identity.get(key)).lower() == hostname:
+                identity[key] = value or identity.get(key)
+            else:
+                identity[key] = prefer_richer_value(identity.get(key), value)
+        merged["hardwareIdentity"] = identity
+        merged["modelNumber"] = first_clean(
+            merged.get("modelNumber"),
+            identity.get("systemSku"),
+            identity.get("productNumber"),
+            identity.get("baseboardProduct"),
+        )
+    for key in ("cpuMaxClockGhz", "cpuCurrentClockGhz", "powershellCollector"):
+        if windows.get(key) is not None:
+            merged[key] = windows.get(key)
+    if not merged.get("gpu") and merged.get("gpus"):
+        merged["gpu"] = " | ".join(item.get("name", "") for item in merged["gpus"] if item.get("name"))
+    return merged
 
 
 def windows_registry_value(path, name):
@@ -402,13 +696,14 @@ def windows_python_fallback():
     storage_free = sum(item["freeGb"] or 0 for item in logical_drives) if logical_drives else bytes_to_gb(disk.free)
     bios_path = r"HARDWARE\DESCRIPTION\System\BIOS"
     cpu_path = r"HARDWARE\DESCRIPTION\System\CentralProcessor\0"
+    cpu_mhz = as_int(windows_registry_value(cpu_path, "~MHz"))
     gpus = windows_registry_gpus()
     disks = windows_registry_disks()
     storage_types = []
-    for item in disks:
-        value = item.get("mediaType") or item.get("busType") or ""
-        if value and value not in storage_types:
-            storage_types.append(value)
+    if any((item.get("mediaType") or "").upper() == "SSD" or (item.get("busType") or "").upper() == "NVME" for item in disks):
+        storage_types.append("SSD")
+    elif any((item.get("mediaType") or "").upper() == "HDD" for item in disks):
+        storage_types.append("HDD")
     hardware_identity = {
         "manufacturer": windows_registry_value(bios_path, "SystemManufacturer"),
         "model": windows_registry_value(bios_path, "SystemProductName"),
@@ -437,6 +732,8 @@ def windows_python_fallback():
         "serialNumber": serial_number,
         "serviceTag": hardware_identity.get("serviceTag"),
         "cpu": windows_registry_value(cpu_path, "ProcessorNameString") or platform.processor(),
+        "cpuMaxClockGhz": round(cpu_mhz / 1000, 2) if cpu_mhz else None,
+        "cpuCurrentClockGhz": round(cpu_mhz / 1000, 2) if cpu_mhz else None,
         "gpu": " | ".join(item["name"] for item in gpus),
         "gpus": gpus,
         "ramTotalGb": windows_memory_gb(),
@@ -589,6 +886,8 @@ def windows_info():
       serialNumber=$serialNumber
       serviceTag=$hardwareIdentity.serviceTag
       cpu=Clean $processor.Name
+      cpuMaxClockGhz=if ($processor.MaxClockSpeed) { [math]::Round([double]$processor.MaxClockSpeed / 1000, 2) } else { $null }
+      cpuCurrentClockGhz=if ($processor.CurrentClockSpeed) { [math]::Round([double]$processor.CurrentClockSpeed / 1000, 2) } else { $null }
       gpu=Clean (($gpus | ForEach-Object { $_.name }) -join ' | ')
       gpus=$gpus
       ramTotalGb=To-Gb $computer.TotalPhysicalMemory
@@ -604,28 +903,42 @@ def windows_info():
     """
     raw = run([shell, "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], timeout=30)
     parsed = parse_json_object(raw)
-    if parsed:
-        return parsed
-    else:
-        return windows_python_fallback()
+    fallback = windows_python_fallback()
+    if not parsed:
+        return fallback
+    has_core_data = any(parsed.get(key) for key in ("manufacturer", "model", "cpu", "gpu", "ramTotalGb"))
+    if not has_core_data:
+        return fallback
+    for key, value in fallback.items():
+        if key in ("hardwareIdentity",):
+            identity = dict(parsed.get(key) or {})
+            for identity_key, identity_value in value.items():
+                identity[identity_key] = prefer_richer_value(identity.get(identity_key), identity_value)
+            parsed[key] = identity
+        elif key in ("gpus", "logicalDrives", "physicalDisks", "memoryModules"):
+            if not parsed.get(key) and value:
+                parsed[key] = value
+        else:
+            parsed[key] = prefer_richer_value(parsed.get(key), value)
+    return parsed
 
 
 def collect(include_mac):
     system = platform.system()
-    details = windows_info() if system == "Windows" else macos_info() if system == "Darwin" else linux_info()
+    details = merge_windows_details(collect_with_osquery(include_mac))
     os_user = getpass.getuser()
     mac = ""
-    if include_mac:
+    if include_mac and not details.get("macAddress"):
         node = hex(__import__("uuid").getnode())[2:].zfill(12)
         mac = ":".join(node[index:index + 2] for index in range(0, 12, 2))
     return {
         **details,
-        "osType": "macOS" if system == "Darwin" else system or "Unknown",
-        "hostname": socket.gethostname(),
-        "macAddress": mac,
-        "localIp": local_ip(),
-        "osUser": os_user,
-        "windowsUser": os_user,
+        "osType": details.get("osType") or ("macOS" if system == "Darwin" else system or "Unknown"),
+        "hostname": details.get("hostname") or socket.gethostname(),
+        "macAddress": details.get("macAddress") or mac,
+        "localIp": details.get("localIp") or local_ip(),
+        "osUser": details.get("osUser") or os_user,
+        "windowsUser": details.get("windowsUser") or os_user,
         "collectedAt": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
         "scriptVersion": SCRIPT_VERSION,
         "collectorVersion": SCRIPT_VERSION,

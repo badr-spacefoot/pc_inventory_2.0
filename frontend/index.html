@@ -152,10 +152,7 @@
               Remplissez le formulaire pour preparer le collecteur et pre-remplir l'application.
             </div>
             <div id="command-result" class="is-hidden">
-              <p class="helper">
-                Methode recommandee: telechargez l'application adaptee a votre systeme. Le fichier de pre-remplissage
-                est telecharge automatiquement et le collecteur le detectera au demarrage.
-              </p>
+              <p class="helper">Installez l'application, puis ouvrez le collecteur depuis cette page.</p>
               <div class="collector-token-box support-only is-hidden">
                 <span>Code support de pré-remplissage</span>
                 <code id="collector-prefill-code"></code>
@@ -176,6 +173,7 @@
                       <span id="collector-os-icon" class="collector-os-icon" aria-hidden="true"></span>
                       <span>Télécharger le collecteur</span>
                     </a>
+                    <button id="collector-open-app" class="secondary action-button" type="button" disabled>Ouvrir le collecteur</button>
                     <a id="collector-releases-link" class="secondary action-button" href="https://github.com/badr-spacefoot/pc_inventory_2.0/releases" target="_blank" rel="noopener">Autres versions</a>
                   </div>
                   <div class="platform-downloads" aria-label="Télécharger pour une autre plateforme">
@@ -190,15 +188,18 @@
                   <p>Script lisible pour diagnostic ou support IT. Les antivirus peuvent bloquer les scripts lances depuis le navigateur.</p>
                 </article>
               </div>
-              <pre><code id="powershell-command"></code></pre>
-              <div class="actions">
-                <button id="copy-command" class="secondary" type="button">Copier la commande</button>
-                <button id="copy-script" class="secondary" type="button">Copier le script</button>
-                <a id="download-script" class="secondary" href="../scripts/collect-windows.ps1" download>Télécharger le script</a>
-              </div>
-              <details class="script-preview">
-                <summary>Apercu du script PowerShell</summary>
-                <pre><code id="script-preview"></code></pre>
+              <details class="support-tools">
+                <summary>Options support IT</summary>
+                <pre><code id="powershell-command"></code></pre>
+                <div class="actions">
+                  <button id="copy-command" class="secondary" type="button">Copier la commande</button>
+                  <button id="copy-script" class="secondary" type="button">Copier le script</button>
+                  <a id="download-script" class="secondary" href="../scripts/collect-windows.ps1" download>Télécharger le script</a>
+                </div>
+                <details class="script-preview">
+                  <summary>Apercu du script PowerShell</summary>
+                  <pre><code id="script-preview"></code></pre>
+                </details>
               </details>
             </div>
           </section>

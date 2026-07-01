@@ -2,6 +2,11 @@ name: Build collector apps
 
 on:
   workflow_dispatch:
+    inputs:
+      osquery_msi_url:
+        description: "Optional direct download URL for the osquery Windows MSI bundled into the Spacefoot installer."
+        required: false
+        type: string
   push:
     tags:
       - "collector-v*"
@@ -21,14 +26,17 @@ jobs:
             os: windows-latest
             artifact: spacefoot-it-collector-windows
             separator: ;
+            pyinstaller_mode: --onedir
           - name: macos
             os: macos-latest
             artifact: spacefoot-it-collector-macos
             separator: ":"
+            pyinstaller_mode: --onefile
           - name: linux
             os: ubuntu-latest
             artifact: spacefoot-it-collector-linux
             separator: ":"
+            pyinstaller_mode: --onefile
 
     steps:
       - name: Checkout
@@ -45,7 +53,7 @@ jobs:
       - name: Build collector
         run: >
           pyinstaller
-          --onefile
+          ${{ matrix.pyinstaller_mode }}
           --windowed
           --name "${{ matrix.artifact }}"
           --add-data "scripts/collect-cross-platform.py${{ matrix.separator }}scripts"
@@ -72,7 +80,10 @@ jobs:
           WINDOWS_CODESIGN_PFX_BASE64: ${{ secrets.WINDOWS_CODESIGN_PFX_BASE64 }}
           WINDOWS_CODESIGN_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_PASSWORD }}
         run: |
-          $target = "dist/${{ matrix.artifact }}.exe"
+          $target = "dist/${{ matrix.artifact }}/${{ matrix.artifact }}.exe"
+          if (-not (Test-Path $target)) {
+            $target = "dist/${{ matrix.artifact }}.exe"
+          }
           $signTool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
             Where-Object { $_.FullName -match "\\x64\\signtool\.exe$" } |
             Sort-Object FullName -Descending |
@@ -97,6 +108,99 @@ jobs:
             -HashAlgorithm SHA256 `
             -NotAfter (Get-Date).AddYears(2)
           Export-Certificate -Cert $cert -FilePath "dist/spacefoot-it-collector-internal-test.cer" | Out-Null
+          & $signTool sign /sha1 $cert.Thumbprint /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $target
+          exit $LASTEXITCODE
+
+      - name: Download osquery Windows MSI
+        if: matrix.name == 'windows'
+        shell: pwsh
+        env:
+          OSQUERY_MSI_URL: ${{ inputs.osquery_msi_url }}
+        run: |
+          New-Item -ItemType Directory -Force installer-assets | Out-Null
+          if ($env:OSQUERY_MSI_URL) {
+            $downloadUrl = $env:OSQUERY_MSI_URL
+            Write-Host "Using workflow-provided osquery MSI URL."
+          } else {
+            $release = Invoke-RestMethod `
+              -Headers @{ "User-Agent" = "spacefoot-it-collector-build" } `
+              -Uri "https://api.github.com/repos/osquery/osquery/releases/latest"
+            $asset = $release.assets |
+              Where-Object { $_.name -match '\.msi$' -and $_.name -match 'osquery' } |
+              Select-Object -First 1
+            if (-not $asset) {
+              throw "No osquery Windows MSI asset was found in the latest osquery release. Re-run with workflow_dispatch input osquery_msi_url."
+            }
+            $downloadUrl = $asset.browser_download_url
+            Write-Host "Using osquery MSI asset: $($asset.name)"
+          }
+          Invoke-WebRequest -Uri $downloadUrl -OutFile "installer-assets/osquery.msi"
+
+      - name: Install Inno Setup
+        if: matrix.name == 'windows'
+        shell: pwsh
+        run: choco install innosetup --no-progress --yes
+
+      - name: Build Windows installer
+        if: matrix.name == 'windows'
+        shell: pwsh
+        run: |
+          $version = if ($env:GITHUB_REF_NAME -like "collector-v*") {
+            $env:GITHUB_REF_NAME -replace '^collector-v', ''
+          } else {
+            "0.0.0-dev"
+          }
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            throw "Inno Setup compiler was not found at $iscc."
+          }
+          & $iscc "installer/windows/spacefoot-collector.iss" "/DAppVersion=$version"
+
+      - name: Sign Windows installer
+        if: matrix.name == 'windows'
+        shell: pwsh
+        env:
+          WINDOWS_CODESIGN_PFX_BASE64: ${{ secrets.WINDOWS_CODESIGN_PFX_BASE64 }}
+          WINDOWS_CODESIGN_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_PASSWORD }}
+        run: |
+          $version = if ($env:GITHUB_REF_NAME -like "collector-v*") {
+            $env:GITHUB_REF_NAME -replace '^collector-v', ''
+          } else {
+            "0.0.0-dev"
+          }
+          $target = "dist/installer/Spacefoot-IT-Collector-$version-Setup.exe"
+          if (-not (Test-Path $target)) {
+            throw "Installer was not found at $target."
+          }
+          $signTool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match "\\x64\\signtool\.exe$" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $signTool) {
+            throw "signtool.exe not found in Windows SDK."
+          }
+          if ($env:WINDOWS_CODESIGN_PFX_BASE64) {
+            $certPath = Join-Path $env:RUNNER_TEMP "spacefoot-codesign.pfx"
+            [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_CODESIGN_PFX_BASE64))
+            & $signTool sign /f $certPath /p $env:WINDOWS_CODESIGN_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $target
+            exit $LASTEXITCODE
+          }
+          $cert = Get-ChildItem Cert:\CurrentUser\My |
+            Where-Object { $_.Subject -eq "CN=Spacefoot IT Collector Internal Testing" } |
+            Select-Object -First 1
+          if (-not $cert) {
+            $cert = New-SelfSignedCertificate `
+              -Type CodeSigningCert `
+              -Subject "CN=Spacefoot IT Collector Internal Testing" `
+              -FriendlyName "Spacefoot IT Collector Internal Testing" `
+              -CertStoreLocation "Cert:\CurrentUser\My" `
+              -KeyAlgorithm RSA `
+              -KeyLength 3072 `
+              -HashAlgorithm SHA256 `
+              -NotAfter (Get-Date).AddYears(2)
+          }
+          New-Item -ItemType Directory -Force dist/installer | Out-Null
+          Export-Certificate -Cert $cert -FilePath "dist/installer/spacefoot-it-collector-internal-test.cer" | Out-Null
           & $signTool sign /sha1 $cert.Thumbprint /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $target
           exit $LASTEXITCODE
 
@@ -140,6 +244,7 @@ jobs:
           path: |
             dist/${{ matrix.artifact }}*
             dist/*.cer
+            dist/installer/*
 
   release:
     name: Publish collector release
@@ -158,14 +263,26 @@ jobs:
           TAG_NAME: ${{ github.ref_name }}
         run: |
           mkdir -p release-upload
-          find release-assets -maxdepth 1 -type f -exec cp {} release-upload/ \;
+          find release-assets -type f \( \
+            -name "Spacefoot-IT-Collector-*-Setup.exe" -o \
+            -name "spacefoot-it-collector-linux" -o \
+            -name "spacefoot-it-collector-macos" -o \
+            -name "*.cer" \
+          \) -exec cp {} release-upload/ \;
           find release-assets -maxdepth 1 -type d -name "*.app" -print0 | while IFS= read -r -d '' app; do
             name="$(basename "$app")"
             (cd "$(dirname "$app")" && zip -qry "$GITHUB_WORKSPACE/release-upload/${name}.zip" "$name")
           done
-          version="${TAG_NAME#collector-}"
-          mv release-upload/spacefoot-it-collector-windows.exe "release-upload/spacefoot-it-collector-windows-${version}.exe"
-          mv release-upload/spacefoot-it-collector-linux "release-upload/spacefoot-it-collector-linux-${version}"
+          version="${TAG_NAME#collector-v}"
+          if [ -f "release-upload/Spacefoot-IT-Collector-${version}-Setup.exe" ]; then
+            mv "release-upload/Spacefoot-IT-Collector-${version}-Setup.exe" "release-upload/spacefoot-it-collector-windows-${version}-setup.exe"
+          fi
+          if [ -f release-upload/spacefoot-it-collector-linux ]; then
+            mv release-upload/spacefoot-it-collector-linux "release-upload/spacefoot-it-collector-linux-${version}"
+          fi
+          if [ -f release-upload/spacefoot-it-collector-macos ]; then
+            mv release-upload/spacefoot-it-collector-macos "release-upload/spacefoot-it-collector-macos-${version}"
+          fi
           if [ -f release-upload/spacefoot-it-collector-macos.app.zip ]; then
             mv release-upload/spacefoot-it-collector-macos.app.zip "release-upload/spacefoot-it-collector-macos-${version}.app.zip"
           fi
@@ -180,4 +297,4 @@ jobs:
           gh release create "$TAG_NAME" release-upload/* \
             --repo "$REPOSITORY" \
             --title "Spacefoot IT Collector $TAG_NAME" \
-            --notes "Native collector builds for Windows, macOS and Linux. Verify downloads with SHA256SUMS.txt. Windows builds use an internal self-signed testing certificate when no official code-signing certificate is configured. Sign Windows with a trusted certificate and notarize macOS before broad distribution."
+            --notes "Native collector builds for Windows, macOS and Linux. The Windows setup installs Spacefoot IT Collector as one app and installs osquery internally when it is not already present. Verify downloads with SHA256SUMS.txt. Windows builds use an internal self-signed testing certificate when no official code-signing certificate is configured. Sign Windows with a trusted certificate and notarize macOS before broad distribution."

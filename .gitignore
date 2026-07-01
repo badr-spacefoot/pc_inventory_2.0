@@ -1,5 +1,11 @@
 .tools/
 *.zip
+*.log
+*.spec
+__pycache__/
+build/
+dist/
+installer-assets/
 .env
 .env.*
 !.env.example

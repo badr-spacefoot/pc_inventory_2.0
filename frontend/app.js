@@ -40,6 +40,7 @@ const state = {
   collectorReleases: null,
   detectedPlatform: "unknown",
   prefillCode: "",
+  collectorLaunchUrl: "",
   mapProvider: "openstreetmap",
 };
 let pendingRetirement = null;
@@ -77,7 +78,8 @@ const englishTranslations = {
   "Mode support IT: utiliser un token manuel": "IT support mode: use a manual token",
   "Lien d'invitation": "Invitation link",
   "Chargé automatiquement depuis le lien": "Loaded automatically from the link",
-  "Methode recommandee: telechargez l'application adaptee a votre systeme. Le fichier de pre-remplissage est telecharge automatiquement et le collecteur le detectera au demarrage.": "Recommended method: download the app for your system. The prefill file is downloaded automatically and the collector will detect it at startup.",
+  "Methode recommandee: telechargez l'application adaptee a votre systeme. Le fichier de pre-remplissage est telecharge automatiquement et le collecteur le detectera au demarrage.": "Recommended method: download the app for your system. After installation, open it from this page to load the profile automatically.",
+  "Methode recommandee: telechargez l'application adaptee a votre systeme. Apres installation, ouvrez le collecteur depuis cette page pour charger le profil automatiquement.": "Recommended method: download the app for your system. After installation, open the collector from this page to load the profile automatically.",
   "Code support de pré-remplissage": "Support prefill code",
   "Preparation terminee. Telechargez le collecteur.": "Preparation complete. Download the collector.",
   "Invitations de collecte": "Collection invitations",
@@ -1677,6 +1679,22 @@ function inviteState(invite) {
   return { key: "valid", label: translate("Valide") };
 }
 
+function displayInviteUrl(inviteUrl) {
+  if (!inviteUrl || !window.IT_INVENTORY_LOCAL_LIVE) return inviteUrl || "";
+  try {
+    const url = new URL(inviteUrl, window.location.href);
+    const inviteCode = url.searchParams.get("invite") || "";
+    const localUrl = new URL(window.location.href);
+    localUrl.pathname = "/";
+    localUrl.search = "";
+    localUrl.hash = "";
+    localUrl.searchParams.set("invite", inviteCode);
+    return localUrl.toString();
+  } catch {
+    return inviteUrl || "";
+  }
+}
+
 function renderCollectionInvites() {
   const table = $("#invites-table");
   if (!table) return;
@@ -1686,7 +1704,7 @@ function renderCollectionInvites() {
       const usage = invite.max_uses === null
         ? `${invite.use_count} / ${state.language === "en" ? "unlimited" : "illimite"}`
         : `${invite.use_count} / ${invite.max_uses}`;
-      const inviteUrl = invite.invite_url || state.rawInviteUrls[invite.id] || "";
+      const inviteUrl = displayInviteUrl(invite.invite_url || state.rawInviteUrls[invite.id] || "");
       return `
         <tr>
           <td>${escapeHtml(invite.label)}</td>
@@ -1717,7 +1735,7 @@ function renderCollectionInvites() {
   $$(".copy-invite-row").forEach((button) => {
     button.addEventListener("click", async () => {
       const invite = state.collectionInvites.find((item) => item.id === button.dataset.id);
-      await copyText(invite?.invite_url || state.rawInviteUrls[button.dataset.id], "Lien copie.", "Aucun lien a copier");
+      await copyText(displayInviteUrl(invite?.invite_url || state.rawInviteUrls[button.dataset.id]), "Lien copie.", "Aucun lien a copier");
     });
   });
   $$(".revoke-invite").forEach((button) => {
@@ -2931,6 +2949,7 @@ function downloadPrefillFile() {
 function updateCollectorDownloadUi() {
   const primary = $("#collector-download-primary");
   const releases = $("#collector-releases-link");
+  const openApp = $("#collector-open-app");
   if (!primary || !releases) return;
   const releasePage = state.collectorReleases?.releasePageUrl
     || state.collectorReleases?.fallbackReleasePageUrl
@@ -2952,6 +2971,10 @@ function updateCollectorDownloadUi() {
     $("#collector-platform-copy").textContent = detected === "unknown"
       ? translate("Choisissez votre plateforme ci-dessous.")
       : translate("Aucun asset collecteur disponible pour cette plateforme.");
+  }
+  if (openApp) {
+    openApp.disabled = !state.collectorLaunchUrl;
+    openApp.classList.toggle("is-disabled", !state.collectorLaunchUrl);
   }
   $$("[data-platform-download]").forEach((link) => {
     const platform = link.dataset.platformDownload;
@@ -3609,9 +3632,10 @@ function bindEvents() {
       $("#command-result").classList.remove("is-hidden");
       $("#collector-prefill-code").textContent = result.prefillCode || "";
       state.prefillCode = result.prefillCode || "";
+      state.collectorLaunchUrl = result.launchUrl || "";
       $("#powershell-command").textContent = state.language === "en"
-        ? "Use the native collector app. The prefill file is downloaded with the app and the fallback script is reserved for IT support."
-        : "Utilisez l'application collecteur native. Le fichier de pré-remplissage est téléchargé avec l'app et le script fallback reste r?serv? au support IT.";
+        ? "Use the native collector app. Install it once, then open it from this page to load the profile automatically. The script fallback is reserved for IT support."
+        : "Utilisez l'application collecteur native. Installez-la une fois, puis ouvrez-la depuis cette page pour charger le profil automatiquement. Le script fallback reste réservé au support IT.";
       updateCollectorDownloadUi();
       toast(translate("Preparation terminee. Telechargez le collecteur."), "success");
     } catch (error) {
@@ -3630,13 +3654,18 @@ function bindEvents() {
     await copyText($("#collector-prefill-code").textContent, "Code copie.", "Aucun code a copier");
   });
   $("#download-prefill-file").addEventListener("click", downloadPrefillFile);
-  $("#collector-download-primary").addEventListener("click", () => {
-    if (state.prefillCode) downloadPrefillFile();
-  });
-  $$("[data-platform-download]").forEach((link) => {
-    link.addEventListener("click", () => {
-      if (state.prefillCode) downloadPrefillFile();
-    });
+  $("#collector-open-app")?.addEventListener("click", () => {
+    if (!state.collectorLaunchUrl) {
+      toast("Aucun code de pré-remplissage", "error");
+      return;
+    }
+    window.location.href = state.collectorLaunchUrl;
+    toast(
+      state.language === "en"
+        ? "Opening the collector. If nothing happens, install it first."
+        : "Ouverture du collecteur. Si rien ne se passe, installez-le d'abord.",
+      "success",
+    );
   });
   $("#copy-script").addEventListener("click", async () => {
     if (!state.scriptPreviewText) await loadScriptPreview();
@@ -3907,7 +3936,7 @@ function bindEvents() {
       const result = await api("/admin/collection-invites", { method: "POST", body: JSON.stringify(payload) });
       const inviteUrl = result.invite.inviteUrl || result.invite.invite_url;
       state.rawInviteUrls[result.invite.id] = inviteUrl;
-      $("#generated-invite-url").textContent = inviteUrl;
+      $("#generated-invite-url").textContent = displayInviteUrl(inviteUrl);
       $("#invite-result").classList.remove("is-hidden");
       form.reset();
       updateOrganizationDatalists();
