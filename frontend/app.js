@@ -14,6 +14,7 @@ const state = {
   adminToken: localStorage.getItem("it_inventory_admin_token") || "",
   currentAdmin: JSON.parse(localStorage.getItem("it_inventory_admin_user") || "null"),
   language: localStorage.getItem("it_inventory_language") || "fr",
+  themePreference: localStorage.getItem("it_inventory_theme_preference") || "system",
   timeFormatPreference: localStorage.getItem("it_inventory_time_format") || "auto",
   temperatureUnit: localStorage.getItem("it_inventory_temperature_unit") || "celsius",
   weather: null,
@@ -71,6 +72,7 @@ const englishTranslations = {
   "Activer le mode sombre": "Enable dark mode",
   "Activer le mode clair": "Enable light mode",
   "Changer de theme": "Change theme",
+  "Theme systeme": "System theme",
   "Changer de langue": "Change language",
   "Accès utilisateur": "User access",
   "Declarer un poste": "Register a computer",
@@ -682,7 +684,7 @@ function applyLanguage(language, persist = true) {
   translateElement(document.body);
   updateTimeFormatButton();
   updateCollectorDownloadUi();
-  setTheme(document.documentElement.dataset.theme || "light");
+  setTheme(state.themePreference, false);
 }
 
 const languageObserver = new MutationObserver((records) => {
@@ -692,14 +694,27 @@ const languageObserver = new MutationObserver((records) => {
   });
 });
 
-function setTheme(theme) {
+function systemTheme() {
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function activeTheme(preference = state.themePreference) {
+  return preference === "system" ? systemTheme() : preference;
+}
+
+function setTheme(preference, persist = true) {
+  state.themePreference = ["system", "light", "dark"].includes(preference) ? preference : "system";
+  const theme = activeTheme();
   document.documentElement.dataset.theme = theme;
-  localStorage.setItem("it_inventory_theme", theme);
+  if (persist) localStorage.setItem("it_inventory_theme_preference", state.themePreference);
   const toggle = $("#theme-toggle");
   if (toggle) {
     const dark = theme === "dark";
-    toggle.setAttribute("aria-label", translate(dark ? "Activer le mode clair" : "Activer le mode sombre"));
-    toggle.title = translate(dark ? "Mode clair" : "Mode sombre");
+    const label = state.themePreference === "system"
+      ? translate("Theme systeme")
+      : translate(dark ? "Mode sombre" : "Mode clair");
+    toggle.setAttribute("aria-label", label);
+    toggle.title = label;
   }
 }
 
@@ -3594,9 +3609,14 @@ async function importCpuBenchmarkFile(file) {
 function bindEvents() {
   $("#download-script").href = CONFIG.scriptUrl;
   loadCollectorReleases().catch(() => updateCollectorDownloadUi());
-  setTheme(document.documentElement.dataset.theme || "light");
+  setTheme(state.themePreference, false);
   $("#theme-toggle").addEventListener("click", () => {
-    setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+    const order = ["system", "light", "dark"];
+    const currentIndex = order.indexOf(state.themePreference);
+    setTheme(order[(currentIndex + 1) % order.length]);
+  });
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    if (state.themePreference === "system") setTheme("system", false);
   });
   $("#language-toggle").addEventListener("click", (event) => {
     event.stopPropagation();
@@ -3663,7 +3683,7 @@ function bindEvents() {
     if (payload.establishment === "__other__") payload.establishment = "";
     payload.apiUrl = CONFIG.apiBaseUrl;
     payload.language = state.language;
-    payload.theme = document.documentElement.dataset.theme || "light";
+    payload.theme = state.themePreference;
     try {
       const hasInvite = Boolean(state.currentInviteCode || form.inviteCode);
       const result = hasInvite

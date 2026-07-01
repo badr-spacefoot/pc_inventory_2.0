@@ -122,7 +122,9 @@ python -m PyInstaller `
   --onedir `
   --windowed `
   --name "spacefoot-it-collector-windows" `
+  --icon "frontend/assets/brand/app-icon.ico" `
   --add-data "scripts/collect-cross-platform.py;scripts" `
+  --add-data "frontend/assets/brand/app-icon.png;assets/brand" `
   --hidden-import argparse `
   --hidden-import ctypes `
   --hidden-import datetime `

@@ -27,16 +27,19 @@ jobs:
             artifact: spacefoot-it-collector-windows
             separator: ;
             pyinstaller_mode: --onedir
+            pyinstaller_icon: --icon frontend/assets/brand/app-icon.ico
           - name: macos
             os: macos-latest
             artifact: spacefoot-it-collector-macos
             separator: ":"
             pyinstaller_mode: --onefile
+            pyinstaller_icon: ""
           - name: linux
             os: ubuntu-latest
             artifact: spacefoot-it-collector-linux
             separator: ":"
             pyinstaller_mode: --onefile
+            pyinstaller_icon: ""
 
     steps:
       - name: Checkout
@@ -56,7 +59,9 @@ jobs:
           ${{ matrix.pyinstaller_mode }}
           --windowed
           --name "${{ matrix.artifact }}"
+          ${{ matrix.pyinstaller_icon }}
           --add-data "scripts/collect-cross-platform.py${{ matrix.separator }}scripts"
+          --add-data "frontend/assets/brand/app-icon.png${{ matrix.separator }}assets/brand"
           --hidden-import argparse
           --hidden-import ctypes
           --hidden-import datetime

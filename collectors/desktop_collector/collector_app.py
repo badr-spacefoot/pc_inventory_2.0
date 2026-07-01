@@ -49,7 +49,7 @@ else:
 
 
 DEFAULT_API_URL = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
-COLLECTOR_VERSION = "0.1.15"
+COLLECTOR_VERSION = "0.1.16"
 COLLECTOR_BUILD_CHANNEL = "github-release"
 DRAFT_PATH = Path.home() / ".spacefoot_it_collector.json"
 PREFILL_FILE_MAX_AGE_SECONDS = 24 * 60 * 60
@@ -82,6 +82,12 @@ LIGHT_COLORS = {
     "input": "#f7faf8",
 }
 COLORS = DARK_COLORS.copy()
+
+
+def bundled_asset_path(relative_path: str) -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(getattr(sys, "_MEIPASS")) / relative_path
+    return Path(__file__).resolve().parents[2] / "frontend" / relative_path
 
 TRANSLATIONS = {
     "fr": {
@@ -334,7 +340,7 @@ def launch_prefill_from_args(argv: list[str]) -> dict:
 class CollectorApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
-        self.title("Spacefoot IT Collector")
+        self.title(f"Spacefoot IT Collector {COLLECTOR_VERSION}")
         self._set_window_icon()
         self.geometry("1180x840")
         self.minsize(1040, 760)
@@ -362,7 +368,10 @@ class CollectorApp(tk.Tk):
         self.comment = tk.StringVar(value=draft.get("comment") or "")
         self.include_mac = tk.BooleanVar(value=bool(draft.get("includeMac", True)))
         self.language = tk.StringVar(value=draft.get("language") or "en")
-        self.theme_preference = tk.StringVar(value=draft.get("themePreference") or "system")
+        self.theme_preference_explicit = bool(draft.get("themePreferenceExplicit"))
+        self.theme_preference = tk.StringVar(
+            value=(draft.get("themePreference") if self.theme_preference_explicit else "system") or "system"
+        )
         self.prefill_code = tk.StringVar(value=launch_prefill.get("prefillCode") or draft.get("prefillCode") or "")
         self.launch_prefill_requested = bool(launch_prefill.get("prefillCode"))
         self.connection_visible = tk.BooleanVar(value=bool(draft.get("connectionVisible", False)))
@@ -389,8 +398,13 @@ class CollectorApp(tk.Tk):
 
     def _set_window_icon(self) -> None:
         try:
+            icon_path = bundled_asset_path("assets/brand/app-icon.png")
+            if icon_path.exists():
+                photo = tk.PhotoImage(file=str(icon_path))
+                self.app_icon_photo = photo
+                self.iconphoto(True, photo)
+                return
             photo = tk.PhotoImage(width=32, height=32)
-            photo.put("#101310", to=(0, 0, 32, 32))
             colors = [
                 "#ff7e02", "#662e9b", "#ea3546",
                 "#43bccd", "#f9c80e", "#ff7e02",
@@ -606,6 +620,7 @@ class CollectorApp(tk.Tk):
         order = ["system", "dark", "light"]
         current = self.theme_preference.get()
         self.theme_preference.set(order[(order.index(current) + 1) % len(order)] if current in order else "system")
+        self.theme_preference_explicit = True
         self.persist_draft()
         self._build_ui()
 
@@ -1185,6 +1200,7 @@ class CollectorApp(tk.Tk):
             "includeMac": self.include_mac.get(),
             "language": self.language.get(),
             "themePreference": self.theme_preference.get(),
+            "themePreferenceExplicit": self.theme_preference_explicit,
             "prefillCode": self.prefill_code.get().strip(),
             "connectionVisible": self.connection_visible.get(),
             "profileVisible": self.profile_visible.get(),
@@ -1262,6 +1278,7 @@ class CollectorApp(tk.Tk):
             self.language.set(data.get("language"))
         if data.get("theme") in ("dark", "light", "system"):
             self.theme_preference.set(data.get("theme"))
+            self.theme_preference_explicit = False
         self.profile_visible.set(bool(self.profile_missing_fields()))
         self.step_index = 0
         if self.access_token.get().strip():
