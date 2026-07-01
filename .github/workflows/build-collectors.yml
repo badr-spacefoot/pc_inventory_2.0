@@ -56,6 +56,38 @@ jobs:
       - name: Install PyInstaller
         run: python -m pip install --upgrade pyinstaller
 
+      - name: Prepare bundled tools directory
+        shell: bash
+        run: mkdir -p installer-assets/bundled-tools
+
+      - name: Bundle osquery for Linux
+        if: matrix.name == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_json="$(curl -fsSL -H "User-Agent: spacefoot-it-collector-build" https://api.github.com/repos/osquery/osquery/releases/latest)"
+          osquery_deb_url="$(python -c 'import json,sys; data=json.load(sys.stdin); assets=data.get("assets", []); urls=[a.get("browser_download_url", "") for a in assets if a.get("name", "").endswith(".deb") and ("amd64" in a.get("name", "").lower() or "x86_64" in a.get("name", "").lower()) and "dbgsym" not in a.get("name", "").lower()]; print(urls[0] if urls else "")' <<< "$release_json")"
+          if [ -z "$osquery_deb_url" ]; then
+            echo "No Linux amd64 osquery .deb asset was found in the latest osquery release."
+            exit 1
+          fi
+          echo "Using osquery package: $osquery_deb_url"
+          curl -fsSL "$osquery_deb_url" -o installer-assets/osquery.deb
+          mkdir -p installer-assets/osquery-root
+          dpkg-deb -x installer-assets/osquery.deb installer-assets/osquery-root
+          osqueryi_path="$(find installer-assets/osquery-root -type f -name osqueryi | head -n 1)"
+          if [ -z "$osqueryi_path" ]; then
+            echo "osqueryi was not found inside the downloaded osquery package."
+            exit 1
+          fi
+          if [ -d installer-assets/osquery-root/opt/osquery ]; then
+            cp -a installer-assets/osquery-root/opt/osquery installer-assets/bundled-tools/osquery
+            chmod +x installer-assets/bundled-tools/osquery/bin/osqueryi
+          else
+            cp "$osqueryi_path" installer-assets/bundled-tools/osqueryi
+            chmod +x installer-assets/bundled-tools/osqueryi
+          fi
+
       - name: Prepare macOS app icon
         if: matrix.name == 'macos'
         shell: bash
@@ -83,6 +115,7 @@ jobs:
           ${{ matrix.pyinstaller_bundle_id }}
           --add-data "scripts/collect-cross-platform.py${{ matrix.separator }}scripts"
           --add-data "frontend/assets/brand/app-icon.png${{ matrix.separator }}assets/brand"
+          --add-data "installer-assets/bundled-tools${{ matrix.separator }}bundled-tools"
           --hidden-import argparse
           --hidden-import ctypes
           --hidden-import datetime
@@ -307,12 +340,67 @@ jobs:
           chmod +x "dist/${{ matrix.artifact }}.app/Contents/MacOS/"*
           ditto -c -k --sequesterRsrc --keepParent "dist/${{ matrix.artifact }}.app" "dist/${{ matrix.artifact }}.app.zip"
 
+      - name: Build Linux deb package
+        if: matrix.name == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#collector-v}"
+          if [ "$version" = "$GITHUB_REF_NAME" ]; then
+            version="0.0.0-dev"
+          fi
+          package_root="dist/deb/spacefoot-it-collector"
+          install_root="$package_root/opt/spacefoot-it-collector"
+          mkdir -p "$package_root/DEBIAN" "$install_root" "$package_root/usr/share/applications" "$package_root/usr/share/icons/hicolor/256x256/apps"
+          cp "dist/${{ matrix.artifact }}" "$install_root/spacefoot-it-collector"
+          chmod 755 "$install_root/spacefoot-it-collector"
+          cp frontend/assets/brand/app-icon.png "$package_root/usr/share/icons/hicolor/256x256/apps/spacefoot-it-collector.png"
+          cat > "$package_root/DEBIAN/control" <<EOF
+          Package: spacefoot-it-collector
+          Version: $version
+          Section: utils
+          Priority: optional
+          Architecture: amd64
+          Maintainer: Spacefoot IT <it@spacefoot.com>
+          Depends: libc6, libx11-6, libxext6, libxrender1, libxft2, libfontconfig1, xdg-utils
+          Description: Spacefoot IT inventory collector
+           Native collector for Spacefoot IT inventory. It bundles the collector app and osquery runtime used for local hardware inventory.
+          EOF
+          sed -i 's/^          //' "$package_root/DEBIAN/control"
+          cat > "$package_root/usr/share/applications/spacefoot-it-collector.desktop" <<EOF
+          [Desktop Entry]
+          Type=Application
+          Name=Spacefoot IT Collector
+          Comment=Spacefoot hardware inventory collector
+          Exec=/opt/spacefoot-it-collector/spacefoot-it-collector %u
+          Icon=spacefoot-it-collector
+          Terminal=false
+          Categories=Utility;
+          MimeType=x-scheme-handler/spacefoot-collector;
+          EOF
+          sed -i 's/^          //' "$package_root/usr/share/applications/spacefoot-it-collector.desktop"
+          cat > "$package_root/DEBIAN/postinst" <<'EOF'
+          #!/bin/sh
+          set -e
+          if command -v xdg-mime >/dev/null 2>&1; then
+            xdg-mime default spacefoot-it-collector.desktop x-scheme-handler/spacefoot-collector || true
+          fi
+          if command -v update-desktop-database >/dev/null 2>&1; then
+            update-desktop-database /usr/share/applications || true
+          fi
+          exit 0
+          EOF
+          sed -i 's/^          //' "$package_root/DEBIAN/postinst"
+          chmod 755 "$package_root/DEBIAN/postinst"
+          dpkg-deb --build "$package_root" "dist/spacefoot-it-collector-linux-${version}.deb"
+
       - name: Upload collector artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: |
             dist/${{ matrix.artifact }}*
+            dist/*.deb
             dist/*.cer
             dist/installer/*
 
@@ -336,6 +424,7 @@ jobs:
           find release-assets -type f \( \
             -name "Spacefoot-IT-Collector-*-Setup.exe" -o \
             -name "spacefoot-it-collector-linux" -o \
+            -name "spacefoot-it-collector-linux-*.deb" -o \
             -name "spacefoot-it-collector-macos" -o \
             -name "spacefoot-it-collector-macos.app.zip" -o \
             -name "*.cer" \
@@ -369,4 +458,4 @@ jobs:
           gh release create "$TAG_NAME" release-upload/* \
             --repo "$REPOSITORY" \
             --title "Spacefoot IT Collector $TAG_NAME" \
-            --notes "Native collector builds for Windows, macOS and Linux. The Windows setup installs Spacefoot IT Collector as one app and installs osquery internally when it is not already present. Verify downloads with SHA256SUMS.txt. Windows builds use an internal self-signed testing certificate when no official code-signing certificate is configured. Sign Windows with a trusted certificate and notarize macOS before broad distribution."
+            --notes "Native collector builds for Windows, macOS and Linux. Windows ships as a setup executable. Linux ships as a .deb that installs Spacefoot IT Collector, registers the spacefoot-collector:// protocol, and bundles osquery for local inventory. If osquery is unavailable at runtime, the collector falls back to its built-in Python inventory path instead of blocking the user. Verify downloads with SHA256SUMS.txt. Windows builds use an internal self-signed testing certificate when no official code-signing certificate is configured. Sign Windows with a trusted certificate and notarize macOS before broad distribution."

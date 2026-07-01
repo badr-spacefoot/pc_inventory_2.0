@@ -213,8 +213,22 @@ def parse_json_array(raw):
 
 def find_osqueryi():
     configured = os.environ.get("SPACEFOOT_OSQUERYI")
+    bundled_candidates = []
+    if getattr(sys, "frozen", False):
+        bundled_candidates.extend([
+            Path(getattr(sys, "_MEIPASS", "")) / "bundled-tools" / "osquery" / "bin" / "osqueryi",
+            Path(getattr(sys, "_MEIPASS", "")) / "bundled-tools" / "osqueryi",
+            Path(sys.executable).resolve().parent / "bundled-tools" / "osquery" / "bin" / "osqueryi",
+            Path(sys.executable).resolve().parent / "bundled-tools" / "osqueryi",
+        ])
+    else:
+        bundled_candidates.extend([
+            Path(__file__).resolve().parents[1] / "installer-assets" / "bundled-tools" / "osquery" / "bin" / "osqueryi",
+            Path(__file__).resolve().parents[1] / "installer-assets" / "bundled-tools" / "osqueryi",
+        ])
     candidates = [
         configured,
+        *[str(path) for path in bundled_candidates],
         shutil.which("osqueryi"),
         shutil.which("osqueryi.exe"),
         r"C:\Program Files\osquery\osqueryi.exe",
@@ -923,9 +937,43 @@ def windows_info():
     return parsed
 
 
+def collect_without_osquery(include_mac, reason=""):
+    system = platform.system()
+    if system == "Windows":
+        details = windows_info()
+    elif system == "Darwin":
+        details = macos_info()
+    elif system == "Linux":
+        details = linux_info()
+    else:
+        disk = shutil.disk_usage(Path.home())
+        details = {
+            "osName": system or "Unknown",
+            "osVersion": platform.platform(),
+            "manufacturer": "",
+            "model": platform.machine() or "Unknown",
+            "serialNumber": "",
+            "cpu": platform.processor(),
+            "gpu": "",
+            "ramTotalGb": None,
+            "storageTotalGb": bytes_to_gb(disk.total),
+            "storageFreeGb": bytes_to_gb(disk.free),
+            "storageType": "",
+        }
+    details = dict(details or {})
+    details["collectorEngine"] = details.get("collectorEngine") or "python-fallback"
+    details["collectorEngineVersion"] = details.get("collectorEngineVersion") or SCRIPT_VERSION
+    if reason:
+        details["collectorEngineMessage"] = str(reason)[:500]
+    return details
+
+
 def collect(include_mac):
     system = platform.system()
-    details = merge_windows_details(collect_with_osquery(include_mac))
+    try:
+        details = merge_windows_details(collect_with_osquery(include_mac))
+    except Exception as exc:
+        details = collect_without_osquery(include_mac, exc)
     os_user = getpass.getuser()
     mac = ""
     if include_mac and not details.get("macAddress"):

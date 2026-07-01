@@ -1,28 +1,28 @@
 {
-  "latestVersion": "collector-v0.1.25",
-  "releasePageUrl": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/tag/collector-v0.1.25",
+  "latestVersion": "collector-v0.1.26",
+  "releasePageUrl": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/tag/collector-v0.1.26",
   "fallbackReleasePageUrl": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases",
   "assets": {
     "windows": {
       "platform": "Windows",
-      "version": "collector-v0.1.25",
-      "fileName": "spacefoot-it-collector-windows-0.1.25-setup.exe",
-      "downloadUrl": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/download/collector-v0.1.25/spacefoot-it-collector-windows-0.1.25-setup.exe",
-      "releasePageUrl": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/tag/collector-v0.1.25"
+      "version": "collector-v0.1.26",
+      "fileName": "spacefoot-it-collector-windows-0.1.26-setup.exe",
+      "downloadUrl": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/download/collector-v0.1.26/spacefoot-it-collector-windows-0.1.26-setup.exe",
+      "releasePageUrl": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/tag/collector-v0.1.26"
     },
     "macos": {
       "platform": "macOS",
-      "version": "collector-v0.1.25",
-      "fileName": "spacefoot-it-collector-macos-0.1.25.app.zip",
-      "downloadUrl": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/download/collector-v0.1.25/spacefoot-it-collector-macos-0.1.25.app.zip",
-      "releasePageUrl": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/tag/collector-v0.1.25"
+      "version": "collector-v0.1.26",
+      "fileName": "spacefoot-it-collector-macos-0.1.26.app.zip",
+      "downloadUrl": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/download/collector-v0.1.26/spacefoot-it-collector-macos-0.1.26.app.zip",
+      "releasePageUrl": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/tag/collector-v0.1.26"
     },
     "linux": {
       "platform": "Linux",
-      "version": "collector-v0.1.25",
-      "fileName": "spacefoot-it-collector-linux-0.1.25",
-      "downloadUrl": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/download/collector-v0.1.25/spacefoot-it-collector-linux-0.1.25",
-      "releasePageUrl": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/tag/collector-v0.1.25"
+      "version": "collector-v0.1.26",
+      "fileName": "spacefoot-it-collector-linux-0.1.26.deb",
+      "downloadUrl": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/download/collector-v0.1.26/spacefoot-it-collector-linux-0.1.26.deb",
+      "releasePageUrl": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/tag/collector-v0.1.26"
     }
   }
 }

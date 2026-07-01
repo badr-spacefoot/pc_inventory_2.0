@@ -200,8 +200,9 @@ Windows:
 
 Linux:
 
-- Aucun signing global n'est obligatoire.
-- Utiliser le binaire/AppImage ou futur `.deb`.
+- Le téléchargement recommandé est maintenant un `.deb` Ubuntu/Debian.
+- Le paquet installe le collecteur dans `/opt/spacefoot-it-collector`, enregistre `spacefoot-collector://` et embarque le moteur `osqueryi` utilisé pour l'inventaire local.
+- Si osquery n'est pas exploitable sur un poste, le collecteur bascule sur sa collecte Python locale au lieu de bloquer l'utilisateur.
 - Verifier `SHA256SUMS.txt`; ajouter une signature GPG ou un dépôt APT signe plus tard si nécessaire.
 
 macOS:

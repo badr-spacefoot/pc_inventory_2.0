@@ -29,7 +29,7 @@ The payload includes:
 - `collectorEngineVersion`
 - `osqueryVersion` when osquery is used
 
-If `osqueryi` is missing, collection fails with a clear setup message. Production packaging should bundle or install osquery so the user experiences this as one trusted app.
+If `osqueryi` is missing or unusable, the collector falls back to the built-in Python inventory path so the user is not blocked. Production packaging bundles osquery where possible so the preferred path still uses a known inventory engine.
 
 ## Windows deployment idea
 
