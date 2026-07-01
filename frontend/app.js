@@ -3136,8 +3136,9 @@ function osIconSvg(platform) {
   return `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"></rect><path d="M8 22h8M12 18v4"></path></svg>`;
 }
 
-function downloadPrefillFile() {
+function downloadPrefillFile(options = {}) {
   if (!state.prefillCode) {
+    if (options.silent) return;
     toast("Aucun code de pré-remplissage", "error");
     return;
   }
@@ -3152,6 +3153,7 @@ function downloadPrefillFile() {
   link.download = `spacefoot-collector-prefill-${state.prefillCode || "draft"}.json`;
   link.click();
   URL.revokeObjectURL(link.href);
+  if (options.silent) return;
   toast("Fichier de pre-remplissage telecharge. Ouvrez le collecteur: il le detectera automatiquement.", "success");
 }
 
@@ -3917,6 +3919,9 @@ function bindEvents() {
     if (!state.collectorLaunchUrl) {
       toast("Aucun code de pré-remplissage", "error");
       return;
+    }
+    if (state.detectedPlatform === "macos") {
+      downloadPrefillFile({ silent: true });
     }
     if (state.detectedPlatform === "windows") rememberCollectorLaunch();
     updateCollectorDownloadUi();

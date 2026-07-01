@@ -51,7 +51,7 @@ else:
 
 
 DEFAULT_API_URL = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
-COLLECTOR_VERSION = "0.1.39"
+COLLECTOR_VERSION = "0.1.40"
 COLLECTOR_BUILD_CHANNEL = "github-release"
 COLLECTOR_RELEASES_URL = "https://badr-spacefoot.github.io/pc_inventory_2.0/collector-releases.json"
 DRAFT_PATH = Path.home() / ".spacefoot_it_collector.json"
@@ -480,6 +480,74 @@ def launch_prefill_from_args(argv: list[str]) -> dict:
     return {key: value for key, value in result.items() if value}
 
 
+class ThemedButton(tk.Label):
+    def __init__(self, parent, text, command, secondary=False):
+        self.command = command
+        self.secondary = secondary
+        self._state = "normal"
+        self.normal_bg = COLORS["panel_2"] if secondary else COLORS["brand"]
+        self.hover_bg = COLORS["line"] if secondary else COLORS["brand_2"]
+        self.disabled_bg = COLORS["panel"]
+        self.normal_fg = COLORS["text"]
+        self.disabled_fg = COLORS["muted"]
+        super().__init__(
+            parent,
+            text=text,
+            bg=self.normal_bg,
+            fg=self.normal_fg,
+            padx=16,
+            pady=9,
+            font=("Segoe UI", 10, "bold"),
+            cursor="hand2",
+            borderwidth=0,
+            highlightthickness=0,
+        )
+        self.bind("<Button-1>", self._click)
+        self.bind("<Return>", self._click)
+        self.bind("<Enter>", self._hover)
+        self.bind("<Leave>", self._leave)
+
+    def _click(self, _event=None):
+        if self._state != "disabled" and self.command:
+            return self.command()
+        return None
+
+    def _hover(self, _event=None) -> None:
+        if self._state != "disabled":
+            tk.Label.configure(self, bg=self.hover_bg)
+
+    def _leave(self, _event=None) -> None:
+        self._sync_visual()
+
+    def _sync_visual(self) -> None:
+        if self._state == "disabled":
+            tk.Label.configure(self, bg=self.disabled_bg, fg=self.disabled_fg, cursor="")
+        else:
+            tk.Label.configure(self, bg=self.normal_bg, fg=self.normal_fg, cursor="hand2")
+
+    def configure(self, cnf=None, **kwargs):
+        options = {}
+        if cnf:
+            options.update(cnf)
+        options.update(kwargs)
+        if "state" in options:
+            self._state = str(options.pop("state") or "normal")
+        if "command" in options:
+            self.command = options.pop("command")
+        if "text" in options:
+            tk.Label.configure(self, text=options.pop("text"))
+        if options:
+            tk.Label.configure(self, **options)
+        self._sync_visual()
+
+    config = configure
+
+    def cget(self, key):
+        if key == "state":
+            return self._state
+        return tk.Label.cget(self, key)
+
+
 class CollectorApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
@@ -493,6 +561,7 @@ class CollectorApp(tk.Tk):
         self.submission_device_id = ""
         self.collection_token = ""
         self.handled_launch_urls: set[str] = set()
+        self.prefill_watch_active = False
         register_linux_url_scheme()
         self.teams: list[dict] = []
         self.establishments: list[dict] = []
@@ -543,6 +612,7 @@ class CollectorApp(tk.Tk):
             self.after(450, self.check_update_then_load_prefill)
         else:
             self.after(700, self.auto_load_prefill_file)
+        self.after(1200, self.start_prefill_file_watch)
 
     def register_macos_url_handler(self) -> None:
         if platform.system() != "Darwin":
@@ -649,6 +719,39 @@ class CollectorApp(tk.Tk):
     def apply_theme_colors(self) -> None:
         global COLORS
         COLORS = (LIGHT_COLORS if self.active_theme() == "light" else DARK_COLORS).copy()
+        self.apply_widget_styles()
+
+    def apply_widget_styles(self) -> None:
+        try:
+            style = ttk.Style(self)
+            if platform.system() == "Darwin":
+                try:
+                    style.theme_use("clam")
+                except tk.TclError:
+                    pass
+            style.configure(
+                "Spacefoot.TCombobox",
+                fieldbackground=COLORS["input"],
+                background=COLORS["panel_2"],
+                foreground=COLORS["text"],
+                arrowcolor=COLORS["text"],
+                bordercolor=COLORS["line"],
+                lightcolor=COLORS["line"],
+                darkcolor=COLORS["line"],
+                padding=4,
+            )
+            style.map(
+                "Spacefoot.TCombobox",
+                fieldbackground=[("readonly", COLORS["input"]), ("focus", COLORS["input"])],
+                foreground=[("readonly", COLORS["text"]), ("focus", COLORS["text"])],
+                background=[("readonly", COLORS["panel_2"]), ("active", COLORS["brand"])],
+            )
+            self.option_add("*TCombobox*Listbox.background", COLORS["input"])
+            self.option_add("*TCombobox*Listbox.foreground", COLORS["text"])
+            self.option_add("*TCombobox*Listbox.selectBackground", COLORS["brand"])
+            self.option_add("*TCombobox*Listbox.selectForeground", COLORS["text"])
+        except Exception:
+            pass
 
     def apply_title_bar_theme(self) -> None:
         if platform.system() != "Windows":
@@ -858,24 +961,11 @@ class CollectorApp(tk.Tk):
         return item
 
     def combo(self, parent, variable, values):
-        combo = ttk.Combobox(parent, textvariable=variable, values=values, state="readonly")
+        combo = ttk.Combobox(parent, textvariable=variable, values=values, state="readonly", style="Spacefoot.TCombobox")
         return combo
 
     def button(self, parent, text, command, secondary=False):
-        return tk.Button(
-            parent,
-            text=text,
-            command=command,
-            bg=COLORS["panel_2"] if secondary else COLORS["brand"],
-            fg=COLORS["text"],
-            activebackground=COLORS["brand_2"],
-            activeforeground="#0c1511",
-            relief="flat",
-            padx=16,
-            pady=9,
-            font=("Segoe UI", 10, "bold"),
-            cursor="hand2",
-        )
+        return ThemedButton(parent, text, command, secondary=secondary)
 
     def auto_update_checkbutton(self, parent):
         return tk.Checkbutton(
@@ -1639,6 +1729,20 @@ class CollectorApp(tk.Tk):
         self.status.set(self.t("Prefill file loaded automatically. You can edit before submitting."))
         self.persist_draft()
         self.load_prefill()
+
+    def start_prefill_file_watch(self) -> None:
+        if self.prefill_watch_active:
+            return
+        self.prefill_watch_active = True
+        self.prefill_file_watch_tick()
+
+    def prefill_file_watch_tick(self) -> None:
+        self.auto_load_prefill_file()
+        profile_complete = not self.profile_missing_fields() and bool(self.access_token.get().strip())
+        if profile_complete:
+            self.prefill_watch_active = False
+            return
+        self.after(2500, self.prefill_file_watch_tick)
 
     def mark_newest_prefill_file_seen(self) -> None:
         path = newest_prefill_file()
