@@ -49,7 +49,7 @@ else:
 
 
 DEFAULT_API_URL = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
-COLLECTOR_VERSION = "0.1.16"
+COLLECTOR_VERSION = "0.1.17"
 COLLECTOR_BUILD_CHANNEL = "github-release"
 DRAFT_PATH = Path.home() / ".spacefoot_it_collector.json"
 PREFILL_FILE_MAX_AGE_SECONDS = 24 * 60 * 60
@@ -355,17 +355,18 @@ class CollectorApp(tk.Tk):
         self.step_frames: list[tk.Frame] = []
         draft = load_draft()
         launch_prefill = launch_prefill_from_args(sys.argv)
+        draft_profile = {} if launch_prefill.get("prefillCode") else draft
 
         self.api_url = tk.StringVar(value=launch_prefill.get("apiUrl") or draft.get("apiUrl") or DEFAULT_API_URL)
-        self.access_token = tk.StringVar(value=draft.get("accessToken") or "")
-        self.first_name = tk.StringVar(value=draft.get("firstName") or "")
-        self.last_name = tk.StringVar(value=draft.get("lastName") or "")
-        self.email = tk.StringVar(value=draft.get("email") or "")
-        self.team = tk.StringVar(value=draft.get("team") or "")
-        self.establishment = tk.StringVar(value=draft.get("establishment") or "")
-        self.proposed_team = tk.StringVar(value=draft.get("proposedTeam") or "")
-        self.proposed_establishment = tk.StringVar(value=draft.get("proposedEstablishment") or "")
-        self.comment = tk.StringVar(value=draft.get("comment") or "")
+        self.access_token = tk.StringVar(value=draft_profile.get("accessToken") or "")
+        self.first_name = tk.StringVar(value=draft_profile.get("firstName") or "")
+        self.last_name = tk.StringVar(value=draft_profile.get("lastName") or "")
+        self.email = tk.StringVar(value=draft_profile.get("email") or "")
+        self.team = tk.StringVar(value=draft_profile.get("team") or "")
+        self.establishment = tk.StringVar(value=draft_profile.get("establishment") or "")
+        self.proposed_team = tk.StringVar(value=draft_profile.get("proposedTeam") or "")
+        self.proposed_establishment = tk.StringVar(value=draft_profile.get("proposedEstablishment") or "")
+        self.comment = tk.StringVar(value=draft_profile.get("comment") or "")
         self.include_mac = tk.BooleanVar(value=bool(draft.get("includeMac", True)))
         self.language = tk.StringVar(value=draft.get("language") or "en")
         self.theme_preference_explicit = bool(draft.get("themePreferenceExplicit"))
@@ -390,8 +391,10 @@ class CollectorApp(tk.Tk):
         self.after(300, self.load_organization_background)
         if self.launch_prefill_requested:
             self.status.set(self.t("Prefill link received. Loading profile..."))
+            self.mark_newest_prefill_file_seen()
             self.after(450, self.load_prefill)
-        self.after(700, self.auto_load_prefill_file)
+        else:
+            self.after(700, self.auto_load_prefill_file)
 
     def t(self, text: str) -> str:
         return TRANSLATIONS.get(self.language.get(), {}).get(text, text)
@@ -1233,9 +1236,8 @@ class CollectorApp(tk.Tk):
         code = str(data.get("prefillCode") or "").strip()
         if not code:
             return
-        current_code = self.prefill_code.get().strip()
         already_loaded = str(path) == self.last_loaded_prefill_file and mtime <= self.last_loaded_prefill_mtime
-        if current_code == code and already_loaded:
+        if already_loaded:
             return
         if data.get("apiUrl"):
             self.api_url.set(str(data.get("apiUrl")))
@@ -1245,6 +1247,16 @@ class CollectorApp(tk.Tk):
         self.status.set(self.t("Prefill file loaded automatically. You can edit before submitting."))
         self.persist_draft()
         self.load_prefill()
+
+    def mark_newest_prefill_file_seen(self) -> None:
+        path = newest_prefill_file()
+        if not path:
+            return
+        try:
+            self.last_loaded_prefill_file = str(path)
+            self.last_loaded_prefill_mtime = path.stat().st_mtime
+        except OSError:
+            return
 
     def _load_prefill_background(self) -> None:
         try:
