@@ -2170,9 +2170,15 @@ tbody tr.is-selected {
   margin-top: 18px;
 }
 
+.detail-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.detail-actions button,
 .detail-enrich-button {
   width: 100%;
-  margin-top: 12px;
 }
 
 .charts-grid {

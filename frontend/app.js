@@ -378,6 +378,7 @@ const englishTranslations = {
   "Dernière remontée": "Last report",
   "Detail": "Details",
   "Selectionnez une machine": "Select a computer",
+  "Aucune machine selectionnee.": "No computer selected.",
   "Aucune machine s?lectionn?e.": "No computer selected.",
   "Valeur estimée": "Estimated value",
   "Valeur matérielle": "Hardware value",
@@ -466,6 +467,8 @@ const englishTranslations = {
   "Aucun token généré.": "No tokens generated.",
   "Révoquer": "Revoke",
   "Supprimer": "Delete",
+  "Supprimer cette machine": "Delete this device",
+  "Machine supprimée.": "Device deleted.",
   "Annuler": "Cancel",
   "Confirmer la suppression": "Confirm deletion",
   "Révoqué": "Revoked",
@@ -2502,6 +2505,7 @@ function renderDetail(device, scans, history = []) {
   const manufacturer = normalizeManufacturer(device.manufacturer, device.model);
   const family = detectDeviceFamily(manufacturer.manufacturerName, device.model);
   const canEditDevice = canPerformAction("DEVICE_EDIT");
+  const canDeleteDevice = canPerformAction("DEVICE_DELETE");
   const unassignedStatus = ["retired", "stock"].includes(device.status);
   const currentUserLabel = unassignedStatus
     ? translate("Aucun utilisateur actuel")
@@ -2559,8 +2563,11 @@ function renderDetail(device, scans, history = []) {
       ${canEditDevice ? `<form id="status-form" class="form-grid one scan-history">
         <label>${translate("Statut")}<select name="status">${Object.entries(labels).map(([value, label]) => `<option value="${value}" ${device.status === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>
         <button type="submit" class="primary">${translate("Mettre a jour")}</button>
-      </form>
-      <button id="enrich-device" class="secondary detail-enrich-button" type="button">${translate("Enrichir cette machine")}</button>` : ""}
+      </form>` : ""}
+      ${canEditDevice || canDeleteDevice ? `<div class="detail-actions">
+        ${canEditDevice ? `<button id="enrich-device" class="secondary detail-enrich-button" type="button">${translate("Enrichir cette machine")}</button>` : ""}
+        ${canDeleteDevice ? `<button id="delete-device" class="danger-button" type="button">${translate("Supprimer cette machine")}</button>` : ""}
+      </div>` : ""}
     </section>
     <section class="detail-tab-panel" data-detail-panel="hardware">
       ${detailRows([
@@ -2709,6 +2716,37 @@ function renderDetail(device, scans, history = []) {
     } finally {
       button.disabled = false;
       button.textContent = translate("Enrichir cette machine");
+    }
+  });
+
+  if ($("#delete-device")) $("#delete-device").addEventListener("click", async () => {
+    const label = device.hostname || device.serial_number || device.service_tag || device.id;
+    const confirmed = await confirmAction({
+      title: "Confirmer la suppression",
+      message: state.language === "en"
+        ? `Permanently delete "${label}" and its scan history? This action cannot be undone.`
+        : `Supprimer definitivement "${label}" et son historique de scan ? Cette action est irreversible.`,
+      confirmLabel: "Supprimer",
+    });
+    if (!confirmed) return;
+    const button = $("#delete-device");
+    button.disabled = true;
+    try {
+      await api(`/admin/devices/${device.id}`, { method: "DELETE" });
+      state.devices = state.devices.filter((item) => item.id !== device.id);
+      state.filtered = state.filtered.filter((item) => item.id !== device.id);
+      state.selectedDeviceId = "";
+      state.selectedDetail = null;
+      state.selectedScans = [];
+      state.selectedHistory = [];
+      $("#detail-title").textContent = translate("Selectionnez une machine");
+      $("#device-detail").textContent = translate("Aucune machine selectionnee.");
+      applyFilters();
+      toast("Machine supprimée.", "success");
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      button.disabled = false;
     }
   });
 }

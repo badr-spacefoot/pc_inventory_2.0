@@ -2308,7 +2308,65 @@ async function handleAdminDeviceDetail(request: Request, id: string) {
   return json(request, { device: { ...device, ...assignment, assignmentPeriods: assignmentPeriods ?? [] }, scans, priceHistory, history: history ?? [] });
 }
 
-async function recordExists(table: "teams" | "establishments" | "users", id: string | null) {
+async function handleAdminDeleteDevice(request: Request, id: string) {
+
+  const auth = await requireAction(request, "DEVICE_DELETE");
+
+  if (auth.response) return auth.response;
+
+  const { data: device, error: deviceError } = await supabase
+
+    .from("devices")
+
+    .select("id,hostname,serial_number,service_tag,manufacturer,model,status")
+
+    .eq("id", id)
+
+    .maybeSingle();
+
+  if (deviceError) throw deviceError;
+
+  if (!device) return badRequest(request, "Machine introuvable.", 404);
+
+  const { error } = await supabase.from("devices").delete().eq("id", id);
+
+  if (error) throw error;
+
+  await audit("device_deleted", "device", id, {
+
+    hostname: device.hostname,
+
+    serial_number: device.serial_number,
+
+    service_tag: device.service_tag,
+
+    manufacturer: device.manufacturer,
+
+    model: device.model,
+
+    status: device.status,
+
+    actor: auth.session?.username || "admin",
+
+  });
+
+  await notify("ADMIN_ACTION_COMPLETED", "Machine supprimee", `${safeString(device.hostname) || "Une machine"} a ete supprimee du parc.`, {
+
+    severity: "WARNING",
+
+    targetRole: "ADMIN",
+
+    relatedEntityType: "device",
+
+  });
+
+  return json(request, { deleted: true, id });
+
+}
+
+
+
+async function recordExists(table: "teams" | "establishments" | "users", id: string | null) {
   if (!id) return true;
   const { data, error } = await supabase.from(table).select("id").eq("id", id).maybeSingle();
   if (error) throw error;
@@ -2784,8 +2842,10 @@ Deno.serve(async (request) => {
     if (request.method === "POST" && assignmentMatch) return await handleAdminDeviceAssignment(request, assignmentMatch[1]);
     const historyNoteMatch = path.match(/\/admin\/devices\/([0-9a-f-]+)\/history-note/i);
     if (request.method === "POST" && historyNoteMatch) return await handleAdminDeviceHistoryNote(request, historyNoteMatch[1]);
-    const detailMatch = path.match(/\/admin\/devices\/([0-9a-f-]+)/i);
-    if (request.method === "GET" && detailMatch) return await handleAdminDeviceDetail(request, detailMatch[1]);
+    const detailMatch = path.match(/\/admin\/devices\/([0-9a-f-]+)$/i);
+    if (request.method === "DELETE" && detailMatch) return await handleAdminDeleteDevice(request, detailMatch[1]);
+
+    if (request.method === "GET" && detailMatch) return await handleAdminDeviceDetail(request, detailMatch[1]);
     return badRequest(request, "Route inconnue.", 404);
   } catch (error) {
     console.error(error);
