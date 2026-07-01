@@ -47,6 +47,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Run]
 Filename: "msiexec.exe"; Parameters: "/i ""{app}\dependencies\osquery.msi"" /quiet /norestart"; StatusMsg: "Installing osquery inventory engine..."; Flags: waituntilterminated runhidden; Check: ShouldInstallOsquery
+Filename: "{app}\spacefoot-it-collector-windows.exe"; Parameters: """{param:LaunchUrl|}"""; Flags: nowait runasoriginaluser; Check: ShouldLaunchAfterInstall
 
 [Code]
 function ShouldInstallOsquery(): Boolean;
@@ -56,4 +57,9 @@ begin
     not FileExists(ExpandConstant('{pf32}\osquery\osqueryi.exe')) and
     not RegKeyExists(HKLM, 'SOFTWARE\osquery') and
     not RegKeyExists(HKLM64, 'SOFTWARE\osquery');
+end;
+
+function ShouldLaunchAfterInstall(): Boolean;
+begin
+  Result := ExpandConstant('{param:LaunchAfterInstall|0}') = '1';
 end;

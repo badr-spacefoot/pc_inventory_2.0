@@ -15,6 +15,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import tkinter as tk
@@ -49,8 +50,9 @@ else:
 
 
 DEFAULT_API_URL = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
-COLLECTOR_VERSION = "0.1.18"
+COLLECTOR_VERSION = "0.1.19"
 COLLECTOR_BUILD_CHANNEL = "github-release"
+COLLECTOR_RELEASES_URL = "https://badr-spacefoot.github.io/pc_inventory_2.0/collector-releases.json"
 DRAFT_PATH = Path.home() / ".spacefoot_it_collector.json"
 PREFILL_FILE_MAX_AGE_SECONDS = 24 * 60 * 60
 DARK_COLORS = {
@@ -193,6 +195,11 @@ TRANSLATIONS = {
         "Load prefill": "Charger le pré-remplissage",
         "Prefilled from the web page. You can edit before submitting.": "Pré-rempli depuis la page web. Vous pouvez modifier avant l'envoi.",
         "Prefill link received. Loading profile...": "Lien de pré-remplissage reçu. Chargement du profil...",
+        "Checking collector version...": "Vérification de la version du collecteur...",
+        "Downloading collector update...": "Téléchargement de la mise à jour du collecteur...",
+        "Installing update. The collector will reopen automatically.": "Installation de la mise à jour. Le collecteur se rouvrira automatiquement.",
+        "Update check failed. Loading current collector.": "Vérification de mise à jour impossible. Chargement avec le collecteur actuel.",
+        "Update collector automatically before loading a prefilled profile": "Mettre à jour automatiquement le collecteur avant de charger un profil pré-rempli",
         "Collector purpose": "Objectif du collecteur",
         "The IT team uses this tool to keep the fleet inventory accurate. Review everything before sending.": "L'équipe IT utilise cet outil pour maintenir l'inventaire du parc à jour. Relisez tout avant l'envoi.",
         "Collected data": "Données collectées",
@@ -245,6 +252,32 @@ def clear_sensitive_draft() -> None:
     draft = load_draft()
     api_url = draft.get("apiUrl") or DEFAULT_API_URL
     save_draft({"apiUrl": api_url})
+
+
+def version_tuple(value: str) -> tuple[int, ...]:
+    text = str(value or "").strip().lower().replace("collector-v", "").lstrip("v")
+    parts = re.findall(r"\d+", text)
+    return tuple(int(part) for part in parts[:4]) or (0,)
+
+
+def is_newer_version(candidate: str, current: str) -> bool:
+    left = version_tuple(candidate)
+    right = version_tuple(current)
+    size = max(len(left), len(right))
+    return left + (0,) * (size - len(left)) > right + (0,) * (size - len(right))
+
+
+def fetch_json_url(url: str, timeout=10) -> dict:
+    request = urllib.request.Request(url, headers={"User-Agent": f"spacefoot-it-collector/{COLLECTOR_VERSION}"})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def download_file(url: str, destination: Path, timeout=60) -> None:
+    request = urllib.request.Request(url, headers={"User-Agent": f"spacefoot-it-collector/{COLLECTOR_VERSION}"})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        with destination.open("wb") as output:
+            shutil.copyfileobj(response, output)
 
 
 def api_request(api_url: str, path: str, method="GET", body=None, headers=None, timeout=25):
@@ -327,9 +360,11 @@ def launch_prefill_from_args(argv: list[str]) -> dict:
     result = {
         "prefillCode": str(args.prefill_code or "").strip(),
         "apiUrl": str(args.api_url or "").strip(),
+        "launchUrl": "",
     }
     launch_url = str(args.launch_url or "").strip()
     if launch_url.startswith("spacefoot-collector://"):
+        result["launchUrl"] = launch_url
         parsed = urllib.parse.urlparse(launch_url)
         params = urllib.parse.parse_qs(parsed.query)
         result["prefillCode"] = result["prefillCode"] or (params.get("prefillCode") or [""])[0].strip()
@@ -355,6 +390,7 @@ class CollectorApp(tk.Tk):
         self.step_frames: list[tk.Frame] = []
         draft = load_draft()
         launch_prefill = launch_prefill_from_args(sys.argv)
+        self.launch_prefill_url = str(launch_prefill.get("launchUrl") or "")
         draft_profile = {} if launch_prefill.get("prefillCode") else draft
 
         self.api_url = tk.StringVar(value=launch_prefill.get("apiUrl") or draft.get("apiUrl") or DEFAULT_API_URL)
@@ -368,6 +404,7 @@ class CollectorApp(tk.Tk):
         self.proposed_establishment = tk.StringVar(value=draft_profile.get("proposedEstablishment") or "")
         self.comment = tk.StringVar(value=draft_profile.get("comment") or "")
         self.include_mac = tk.BooleanVar(value=bool(draft.get("includeMac", True)))
+        self.auto_update = tk.BooleanVar(value=bool(draft.get("autoUpdate", True)))
         self.language = tk.StringVar(value=draft.get("language") or "en")
         self.theme_preference_explicit = bool(draft.get("themePreferenceExplicit"))
         self.theme_preference = tk.StringVar(
@@ -392,7 +429,7 @@ class CollectorApp(tk.Tk):
         if self.launch_prefill_requested:
             self.status.set(self.t("Prefill link received. Loading profile..."))
             self.mark_newest_prefill_file_seen()
-            self.after(450, self.load_prefill)
+            self.after(450, self.check_update_then_load_prefill)
         else:
             self.after(700, self.auto_load_prefill_file)
 
@@ -688,6 +725,18 @@ class CollectorApp(tk.Tk):
             cursor="hand2",
         )
 
+    def auto_update_checkbutton(self, parent):
+        return tk.Checkbutton(
+            parent,
+            text=self.t("Update collector automatically before loading a prefilled profile"),
+            variable=self.auto_update,
+            bg=COLORS["panel"],
+            fg=COLORS["text"],
+            activebackground=COLORS["panel"],
+            activeforeground=COLORS["text"],
+            selectcolor=COLORS["input"],
+        )
+
     def profile_missing_fields(self) -> list[str]:
         body = self.profile_body()
         required = [
@@ -821,8 +870,9 @@ class CollectorApp(tk.Tk):
                 activeforeground=COLORS["text"],
                 selectcolor=COLORS["input"],
             ).grid(row=4, column=1, sticky="w", pady=(6, 12))
-            self.button(advanced, self.t("Validate token"), self.validate_token, secondary=True).grid(row=5, column=0, sticky="w", pady=(8, 0))
-            tk.Label(advanced, textvariable=self.connection_status, fg=COLORS["brand_2"], bg=COLORS["panel"], font=("Segoe UI", 10, "bold")).grid(row=5, column=1, sticky="w", padx=(10, 0), pady=(8, 0))
+            self.auto_update_checkbutton(advanced).grid(row=5, column=1, sticky="w", pady=(0, 12))
+            self.button(advanced, self.t("Validate token"), self.validate_token, secondary=True).grid(row=6, column=0, sticky="w", pady=(8, 0))
+            tk.Label(advanced, textvariable=self.connection_status, fg=COLORS["brand_2"], bg=COLORS["panel"], font=("Segoe UI", 10, "bold")).grid(row=6, column=1, sticky="w", padx=(10, 0), pady=(8, 0))
 
         self.after(0, self.update_proposal_visibility)
         return frame
@@ -915,8 +965,9 @@ class CollectorApp(tk.Tk):
                 activeforeground=COLORS["text"],
                 selectcolor=COLORS["input"],
             ).grid(row=4, column=1, sticky="w", pady=(6, 12))
-            self.button(quick, self.t("Validate token"), self.validate_token, secondary=True).grid(row=5, column=0, sticky="w", pady=(8, 0))
-            tk.Label(quick, textvariable=self.connection_status, fg=COLORS["brand_2"], bg=COLORS["panel"], font=("Segoe UI", 10, "bold")).grid(row=5, column=1, sticky="w", padx=(10, 0), pady=(8, 0))
+            self.auto_update_checkbutton(quick).grid(row=5, column=1, sticky="w", pady=(0, 12))
+            self.button(quick, self.t("Validate token"), self.validate_token, secondary=True).grid(row=6, column=0, sticky="w", pady=(8, 0))
+            tk.Label(quick, textvariable=self.connection_status, fg=COLORS["brand_2"], bg=COLORS["panel"], font=("Segoe UI", 10, "bold")).grid(row=6, column=1, sticky="w", padx=(10, 0), pady=(8, 0))
 
         scan_card = self.card(frame)
         scan_card.grid(row=3, column=0, sticky="ew", pady=(14, 0))
@@ -1173,6 +1224,7 @@ class CollectorApp(tk.Tk):
         for variable in variables:
             variable.trace_add("write", lambda *_: self.persist_draft())
         self.include_mac.trace_add("write", lambda *_: self.persist_draft())
+        self.auto_update.trace_add("write", lambda *_: self.persist_draft())
         self.team.trace_add("write", lambda *_: self.update_proposal_visibility())
         self.establishment.trace_add("write", lambda *_: self.update_proposal_visibility())
 
@@ -1201,6 +1253,7 @@ class CollectorApp(tk.Tk):
             "proposedEstablishment": self.proposed_establishment.get().strip(),
             "comment": self.comment.get().strip(),
             "includeMac": self.include_mac.get(),
+            "autoUpdate": self.auto_update.get(),
             "language": self.language.get(),
             "themePreference": self.theme_preference.get(),
             "themePreferenceExplicit": self.theme_preference_explicit,
@@ -1218,6 +1271,59 @@ class CollectorApp(tk.Tk):
             return
         self.status.set(self.t("Load prefill"))
         threading.Thread(target=self._load_prefill_background, daemon=True).start()
+
+    def check_update_then_load_prefill(self) -> None:
+        if not self.auto_update.get() or platform.system() != "Windows":
+            self.load_prefill()
+            return
+        self.status.set(self.t("Checking collector version..."))
+        threading.Thread(target=self._check_update_then_load_prefill_background, daemon=True).start()
+
+    def _check_update_then_load_prefill_background(self) -> None:
+        try:
+            manifest = fetch_json_url(COLLECTOR_RELEASES_URL, timeout=8)
+            latest = str(manifest.get("latestVersion") or "")
+            windows_asset = (manifest.get("assets") or {}).get("windows") or {}
+            download_url = str(windows_asset.get("downloadUrl") or "")
+            file_name = str(windows_asset.get("fileName") or "spacefoot-it-collector-update.exe")
+            if not latest or not download_url or not is_newer_version(latest, COLLECTOR_VERSION):
+                self.after(0, self.load_prefill)
+                return
+            safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "-", file_name) or "spacefoot-it-collector-update.exe"
+            installer_path = Path(tempfile.gettempdir()) / safe_name
+            self.after(0, lambda: self.status.set(self.t("Downloading collector update...")))
+            download_file(download_url, installer_path, timeout=120)
+            self.after(0, lambda: self.install_update_and_relaunch(installer_path))
+        except Exception:
+            self.after(0, lambda: self.status.set(self.t("Update check failed. Loading current collector.")))
+            self.after(700, self.load_prefill)
+
+    def launch_url_for_reopen(self) -> str:
+        if self.launch_prefill_url:
+            return self.launch_prefill_url
+        params = urllib.parse.urlencode({
+            "prefillCode": self.prefill_code.get().strip(),
+            "apiUrl": self.api_url.get().strip(),
+        })
+        return f"spacefoot-collector://collect?{params}"
+
+    def install_update_and_relaunch(self, installer_path: Path) -> None:
+        self.status.set(self.t("Installing update. The collector will reopen automatically."))
+        launch_url = self.launch_url_for_reopen()
+        try:
+            subprocess.Popen([
+                str(installer_path),
+                "/SP-",
+                "/SILENT",
+                "/NORESTART",
+                "/CLOSEAPPLICATIONS",
+                "/LaunchAfterInstall=1",
+                f"/LaunchUrl={launch_url}",
+            ])
+            self.after(800, self.destroy)
+        except Exception as exc:
+            self.status.set(api_error_message(exc))
+            self.after(1000, self.load_prefill)
 
     def auto_load_prefill_file(self) -> None:
         path = newest_prefill_file()
