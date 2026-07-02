@@ -122,7 +122,6 @@ jobs:
           echo "Using osquery package: $osquery_pkg_url"
           curl -fsSL "$osquery_pkg_url" -o installer-assets/osquery.pkg
           rm -rf installer-assets/osquery-expanded
-          mkdir -p installer-assets/osquery-expanded
           pkgutil --expand-full installer-assets/osquery.pkg installer-assets/osquery-expanded
           osqueryi_path="$(find installer-assets/osquery-expanded -name osqueryi -type f | head -n 1)"
           if [ -z "$osqueryi_path" ]; then
