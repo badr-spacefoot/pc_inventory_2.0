@@ -2154,7 +2154,7 @@ function getSearchBlob(device) {
     device.first_name,
     device.last_name,
     device.email,
-    device.team_name,
+    activeTeamName(device),
     device.team_abbreviation,
     device.establishment_name,
     device.establishment_abbreviation,
@@ -2165,6 +2165,14 @@ function getSearchBlob(device) {
   ]
     .map(normalize)
     .join(" ");
+}
+
+function isDetachedInventoryStatus(status) {
+  return ["retired", "stock"].includes(status);
+}
+
+function activeTeamName(device) {
+  return isDetachedInventoryStatus(device.status) ? "" : device.team_name;
 }
 
 function applyFilters() {
@@ -2181,7 +2189,7 @@ function applyFilters() {
 
   state.filtered = state.devices.filter((device) => {
     if (search && !getSearchBlob(device).includes(search)) return false;
-    if (team && device.team_name !== team) return false;
+    if (team && activeTeamName(device) !== team) return false;
     if (establishment && device.establishment_name !== establishment) return false;
     if (os && device.os_name !== os) return false;
     if (model && device.model !== model) return false;
@@ -2295,7 +2303,7 @@ function renderValuation() {
     else priorities.Low += 1;
   });
 
-  renderBarChart('[data-valuation-chart="value-team"]', translate("Valeur par équipe"), sumBy(devices, (device) => device.team_name, estimatedValue), " EUR");
+  renderBarChart('[data-valuation-chart="value-team"]', translate("Valeur par équipe"), sumBy(devices, activeTeamName, estimatedValue), " EUR");
   renderBarChart('[data-valuation-chart="age"]', translate("Distribution des ages"), ageDistribution);
   renderBarChart('[data-valuation-chart="performance"]', translate("Distribution des performances"), performance);
   renderBarChart('[data-valuation-chart="priority"]', translate("Priorite de remplacement"), priorities);
@@ -2313,7 +2321,7 @@ function renderDevices() {
   const labels = currentStatusLabels();
   $("#devices-table").innerHTML = state.filtered
     .map((device) => {
-      const unassignedStatus = ["retired", "stock"].includes(device.status);
+      const unassignedStatus = isDetachedInventoryStatus(device.status);
       const userName = unassignedStatus
         ? translate("Aucun utilisateur actuel")
         : (`${device.first_name || ""} ${device.last_name || ""}`.trim() || "-");
@@ -2322,7 +2330,7 @@ function renderDevices() {
         <tr data-id="${device.id}" class="${device.id === state.selectedDeviceId ? "is-selected" : ""}">
           <td><strong class="cell-primary">${escapeHtml(device.hostname || "-")}</strong><small class="cell-secondary">${escapeHtml(device.serial_number || device.service_tag || "")}</small></td>
           <td><strong class="cell-primary">${escapeHtml(userName)}</strong><small class="cell-secondary">${escapeHtml(userEmail)}</small></td>
-          <td>${renderTeamBadge(device.team_name, device.team_id, device.team_color)}</td>
+          <td>${unassignedStatus ? "" : renderTeamBadge(device.team_name, device.team_id, device.team_color)}</td>
           <td>${renderLocationBadge(device)}</td>
           <td>${renderOsBadge(device)}</td>
           <td class="manufacturer-cell">${renderManufacturerBadge(device)}<small title="${escapeHtml(fullDeviceModel(device))}">${escapeHtml(shortDeviceModel(device))}</small></td>
@@ -2722,10 +2730,12 @@ function renderDetail(device, scans, history = []) {
   const family = detectDeviceFamily(manufacturer.manufacturerName, device.model);
   const canEditDevice = canPerformAction("DEVICE_EDIT");
   const canDeleteDevice = canPerformAction("DEVICE_DELETE");
-  const unassignedStatus = ["retired", "stock"].includes(device.status);
+  const unassignedStatus = isDetachedInventoryStatus(device.status);
   const currentUserLabel = unassignedStatus
     ? translate("Aucun utilisateur actuel")
     : (`${device.first_name || ""} ${device.last_name || ""}`.trim() || device.email || translate("Non renseigné"));
+  const currentTeamLabel = unassignedStatus ? "" : displayWithAbbreviation(device.team_name || "", device.team_abbreviation);
+  const currentTeamBadge = unassignedStatus ? "" : renderTeamBadge(device.team_name, device.team_id, device.team_color);
   const payload = latestScanPayload(scans);
   const memoryDetails = memorySummary(payload);
   const invoices = Array.isArray(device.invoices) ? device.invoices : [];
@@ -2740,13 +2750,15 @@ function renderDetail(device, scans, history = []) {
     && purchasePriceNumber > 0
     && Math.round(launchPriceNumber * 100) === Math.round(purchasePriceNumber * 100);
   const launchPriceDisplay = launchLooksLikeInvoice ? "" : money(device.estimated_launch_price);
+  const effectiveTeamId = unassignedStatus ? "" : device.team_id;
+  const effectiveUserId = unassignedStatus ? "" : device.assigned_user_id;
   const teamOptions = state.teams.map((team) =>
-    `<option value="${team.id}" ${device.team_id === team.id ? "selected" : ""}>${escapeHtml(displayWithAbbreviation(team.name, team.abbreviation))}</option>`).join("");
+    `<option value="${team.id}" ${effectiveTeamId === team.id ? "selected" : ""}>${escapeHtml(displayWithAbbreviation(team.name, team.abbreviation))}</option>`).join("");
   const establishmentOptions = state.establishments.map((site) =>
     `<option value="${site.id}" ${device.establishment_id === site.id ? "selected" : ""}>${escapeHtml(displayWithAbbreviation(site.name, site.abbreviation))}</option>`).join("");
   const userOptions = state.users.map((user) => {
     const name = `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.email;
-    return `<option value="${user.id}" ${device.assigned_user_id === user.id ? "selected" : ""}>${escapeHtml(name)} (${escapeHtml(user.email)})</option>`;
+    return `<option value="${user.id}" ${effectiveUserId === user.id ? "selected" : ""}>${escapeHtml(name)} (${escapeHtml(user.email)})</option>`;
   }).join("");
   const detailRows = (rows) => `<dl class="detail-list">${rows.map(([key, value]) => `<div><dt>${escapeHtml(translate(key))}</dt><dd>${escapeHtml(value === 0 ? 0 : (value || "-"))}</dd></div>`).join("")}</dl>`;
   const priceRows = (device.priceHistory || [])
@@ -2786,7 +2798,7 @@ function renderDetail(device, scans, history = []) {
         ["Etiquette service", device.service_tag],
         ["Dernière remontée", formatDate(device.last_seen_at)],
         ["Utilisateur", currentUserLabel],
-        ["Équipe", displayWithAbbreviation(device.team_name || "", device.team_abbreviation)],
+        ["Équipe", currentTeamLabel],
         ["Établissement", displayWithAbbreviation(device.establishment_name || "", device.establishment_abbreviation)],
       ])}
       ${canEditDevice ? `<form id="status-form" class="form-grid one scan-history">
@@ -2826,7 +2838,7 @@ function renderDetail(device, scans, history = []) {
       ${detailRows([["OS", device.os_name], ["Version OS", device.os_version], ["Dernière remontée", formatDate(device.last_seen_at)], ["Script", device.script_version]])}
     </section>
     <section class="detail-tab-panel" data-detail-panel="assignment">
-      <div class="assignment-summary">${renderTeamBadge(device.team_name, device.team_id, device.team_color)} ${renderLocationBadge(device)}</div>
+      <div class="assignment-summary">${currentTeamBadge} ${renderLocationBadge(device)}</div>
       ${canEditDevice ? `<form id="assignment-form" class="form-grid one assignment-form">
         <label>${translate("Équipe")}<select name="teamId"><option value="">${translate("Non renseigné")}</option>${teamOptions}</select></label>
         <label>${translate("Établissement")}<select name="establishmentId"><option value="">${translate("Non renseigné")}</option>${establishmentOptions}</select></label>
@@ -2986,12 +2998,14 @@ function renderDetail(device, scans, history = []) {
         state.devices[index] = {
           ...state.devices[index],
           status: result.device.status,
-          assigned_user_id: result.device.status === "retired" ? null : state.devices[index].assigned_user_id,
-          first_name: result.device.status === "retired" ? "" : state.devices[index].first_name,
-          last_name: result.device.status === "retired" ? "" : state.devices[index].last_name,
-          email: result.device.status === "retired" ? "" : state.devices[index].email,
-          team_id: result.device.status === "retired" ? null : state.devices[index].team_id,
-          team_name: result.device.status === "retired" ? "" : state.devices[index].team_name,
+          assigned_user_id: isDetachedInventoryStatus(result.device.status) ? null : state.devices[index].assigned_user_id,
+          first_name: isDetachedInventoryStatus(result.device.status) ? "" : state.devices[index].first_name,
+          last_name: isDetachedInventoryStatus(result.device.status) ? "" : state.devices[index].last_name,
+          email: isDetachedInventoryStatus(result.device.status) ? "" : state.devices[index].email,
+          team_id: isDetachedInventoryStatus(result.device.status) ? null : state.devices[index].team_id,
+          team_name: isDetachedInventoryStatus(result.device.status) ? "" : state.devices[index].team_name,
+          team_abbreviation: isDetachedInventoryStatus(result.device.status) ? "" : state.devices[index].team_abbreviation,
+          team_color: isDetachedInventoryStatus(result.device.status) ? "" : state.devices[index].team_color,
         };
       }
       await loadAdminData();
@@ -3100,7 +3114,7 @@ function renderBarChart(selector, title, data, suffix = "") {
 
 function renderCharts() {
   renderBarChart('[data-chart="establishments"]', "Machines par établissement", countBy(state.filtered, (d) => d.establishment_name));
-  renderBarChart('[data-chart="teams"]', "Machines par équipe", countBy(state.filtered, (d) => d.team_name));
+  renderBarChart('[data-chart="teams"]', "Machines par équipe", countBy(state.filtered, activeTeamName));
   renderBarChart('[data-chart="os"]', "OS", countBy(state.filtered, (d) => d.os_name));
   renderBarChart('[data-chart="stale"]', "Non mises a jour", {
     [`+${CONFIG.staleDays} jours`]: state.filtered.filter((d) => daysSince(d.last_seen_at) > CONFIG.staleDays).length,
@@ -3108,7 +3122,7 @@ function renderCharts() {
   });
   renderBarChart('[data-chart="age"]', "Anciennete du parc", countBy(state.filtered, ageBucket));
   renderBarChart('[data-chart="models"]', "Modeles presents", countBy(state.filtered, (d) => d.model));
-  renderBarChart('[data-chart="ram"]', "RAM moyenne par équipe", averageBy(state.filtered, (d) => d.team_name, (d) => d.ram_total_gb), " Go");
+  renderBarChart('[data-chart="ram"]', "RAM moyenne par équipe", averageBy(state.filtered, activeTeamName, (d) => d.ram_total_gb), " Go");
   renderBarChart('[data-chart="storage"]', "Stockage faible", {
     "< 15 Go": state.filtered.filter((d) => Number(d.storage_free_gb || 0) < 15).length,
     "15-30 Go": state.filtered.filter((d) => Number(d.storage_free_gb || 0) >= 15 && Number(d.storage_free_gb || 0) < 30).length,
@@ -3983,7 +3997,7 @@ async function loadAdminData() {
     state.cpuBenchmarkStats = null;
   });
   state.devices = data.devices || [];
-  const teams = [...new Set(state.devices.map((d) => d.team_name))];
+  const teams = [...new Set(state.devices.map(activeTeamName))];
   const establishments = [...new Set(state.devices.map((d) => d.establishment_name))];
   const os = [...new Set(state.devices.map((d) => d.os_name))];
   const models = [...new Set(state.devices.map((d) => d.model))];

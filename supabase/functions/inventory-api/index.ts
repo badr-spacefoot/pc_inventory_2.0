@@ -1463,7 +1463,9 @@ async function persistScan(request: Request, user: { id: string; team_id: string
     assigned_user_id: clearsAssignment
       ? null
       : updateAssignmentFromScan ? user.id : previousAssignment?.assigned_user_id ?? user.id,
-    team_id: updateAssignmentFromScan ? user.team_id : previousAssignment?.team_id ?? user.team_id,
+    team_id: clearsAssignment
+      ? null
+      : updateAssignmentFromScan ? user.team_id : previousAssignment?.team_id ?? user.team_id,
     establishment_id: updateAssignmentFromScan ? user.establishment_id : previousAssignment?.establishment_id ?? user.establishment_id,
     hostname: safeString(body.hostname, 160),
     os_name: safeString(body.osName, 80),
@@ -3283,12 +3285,10 @@ async function handleAdminDeviceStatus(request: Request, id: string) {
     .single();
   if (previousError) throw previousError;
   const values: Json = { status };
-  if (status === "retired" || status === "stock") {
-    values.assigned_user_id = null;
-  }
-  if (status === "retired") {
-    values.team_id = null;
-  }
+  if (status === "retired" || status === "stock") {
+    values.assigned_user_id = null;
+    values.team_id = null;
+  }
   const { data: device, error } = await supabase.from("devices").update(values).eq("id", id).select("id,status").single();
   if (error) throw error;
   const changedAt = new Date().toISOString();
