@@ -483,9 +483,7 @@ jobs:
           mkdir -p release-upload
           find release-assets -type f \( \
             -name "Spacefoot-IT-Collector-*-Setup.exe" -o \
-            -name "spacefoot-it-collector-linux" -o \
             -name "spacefoot-it-collector-linux-*.deb" -o \
-            -name "spacefoot-it-collector-macos" -o \
             -name "spacefoot-it-collector-macos.app.zip" -o \
             -name "spacefoot-it-collector-macos-*.app.zip" -o \
             -name "*.cer" \
@@ -500,12 +498,6 @@ jobs:
           version="${TAG_NAME#collector-v}"
           if [ -f "release-upload/Spacefoot-IT-Collector-${version}-Setup.exe" ]; then
             mv "release-upload/Spacefoot-IT-Collector-${version}-Setup.exe" "release-upload/spacefoot-it-collector-windows-${version}-setup.exe"
-          fi
-          if [ -f release-upload/spacefoot-it-collector-linux ]; then
-            mv release-upload/spacefoot-it-collector-linux "release-upload/spacefoot-it-collector-linux-${version}"
-          fi
-          if [ -f release-upload/spacefoot-it-collector-macos ]; then
-            mv release-upload/spacefoot-it-collector-macos "release-upload/spacefoot-it-collector-macos-${version}"
           fi
           if [ -f release-upload/spacefoot-it-collector-macos.app.zip ]; then
             mv release-upload/spacefoot-it-collector-macos.app.zip "release-upload/spacefoot-it-collector-macos-${version}.app.zip"
