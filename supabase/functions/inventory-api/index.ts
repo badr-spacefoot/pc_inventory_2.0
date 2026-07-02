@@ -124,8 +124,10 @@ function emailValidationError(email: string) {
 function titleCase(value: string) {
   return value
     .trim()
-    .toLowerCase()
-    .replace(/\b\p{L}/gu, (char) => char.toUpperCase());
+    .toLocaleLowerCase("fr-FR")
+    .replace(/(^|[\s'-])(\p{L})/gu, (_match, prefix: string, char: string) =>
+      `${prefix}${char.toLocaleUpperCase("fr-FR")}`
+    );
 }
 
 async function nextOrganizationColor(table: "teams" | "establishments") {
