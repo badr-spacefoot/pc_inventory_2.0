@@ -8,6 +8,8 @@ where valuation_method = 'invoice_backed'
   and (raw_data->'invoice'->>'purchase_price') ~ '^[0-9]+(\.[0-9]+)?$'
   and estimated_launch_price = (raw_data->'invoice'->>'purchase_price')::numeric;
 
+drop view if exists public.device_inventory_view;
+
 create or replace view public.device_inventory_view with (security_invoker = true) as
 select
   d.id,
