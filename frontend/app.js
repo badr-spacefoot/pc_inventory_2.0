@@ -2387,12 +2387,12 @@ function historyValueDisplay(event, side) {
 }
 
 function historyGroupKey(event) {
-  const groupedTypes = new Set(["HARDWARE_CHANGED", "OS_CHANGED", "IMPORT_UPDATE"]);
+  const groupedTypes = new Set(["HARDWARE_CHANGED", "OS_CHANGED", "DEVICE_RESET", "IMPORT_UPDATE"]);
   if (!groupedTypes.has(event.event_type) || event.field_name === "legacy_google_sheets_history") {
     return `single:${event.id}`;
   }
   return [
-    event.event_type,
+    "collection",
     event.changed_at,
     event.changed_by || "",
     event.source || "",
@@ -2410,6 +2410,14 @@ function groupHistoryEvents(history = []) {
     }
     return groups;
   }, []);
+}
+
+function historyGroupLabel(events) {
+  const types = new Set(events.map((event) => event.event_type));
+  if (types.size > 1 && events.some((event) => ["HARDWARE_CHANGED", "OS_CHANGED", "DEVICE_RESET"].includes(event.event_type))) {
+    return "COLLECTOR_UPDATE";
+  }
+  return events[0]?.event_type || "";
 }
 
 function renderHistoryChanges(events) {
@@ -2440,6 +2448,7 @@ function renderHistoryChanges(events) {
 function renderHistoryTimeline(history) {
   return groupHistoryEvents(history).map((group) => {
     const event = group.events[0];
+    const groupLabel = historyGroupLabel(group.events);
     const fieldSummary = group.events.length > 1
       ? `${group.events.length} ${state.language === "en" ? "fields updated" : "champs mis à jour"}`
       : (event.field_name ? historyFieldLabel(event.field_name) : "");
@@ -2448,7 +2457,7 @@ function renderHistoryTimeline(history) {
       <span class="history-marker"></span>
       <div>
         <time>${formatDate(event.changed_at)} (${formatRelativeDate(event.changed_at)})</time>
-        <strong>${escapeHtml(translate(historyLabel(event)))}</strong>
+        <strong>${escapeHtml(translate(historyLabel({ ...event, event_type: groupLabel })))}</strong>
         ${fieldSummary ? `<small>${escapeHtml(fieldSummary)}</small>` : ""}
         ${renderHistoryChanges(group.events)}
         ${group.events.map((item) => item.notes ? `<p>${escapeHtml(cleanImportedText(item.notes))}</p>` : "").join("")}
