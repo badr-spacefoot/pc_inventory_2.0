@@ -434,6 +434,7 @@ const englishTranslations = {
   "model_matched": "Model matched",
   "spec_estimate": "Spec estimate",
   "fallback_estimate": "Fallback estimate",
+  "invoice_backed": "Invoice backed",
   "business-laptop": "Business laptop",
   "workstation": "Workstation",
   "mini-pc": "Mini PC",
@@ -526,6 +527,27 @@ const englishTranslations = {
   "Réseau": "Network",
   "Affectation": "Assignment",
   "Historique": "History",
+  "Factures": "Invoices",
+  "Facture": "Invoice",
+  "Ajouter une facture": "Add invoice",
+  "Fournisseur": "Supplier",
+  "Numero facture": "Invoice number",
+  "Date facture": "Invoice date",
+  "Montant facture": "Invoice amount",
+  "Devise": "Currency",
+  "Lien facture": "Invoice link",
+  "Fichier facture": "Invoice file",
+  "Nom fichier": "File name",
+  "Notes facture": "Invoice notes",
+  "Ouvrir la facture": "Open invoice",
+  "Aucune facture.": "No invoice.",
+  "Facture ajoutee.": "Invoice added.",
+  "Facture supprimee.": "Invoice deleted.",
+  "Supprimer cette facture ?": "Delete this invoice?",
+  "Supprimer la facture": "Delete invoice",
+  "Prix achat reel": "Actual purchase price",
+  "Fichier trop volumineux. Maximum 10 Mo.": "File too large. Maximum 10 MB.",
+  "Lecture du fichier...": "Reading file...",
   "De": "From",
   "Vers": "To",
   "Aucun historique.": "No history.",
@@ -547,6 +569,8 @@ const englishTranslations = {
   "Reinitialisation detectee": "Reset detected",
   "Note administrateur": "Admin note",
   "Import mis a jour": "Import updated",
+  "Facture ajoutee": "Invoice added",
+  "Facture supprimee": "Invoice deleted",
   "Sections machine": "Device sections",
   "Scans": "Scans",
   "Prix marché": "Market prices",
@@ -645,7 +669,7 @@ function localizedEnrichmentValue(value) {
       keep: "Garder", watch: "Surveiller", replace: "Remplacer",
       market_verified: "Prix marche verifie", market_blended: "Prix marche mixte",
       model_matched: "Modele identifie", spec_estimate: "Estimation technique",
-      fallback_estimate: "Estimation prudente",
+      fallback_estimate: "Estimation prudente", invoice_backed: "Facture verifiee",
     },
     en: {
       completed: "Completed", partial: "Partial", failed: "Failed", pending: "Pending",
@@ -654,7 +678,7 @@ function localizedEnrichmentValue(value) {
       keep: "Keep", watch: "Monitor", replace: "Replace",
       market_verified: "Market verified", market_blended: "Market blended",
       model_matched: "Model matched", spec_estimate: "Spec estimate",
-      fallback_estimate: "Fallback estimate",
+      fallback_estimate: "Fallback estimate", invoice_backed: "Invoice backed",
     },
   };
   return labels[state.language]?.[value] || value;
@@ -1547,6 +1571,13 @@ function money(value) {
   return new Intl.NumberFormat(state.language === "en" ? "en-GB" : "fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(number);
 }
 
+function moneyWithCurrency(value, currency = "EUR") {
+  const number = Number(value || 0);
+  if (!number) return "-";
+  const safeCurrency = /^[A-Z]{3}$/.test(String(currency || "").toUpperCase()) ? String(currency).toUpperCase() : "EUR";
+  return new Intl.NumberFormat(state.language === "en" ? "en-GB" : "fr-FR", { style: "currency", currency: safeCurrency, maximumFractionDigits: 0 }).format(number);
+}
+
 function estimatedValue(device) {
   return Number(device.resale_value || device.estimated_current_value || device.current_market_price_avg || device.current_new_price || device.estimated_launch_price || 0);
 }
@@ -2303,7 +2334,7 @@ async function selectDevice(id) {
   $("#device-detail").innerHTML = `<p class="helper">Chargement de l'historique...</p>`;
   try {
     const detail = await api(`/admin/devices/${id}`);
-    renderDetail({ ...detail.device, priceHistory: detail.priceHistory || [] }, detail.scans || [], detail.history || []);
+    renderDetail({ ...detail.device, priceHistory: detail.priceHistory || [], invoices: detail.invoices || detail.device?.invoices || [] }, detail.scans || [], detail.history || []);
   } catch (error) {
     toast(error.message);
     renderDetail(device, [], []);
@@ -2328,6 +2359,8 @@ function historyLabel(event) {
     DEVICE_RESET: "Réinitialisation détectée",
     MANUAL_EDIT: "Note administrateur",
     IMPORT_UPDATE: "Import mis à jour",
+    INVOICE_ADDED: "Facture ajoutee",
+    INVOICE_DELETED: "Facture supprimee",
   };
   return labels[event.event_type] || event.event_type;
 }
@@ -2353,6 +2386,7 @@ function historyFieldLabel(fieldName) {
     assigned_user_id: "Propriétaire",
     owner_email: "Email propriétaire",
     status: "Statut",
+    invoice: "Facture",
     legacy_google_sheets_history: "Historique Google Sheets",
   };
   return translate(labels[fieldName] || fieldName);
@@ -2597,6 +2631,70 @@ function promptRetirementNote(device) {
   });
 }
 
+function renderInvoiceList(invoices = [], canEditDevice = false) {
+  if (!invoices.length) return `<p class="helper">${translate("Aucune facture.")}</p>`;
+  return `
+    <div class="invoice-list">
+      ${invoices.map((invoice) => `
+        <article class="invoice-item">
+          <div>
+            <strong>${escapeHtml(invoice.supplier || invoice.invoice_number || translate("Factures"))}</strong>
+            <small>${[
+              invoice.invoice_number ? `${translate("Numero facture")}: ${invoice.invoice_number}` : "",
+              invoice.invoice_date ? formatDate(invoice.invoice_date) : "",
+              invoice.purchase_price ? moneyWithCurrency(invoice.purchase_price, invoice.currency) : "",
+            ].filter(Boolean).map(escapeHtml).join(" - ")}</small>
+            ${invoice.file_name ? `<small>${escapeHtml(invoice.file_name)}</small>` : ""}
+            ${invoice.notes ? `<p>${escapeHtml(invoice.notes)}</p>` : ""}
+          </div>
+          <div class="invoice-actions">
+            ${invoice.file_url ? `<a class="secondary button-like" href="${escapeHtml(invoice.file_url)}" target="_blank" rel="noopener">${translate("Ouvrir la facture")}</a>` : ""}
+            ${canEditDevice ? `<button class="danger-button invoice-delete" type="button" data-invoice-id="${escapeHtml(invoice.id)}">${translate("Supprimer la facture")}</button>` : ""}
+          </div>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+const maxInvoiceUploadBytes = 10 * 1024 * 1024;
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      const result = String(reader.result || "");
+      resolve(result.includes(",") ? result.split(",").pop() : result);
+    });
+    reader.addEventListener("error", () => reject(reader.error || new Error("File read failed")));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function invoiceFormPayload(form) {
+  const values = Object.fromEntries(new FormData(form));
+  const file = form.elements.invoiceFile?.files?.[0] || null;
+  if (file && file.size > maxInvoiceUploadBytes) {
+    throw new Error(translate("Fichier trop volumineux. Maximum 10 Mo."));
+  }
+  const payload = {
+    supplier: String(values.supplier || "").trim(),
+    invoiceNumber: String(values.invoiceNumber || "").trim(),
+    invoiceDate: String(values.invoiceDate || "").trim(),
+    purchasePrice: String(values.purchasePrice || "").trim(),
+    currency: String(values.currency || "EUR").trim().toUpperCase(),
+    fileName: String(values.fileName || file?.name || "").trim(),
+    fileUrl: String(values.fileUrl || "").trim(),
+    notes: String(values.notes || "").trim(),
+  };
+  if (file) {
+    payload.fileDataBase64 = await readFileAsBase64(file);
+    payload.fileMimeType = file.type || "application/octet-stream";
+    payload.fileSizeBytes = file.size;
+  }
+  return payload;
+}
+
 function renderDetail(device, scans, history = []) {
   state.selectedDetail = device;
   state.selectedScans = scans;
@@ -2613,6 +2711,7 @@ function renderDetail(device, scans, history = []) {
     : (`${device.first_name || ""} ${device.last_name || ""}`.trim() || device.email || translate("Non renseigné"));
   const payload = latestScanPayload(scans);
   const memoryDetails = memorySummary(payload);
+  const invoices = Array.isArray(device.invoices) ? device.invoices : [];
   const teamOptions = state.teams.map((team) =>
     `<option value="${team.id}" ${device.team_id === team.id ? "selected" : ""}>${escapeHtml(displayWithAbbreviation(team.name, team.abbreviation))}</option>`).join("");
   const establishmentOptions = state.establishments.map((site) =>
@@ -2645,6 +2744,7 @@ function renderDetail(device, scans, history = []) {
       <button class="detail-tab" type="button" data-detail-tab="os">${translate("OS")}</button>
       <button class="detail-tab" type="button" data-detail-tab="network">${translate("Réseau")}</button>
       <button class="detail-tab" type="button" data-detail-tab="assignment">${translate("Affectation")}</button>
+      <button class="detail-tab" type="button" data-detail-tab="invoices">${translate("Factures")}</button>
       <button class="detail-tab" type="button" data-detail-tab="lifecycle">${translate("Cycle de vie")}</button>
       <button class="detail-tab" type="button" data-detail-tab="history">${translate("Historique")}</button>
     </nav>
@@ -2708,6 +2808,21 @@ function renderDetail(device, scans, history = []) {
         <button type="submit" class="primary">${translate("Enregistrer les affectations")}</button>
       </form>` : ""}
     </section>
+    <section class="detail-tab-panel" data-detail-panel="invoices">
+      ${renderInvoiceList(invoices, canEditDevice)}
+      ${canEditDevice ? `<form id="invoice-form" class="form-grid invoice-form">
+        <label>${translate("Fournisseur")}<input name="supplier" maxlength="160" placeholder="Apple, Dell, LDLC..." /></label>
+        <label>${translate("Numero facture")}<input name="invoiceNumber" maxlength="120" /></label>
+        <label>${translate("Date facture")}<input name="invoiceDate" type="date" /></label>
+        <label>${translate("Montant facture")}<input name="purchasePrice" type="number" min="0" step="0.01" /></label>
+        <label>${translate("Devise")}<input name="currency" maxlength="3" value="EUR" /></label>
+        <label>${translate("Nom fichier")}<input name="fileName" maxlength="255" placeholder="facture-macbook.pdf" /></label>
+        <label>${translate("Fichier facture")}<input name="invoiceFile" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,image/*,application/pdf" /></label>
+        <label class="wide">${translate("Lien facture")}<input name="fileUrl" type="url" maxlength="2000" placeholder="https://..." /></label>
+        <label class="wide">${translate("Notes facture")}<textarea name="notes" rows="3" maxlength="1000"></textarea></label>
+        <button type="submit" class="primary">${translate("Ajouter une facture")}</button>
+      </form>` : ""}
+    </section>
     <section class="detail-tab-panel" data-detail-panel="history">
       <form id="history-note-form" class="history-note-form">
         <textarea name="notes" rows="3" maxlength="2000" placeholder="${escapeHtml(translate("Ajouter une note a l'historique..."))}" required></textarea>
@@ -2759,6 +2874,53 @@ function renderDetail(device, scans, history = []) {
     } catch (error) {
       toast(error.message, "error");
     }
+  });
+
+  if ($("#invoice-form")) $("#invoice-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const button = event.currentTarget.querySelector("button[type='submit']");
+    const originalText = button.textContent;
+    button.disabled = true;
+    try {
+      button.textContent = translate("Lecture du fichier...");
+      const payload = await invoiceFormPayload(event.currentTarget);
+      await api(`/admin/devices/${device.id}/invoices`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      await loadAdminData();
+      await selectDevice(device.id);
+      activateDetailTab("invoices");
+      toast("Facture ajoutee.", "success");
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+  });
+
+  $$(".invoice-delete").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const confirmed = await confirmAction({
+        title: "Supprimer la facture",
+        message: translate("Supprimer cette facture ?"),
+        confirmLabel: "Supprimer",
+      });
+      if (!confirmed) return;
+      button.disabled = true;
+      try {
+        await api(`/admin/devices/${device.id}/invoices/${button.dataset.invoiceId}`, { method: "DELETE" });
+        await loadAdminData();
+        await selectDevice(device.id);
+        activateDetailTab("invoices");
+        toast("Facture supprimee.", "success");
+      } catch (error) {
+        toast(error.message, "error");
+      } finally {
+        button.disabled = false;
+      }
+    });
   });
 
   $("#history-note-form").addEventListener("submit", async (event) => {

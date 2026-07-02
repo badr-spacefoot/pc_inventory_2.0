@@ -30,6 +30,12 @@ const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const adminPassword = Deno.env.get("ADMIN_PASSWORD") ?? "";
 const adminSessionSecret = Deno.env.get("ADMIN_SESSION_SECRET") ?? "";
 const collectionAccessToken = Deno.env.get("COLLECTION_ACCESS_TOKEN") ?? "";
+const invoiceStorageBucket = Deno.env.get("INVOICE_STORAGE_BUCKET") ?? "device-invoices";
+
+const maxInvoiceFileBytes = 10 * 1024 * 1024;
+
+const allowedInvoiceMimeTypes = new Set(["application/pdf", "image/png", "image/jpeg", "image/webp", "image/heic", "image/heif"]);
+
 const defaultAllowedOrigins = "https://badr-spacefoot.github.io,http://localhost:8080,http://127.0.0.1:8080";
 
 const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ?? defaultAllowedOrigins).split(",").map((origin) => origin.trim());
@@ -2414,7 +2420,24 @@ async function handleAdminDeviceDetail(request: Request, id: string) {
     .eq("device_id", id)
     .order("collected_at", { ascending: false })
     .limit(20);
-  if (priceHistoryError) throw priceHistoryError;
+  if (priceHistoryError) throw priceHistoryError;
+
+  const { data: invoices, error: invoicesError } = await supabase
+
+    .from("device_invoices")
+
+    .select("id,invoice_number,supplier,invoice_date,purchase_price,currency,file_name,file_url,file_path,file_mime_type,file_size_bytes,notes,created_by,created_at,updated_at")
+
+    .eq("device_id", id)
+
+    .order("invoice_date", { ascending: false, nullsFirst: false })
+
+    .order("created_at", { ascending: false })
+
+    .limit(50);
+
+  if (invoicesError) throw invoicesError;
+  const signedInvoices = await signInvoiceRows(invoices ?? []);
   const { data: history, error: historyError } = await supabase
     .from("device_history")
     .select("id,event_type,field_name,old_value,new_value,changed_by,source,notes,changed_at,related_user_id,related_team_id,related_establishment_id")
@@ -2429,8 +2452,8 @@ async function handleAdminDeviceDetail(request: Request, id: string) {
     .order("started_at", { ascending: false })
     .limit(100);
   if (periodsError) throw periodsError;
-  return json(request, { device: { ...device, ...assignment, assignmentPeriods: assignmentPeriods ?? [] }, scans, priceHistory, history: history ?? [] });
-}
+  return json(request, { device: { ...device, ...assignment, assignmentPeriods: assignmentPeriods ?? [], invoices: signedInvoices }, scans, priceHistory, invoices: signedInvoices, history: history ?? [] });
+}
 
 async function handleAdminDeleteDevice(request: Request, id: string) {
 
@@ -2490,7 +2513,7 @@ async function handleAdminDeleteDevice(request: Request, id: string) {
 
 
 
-async function recordExists(table: "teams" | "establishments" | "users", id: string | null) {
+async function recordExists(table: "teams" | "establishments" | "users" | "devices", id: string | null) {
   if (!id) return true;
   const { data, error } = await supabase.from(table).select("id").eq("id", id).maybeSingle();
   if (error) throw error;
@@ -2804,7 +2827,398 @@ async function handleAdminEnrich(request: Request) {
   return json(request, { ok: failed === 0, enriched, failed, skipped, results });
 }
 
-async function handleAdminDeviceStatus(request: Request, id: string) {
+function invoiceDateValue(value: unknown) {
+
+  const text = safeString(value, 10);
+
+  if (!text) return null;
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return "";
+
+  const time = new Date(`${text}T00:00:00Z`).getTime();
+
+  return Number.isFinite(time) ? text : "";
+
+}
+
+
+
+function invoiceSummary(invoice: Json) {
+
+  return [
+
+    safeString(invoice.supplier),
+
+    safeString(invoice.invoice_number) ? `#${safeString(invoice.invoice_number)}` : "",
+
+    safeString(invoice.purchase_price) ? `${safeString(invoice.purchase_price)} ${safeString(invoice.currency) || "EUR"}` : "",
+
+    safeString(invoice.invoice_date),
+
+  ].filter(Boolean).join(" - ") || "Facture";
+
+}
+
+
+
+async function syncLatestInvoiceValuation(deviceId: string) {
+
+  const { data: invoice, error: invoiceError } = await supabase
+
+    .from("device_invoices")
+
+    .select("id,invoice_date,purchase_price,currency,supplier,invoice_number")
+
+    .eq("device_id", deviceId)
+
+    .not("purchase_price", "is", null)
+
+    .order("invoice_date", { ascending: false, nullsFirst: false })
+
+    .order("created_at", { ascending: false })
+
+    .limit(1)
+
+    .maybeSingle();
+
+  if (invoiceError) throw invoiceError;
+
+  const purchasePrice = safeNumber(invoice?.purchase_price);
+
+  if (!invoice || purchasePrice === null || purchasePrice <= 0) return;
+
+  const invoiceYear = safeString(invoice.invoice_date) ? new Date(`${safeString(invoice.invoice_date)}T00:00:00Z`).getUTCFullYear() : new Date().getUTCFullYear();
+
+  const age = Math.max(0, new Date().getUTCFullYear() - invoiceYear);
+
+  const { data: existing, error: existingError } = await supabase
+
+    .from("hardware_enrichment")
+
+    .select("raw_data,valuation_reasons,notes,confidence_score,price_confidence_score")
+
+    .eq("device_id", deviceId)
+
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+
+  const existingReasons = Array.isArray(existing?.valuation_reasons) ? existing?.valuation_reasons : [];
+
+  const valuationReasons = [
+
+    "method:invoice_backed",
+
+    "confidence:A",
+
+    `invoice:${safeString(invoice.id)}`,
+
+    `purchase_price:${purchasePrice}`,
+
+    ...existingReasons.filter((reason) => !String(reason).startsWith("method:") && !String(reason).startsWith("confidence:") && !String(reason).startsWith("invoice:") && !String(reason).startsWith("purchase_price:")),
+
+  ];
+
+  const rawData = existing?.raw_data && typeof existing.raw_data === "object" && !Array.isArray(existing.raw_data)
+
+    ? (existing.raw_data as Json)
+
+    : {};
+
+  const note = "Purchase price backed by invoice. Book value uses a 4-year straight-line depreciation model.";
+  const existingNotes = safeString(existing?.notes, 1000);
+
+  const values: Json = {
+
+    device_id: deviceId,
+
+    estimated_launch_price: purchasePrice,
+
+    book_value: bookValueEstimate(purchasePrice, age),
+
+    valuation_method: "invoice_backed",
+
+    valuation_confidence_label: "A",
+
+    valuation_reasons: valuationReasons,
+
+    confidence_score: 100,
+
+    price_confidence_score: 100,
+
+    enrichment_status: "completed",
+
+    enrichment_source: "invoice",
+
+    notes: existingNotes.includes(note) ? existingNotes : (existingNotes ? `${existingNotes} ${note}` : note),
+
+    last_enriched_at: new Date().toISOString(),
+
+    raw_data: {
+
+      ...rawData,
+
+      invoice: {
+
+        id: safeString(invoice.id),
+
+        invoice_date: safeString(invoice.invoice_date),
+
+        purchase_price: purchasePrice,
+
+        currency: safeString(invoice.currency) || "EUR",
+
+        supplier: safeString(invoice.supplier),
+
+        invoice_number: safeString(invoice.invoice_number),
+
+      },
+
+    },
+
+  };
+
+  const { error } = await supabase.from("hardware_enrichment").upsert(values, { onConflict: "device_id" });
+
+  if (error) throw error;
+
+}
+
+function sanitizeInvoiceFileName(name: string) {
+  const cleaned = name
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 160);
+  return cleaned || "invoice-file";
+}
+
+function decodeBase64File(value: unknown) {
+  const raw = String(value || "").trim();
+  if (!raw) return new Uint8Array();
+  const base64 = raw.includes(",") ? raw.split(",").pop() || "" : raw;
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
+
+async function createSignedInvoiceUrl(path: unknown) {
+  const filePath = safeString(path, 2000);
+  if (!filePath) return "";
+  const { data, error } = await supabase.storage.from(invoiceStorageBucket).createSignedUrl(filePath, 60 * 60);
+  if (error) return "";
+  return data?.signedUrl || "";
+}
+
+async function signInvoiceRows(invoices: Json[] = []) {
+  return await Promise.all((invoices ?? []).map(async (invoice) => ({
+    ...invoice,
+    file_url: safeString(invoice.file_path, 2000) ? await createSignedInvoiceUrl(invoice.file_path) : invoice.file_url,
+  })));
+}
+
+async function uploadInvoiceFile(deviceId: string, body: Json) {
+  if (!body.fileDataBase64) return {};
+  const bytes = decodeBase64File(body.fileDataBase64);
+  const declaredSize = safeNumber(body.fileSizeBytes ?? body.file_size_bytes);
+  if (!bytes.length) return {};
+  if (bytes.byteLength > maxInvoiceFileBytes || (declaredSize !== null && declaredSize > maxInvoiceFileBytes)) {
+    throw new Error("Fichier facture trop volumineux. Maximum 10 Mo.");
+  }
+  const mimeType = safeString(body.fileMimeType ?? body.file_mime_type, 120) || "application/octet-stream";
+  if (!allowedInvoiceMimeTypes.has(mimeType)) {
+    throw new Error("Format de facture non autorise. Utilisez PDF, PNG, JPG, WEBP ou HEIC.");
+  }
+  const fileName = sanitizeInvoiceFileName(safeString(body.fileName ?? body.file_name, 255));
+  const filePath = `${deviceId}/${crypto.randomUUID()}-${fileName}`;
+  const { error } = await supabase.storage.from(invoiceStorageBucket).upload(filePath, bytes, {
+    contentType: mimeType,
+    upsert: false,
+  });
+  if (error) throw error;
+  return {
+    file_name: fileName,
+    file_path: filePath,
+    file_mime_type: mimeType,
+    file_size_bytes: bytes.byteLength,
+  };
+}
+
+
+
+async function handleAdminDeviceInvoice(request: Request, id: string) {
+
+  const auth = await requireAction(request, "DEVICE_EDIT");
+
+  if (auth.response) return auth.response;
+
+  if (!(await recordExists("devices", id))) return badRequest(request, "Machine introuvable.", 404);
+
+  const body = await request.json().catch(() => ({}));
+
+  const invoiceDate = invoiceDateValue(body.invoiceDate ?? body.invoice_date);
+
+  if (invoiceDate === "") return badRequest(request, "Date de facture invalide. Format attendu: YYYY-MM-DD.");
+
+  const purchasePrice = safeNumber(body.purchasePrice ?? body.purchase_price);
+
+  if (purchasePrice !== null && purchasePrice < 0) return badRequest(request, "Montant de facture invalide.");
+
+  const currency = (safeString(body.currency, 3) || "EUR").toUpperCase();
+
+  if (!/^[A-Z]{3}$/.test(currency)) return badRequest(request, "Devise invalide.");
+
+  const fileUrl = safeString(body.fileUrl ?? body.file_url, 2000);
+
+  if (fileUrl && !/^https?:\/\//i.test(fileUrl)) return badRequest(request, "Lien facture invalide. Utilisez une URL http ou https.");
+
+  let uploadedFile: Json = {};
+  try {
+    uploadedFile = await uploadInvoiceFile(id, body);
+  } catch (error) {
+    return badRequest(request, error instanceof Error ? error.message : "Upload de facture impossible.", 400);
+  }
+
+  const values: Json = {
+
+    device_id: id,
+
+    invoice_number: safeString(body.invoiceNumber ?? body.invoice_number, 120) || null,
+
+    supplier: safeString(body.supplier, 160) || null,
+
+    invoice_date: invoiceDate,
+
+    purchase_price: purchasePrice,
+
+    currency,
+
+    file_name: uploadedFile.file_name || safeString(body.fileName ?? body.file_name, 255) || null,
+
+    file_url: fileUrl || null,
+
+    file_path: uploadedFile.file_path || null,
+
+    file_mime_type: uploadedFile.file_mime_type || null,
+
+    file_size_bytes: uploadedFile.file_size_bytes || null,
+
+    notes: safeString(body.notes, 1000) || null,
+
+    created_by: auth.session?.username || "admin",
+
+  };
+
+  if (!values.invoice_number && !values.supplier && !values.invoice_date && purchasePrice === null && !values.file_url && !values.file_path && !values.notes) {
+
+    return badRequest(request, "Renseignez au moins une information de facture.");
+
+  }
+
+  const { data, error } = await supabase.from("device_invoices").insert(values).select("*").single();
+
+  if (error) throw error;
+
+  await syncLatestInvoiceValuation(id);
+
+  await appendDeviceHistory([{
+
+    device_id: id,
+
+    event_type: "INVOICE_ADDED",
+
+    field_name: "invoice",
+
+    old_value: null,
+
+    new_value: invoiceSummary(data),
+
+    changed_by: auth.session?.username || "admin",
+
+    source: "MANUAL_ADMIN",
+
+    notes: safeString(values.notes),
+
+    changed_at: new Date().toISOString(),
+
+  }]);
+
+  await audit("device_invoice_added", "device", id, { invoice_id: data.id, purchase_price: purchasePrice, currency });
+
+  const signedInvoice = (await signInvoiceRows([data]))[0];
+
+  return json(request, { invoice: signedInvoice });
+
+}
+
+
+
+async function handleAdminDeleteDeviceInvoice(request: Request, deviceId: string, invoiceId: string) {
+
+  const auth = await requireAction(request, "DEVICE_EDIT");
+
+  if (auth.response) return auth.response;
+
+  const { data: invoice, error: readError } = await supabase
+
+    .from("device_invoices")
+
+    .select("*")
+
+    .eq("id", invoiceId)
+
+    .eq("device_id", deviceId)
+
+    .maybeSingle();
+
+  if (readError) throw readError;
+
+  if (!invoice) return badRequest(request, "Facture introuvable.", 404);
+
+  const { error } = await supabase.from("device_invoices").delete().eq("id", invoiceId).eq("device_id", deviceId);
+
+  if (error) throw error;
+
+  if (invoice.file_path) {
+    await supabase.storage.from(invoiceStorageBucket).remove([safeString(invoice.file_path, 2000)]);
+  }
+
+  await syncLatestInvoiceValuation(deviceId);
+
+  await appendDeviceHistory([{
+
+    device_id: deviceId,
+
+    event_type: "INVOICE_DELETED",
+
+    field_name: "invoice",
+
+    old_value: invoiceSummary(invoice),
+
+    new_value: null,
+
+    changed_by: auth.session?.username || "admin",
+
+    source: "MANUAL_ADMIN",
+
+    notes: "Invoice metadata removed.",
+
+    changed_at: new Date().toISOString(),
+
+  }]);
+
+  await audit("device_invoice_deleted", "device", deviceId, { invoice_id: invoiceId });
+
+  return json(request, { ok: true });
+
+}
+
+
+
+async function handleAdminDeviceStatus(request: Request, id: string) {
   const auth = await requireAction(request, "DEVICE_EDIT");
   if (auth.response) return auth.response;
   const body = await request.json().catch(() => ({}));
@@ -2966,6 +3380,12 @@ Deno.serve(async (request) => {
     if (request.method === "POST" && assignmentMatch) return await handleAdminDeviceAssignment(request, assignmentMatch[1]);
     const historyNoteMatch = path.match(/\/admin\/devices\/([0-9a-f-]+)\/history-note/i);
     if (request.method === "POST" && historyNoteMatch) return await handleAdminDeviceHistoryNote(request, historyNoteMatch[1]);
+    const invoiceMatch = path.match(/\/admin\/devices\/([0-9a-f-]+)\/invoices$/i);
+    if (request.method === "POST" && invoiceMatch) return await handleAdminDeviceInvoice(request, invoiceMatch[1]);
+
+    const deleteInvoiceMatch = path.match(/\/admin\/devices\/([0-9a-f-]+)\/invoices\/([0-9a-f-]+)$/i);
+    if (request.method === "DELETE" && deleteInvoiceMatch) return await handleAdminDeleteDeviceInvoice(request, deleteInvoiceMatch[1], deleteInvoiceMatch[2]);
+
     const detailMatch = path.match(/\/admin\/devices\/([0-9a-f-]+)$/i);
     if (request.method === "DELETE" && detailMatch) return await handleAdminDeleteDevice(request, detailMatch[1]);
 

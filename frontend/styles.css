@@ -2070,6 +2070,58 @@ tbody tr.is-selected {
   gap: 8px;
 }
 
+.invoice-list {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.invoice-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+}
+
+.invoice-item strong,
+.invoice-item small {
+  display: block;
+}
+
+.invoice-item p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.invoice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.button-like {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 12px;
+  text-decoration: none;
+}
+
+.invoice-form {
+  margin-top: 14px;
+}
+
+.invoice-form .wide {
+  grid-column: 1 / -1;
+}
+
 .history-note-form {
   display: grid;
   gap: 8px;

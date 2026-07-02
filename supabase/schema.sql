@@ -345,6 +345,25 @@ create table if not exists public.market_price_history (
   collected_at timestamptz not null default now()
 );
 
+create table if not exists public.device_invoices (
+  id uuid primary key default gen_random_uuid(),
+  device_id uuid not null references public.devices(id) on delete cascade,
+  invoice_number text,
+  supplier text,
+  invoice_date date,
+  purchase_price numeric check (purchase_price is null or purchase_price >= 0),
+  currency text not null default 'EUR',
+  file_name text,
+  file_url text,
+  file_path text,
+  file_mime_type text,
+  file_size_bytes bigint check (file_size_bytes is null or file_size_bytes >= 0),
+  notes text,
+  created_by text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create index if not exists idx_devices_last_seen_at on public.devices(last_seen_at desc);
 create index if not exists idx_devices_status on public.devices(status);
 create index if not exists idx_devices_serial_number on public.devices(serial_number);
@@ -376,6 +395,7 @@ create index if not exists idx_hardware_enrichment_cpu_score on public.hardware_
 create index if not exists idx_hardware_enrichment_priority on public.hardware_enrichment(replacement_priority desc);
 create index if not exists idx_cpu_benchmarks_normalized_name on public.cpu_benchmarks(normalized_name);
 create index if not exists idx_market_price_history_device_collected on public.market_price_history(device_id, collected_at desc);
+create index if not exists idx_device_invoices_device_date on public.device_invoices(device_id, invoice_date desc nulls last, created_at desc);
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -419,6 +439,11 @@ for each row execute function public.set_updated_at();
 drop trigger if exists set_devices_updated_at on public.devices;
 create trigger set_devices_updated_at
 before update on public.devices
+for each row execute function public.set_updated_at();
+
+drop trigger if exists set_device_invoices_updated_at on public.device_invoices;
+create trigger set_device_invoices_updated_at
+before update on public.device_invoices
 for each row execute function public.set_updated_at();
 
 create or replace view public.device_inventory_view with (security_invoker = true) as
@@ -518,6 +543,20 @@ alter table public.device_assignment_periods enable row level security;
 alter table public.hardware_enrichment enable row level security;
 alter table public.market_price_history enable row level security;
 alter table public.cpu_benchmarks enable row level security;
+alter table public.device_invoices enable row level security;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'device-invoices',
+  'device-invoices',
+  false,
+  10485760,
+  array['application/pdf', 'image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/heif']
+)
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
 
 -- Les lectures/ecritures applicatives passent par la Edge Function avec la service role key.
 -- Aucune policy publique n'est creee afin d'eviter l'exposition depuis GitHub Pages.

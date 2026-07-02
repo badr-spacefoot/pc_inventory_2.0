@@ -1,4 +1,5 @@
 .tools/
+.pnpm-store/
 *.zip
 *.log
 *.spec

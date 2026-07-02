@@ -50,7 +50,7 @@ jobs:
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
           ADMIN_SESSION_SECRET: ${{ secrets.ADMIN_SESSION_SECRET }}
           COLLECTION_ACCESS_TOKEN: ${{ secrets.COLLECTION_ACCESS_TOKEN }}
-          ALLOWED_ORIGINS: https://badr-spacefoot.github.io
+          ALLOWED_ORIGINS: https://badr-spacefoot.github.io,http://localhost:8080,http://127.0.0.1:8080
           ENRICHMENT_CACHE_DAYS: "90"
           EBAY_BROWSE_API_TOKEN: ${{ secrets.EBAY_BROWSE_API_TOKEN }}
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
