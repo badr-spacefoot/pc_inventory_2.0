@@ -27,6 +27,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+import zipfile
 
 try:
     import winreg
@@ -52,9 +53,10 @@ else:
 
 
 DEFAULT_API_URL = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
-COLLECTOR_VERSION = "0.1.47"
+COLLECTOR_VERSION = "0.1.48"
 COLLECTOR_BUILD_CHANNEL = "github-release"
 COLLECTOR_RELEASES_URL = "https://badr-spacefoot.github.io/pc_inventory_2.0/collector-releases.json"
+MACOS_APP_BUNDLE_PREFIX = "spacefoot-it-collector-macos"
 DRAFT_PATH = Path.home() / ".spacefoot_it_collector.json"
 PREFILL_FILE_MAX_AGE_SECONDS = 24 * 60 * 60
 DARK_COLORS = {
@@ -225,7 +227,9 @@ TRANSLATIONS = {
         "Collector update ready": "Mise à jour du collecteur prête",
         "A new collector version has been downloaded. Windows will now ask for permission to run the installer. Click Yes or Run. The collector will reopen automatically with the prefilled profile.": "Une nouvelle version du collecteur a été téléchargée. Windows va maintenant demander l'autorisation d'exécuter l'installateur. Cliquez sur Oui ou Exécuter. Le collecteur se rouvrira automatiquement avec le profil pré-rempli.",
         "A new collector version has been downloaded. Ubuntu will now ask for your password in a terminal to install the update. The collector will reopen automatically with the prefilled profile.": "Une nouvelle version du collecteur a été téléchargée. Ubuntu va maintenant demander votre mot de passe dans un terminal pour installer la mise à jour. Le collecteur se rouvrira automatiquement avec le profil pré-rempli.",
+        "A new collector version has been downloaded. macOS will install it in your Applications folder and reopen it automatically with the prefilled profile.": "Une nouvelle version du collecteur a été téléchargée. macOS va l'installer dans votre dossier Applications et le rouvrir automatiquement avec le profil pré-rempli.",
         "Unable to open a terminal for the update. Run this command, then reopen the collector from the web page:": "Impossible d'ouvrir un terminal pour la mise à jour. Lancez cette commande, puis rouvrez le collecteur depuis la page web :",
+        "Unable to install the macOS update automatically. Open the downloaded file, then reopen the collector from the web page:": "Impossible d'installer automatiquement la mise à jour macOS. Ouvrez le fichier téléchargé, puis rouvrez le collecteur depuis la page web :",
         "Waiting for Ubuntu to finish installing the update...": "En attente de la fin d'installation de la mise à jour Ubuntu...",
         "Update did not finish. Loading current collector.": "La mise à jour n'a pas abouti. Chargement avec le collecteur actuel.",
         "Update check failed. Loading current collector.": "Vérification de mise à jour impossible. Chargement avec le collecteur actuel.",
@@ -311,6 +315,10 @@ def is_newer_version(candidate: str, current: str) -> bool:
     right = version_tuple(current)
     size = max(len(left), len(right))
     return left + (0,) * (size - len(left)) > right + (0,) * (size - len(right))
+
+
+def version_label(value: str) -> str:
+    return ".".join(str(part) for part in version_tuple(value))
 
 
 def fetch_json_url(url: str, timeout=10) -> dict:
@@ -1542,7 +1550,7 @@ class CollectorApp(tk.Tk):
         threading.Thread(target=self._load_prefill_background, daemon=True).start()
 
     def check_update_then_load_prefill(self) -> None:
-        if not self.auto_update.get() or platform.system() not in {"Windows", "Linux"}:
+        if not self.auto_update.get() or platform.system() not in {"Windows", "Linux", "Darwin"}:
             self.load_prefill()
             return
         self.status.set(self.t("Checking collector version..."))
@@ -1552,10 +1560,18 @@ class CollectorApp(tk.Tk):
         try:
             manifest = fetch_json_url(COLLECTOR_RELEASES_URL, timeout=8)
             latest = str(manifest.get("latestVersion") or "")
-            platform_key = "windows" if platform.system() == "Windows" else "linux"
+            platform_key = {
+                "Windows": "windows",
+                "Linux": "linux",
+                "Darwin": "macos",
+            }.get(platform.system(), "")
             asset = (manifest.get("assets") or {}).get(platform_key) or {}
             download_url = str(asset.get("downloadUrl") or "")
-            default_name = "spacefoot-it-collector-update.exe" if platform_key == "windows" else "spacefoot-it-collector-update.deb"
+            default_name = {
+                "windows": "spacefoot-it-collector-update.exe",
+                "linux": "spacefoot-it-collector-update.deb",
+                "macos": "spacefoot-it-collector-update.app.zip",
+            }.get(platform_key, "spacefoot-it-collector-update")
             file_name = str(asset.get("fileName") or default_name)
             if not latest or not download_url or not is_newer_version(latest, COLLECTOR_VERSION):
                 self.after(0, self.load_prefill)
@@ -1566,6 +1582,8 @@ class CollectorApp(tk.Tk):
             download_file(download_url, installer_path, timeout=120)
             if platform_key == "linux":
                 self.after(0, lambda: self.install_linux_update_and_relaunch(installer_path, latest))
+            elif platform_key == "macos":
+                self.after(0, lambda: self.install_macos_update_and_relaunch(installer_path, latest))
             else:
                 self.after(0, lambda: self.install_update_and_relaunch(installer_path))
         except Exception:
@@ -1704,6 +1722,57 @@ class CollectorApp(tk.Tk):
             self.after(1000, self.load_prefill)
         except Exception as exc:
             self.status.set(api_error_message(exc))
+            self.after(1000, self.load_prefill)
+
+    def macos_target_app_path(self, latest_version: str) -> Path:
+        version = version_label(latest_version)
+        return Path.home() / "Applications" / f"{MACOS_APP_BUNDLE_PREFIX}-{version}.app"
+
+    def install_macos_update_and_relaunch(self, installer_path: Path, latest_version: str) -> None:
+        self.status.set(self.t("Installing update. The collector will reopen automatically."))
+        launch_url = self.launch_url_for_reopen()
+        messagebox.showinfo(
+            self.t("Collector update ready"),
+            self.t("A new collector version has been downloaded. macOS will install it in your Applications folder and reopen it automatically with the prefilled profile."),
+        )
+        try:
+            with tempfile.TemporaryDirectory(prefix="spacefoot-collector-macos-") as temp_dir:
+                extract_dir = Path(temp_dir)
+                with zipfile.ZipFile(installer_path) as archive:
+                    archive.extractall(extract_dir)
+                apps = sorted(extract_dir.rglob("*.app"), key=lambda path: len(path.parts))
+                if not apps:
+                    raise RuntimeError("No macOS app bundle was found in the update archive.")
+                source_app = apps[0]
+                target_app = self.macos_target_app_path(latest_version)
+                target_app.parent.mkdir(parents=True, exist_ok=True)
+                if target_app.exists():
+                    shutil.rmtree(target_app)
+                shutil.copytree(source_app, target_app, symlinks=True)
+            subprocess.run(
+                ["xattr", "-dr", "com.apple.quarantine", str(target_app)],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+            )
+            lsregister = Path("/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister")
+            if lsregister.exists():
+                subprocess.run(
+                    [str(lsregister), "-f", str(target_app)],
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=10,
+                )
+            subprocess.Popen(["open", "-n", str(target_app), "--args", launch_url])
+            self.after(900, self.destroy)
+        except Exception as exc:
+            self.status.set(api_error_message(exc))
+            messagebox.showwarning(
+                self.t("Collector update ready"),
+                f"{self.t('Unable to install the macOS update automatically. Open the downloaded file, then reopen the collector from the web page:')}\n\n{installer_path}",
+            )
             self.after(1000, self.load_prefill)
 
     def install_update_and_relaunch(self, installer_path: Path) -> None:

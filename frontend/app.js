@@ -3106,9 +3106,14 @@ function updateUbuntuInstallGuide() {
   code.textContent = ubuntuInstallCommand();
 }
 
-function macosInstallCommand() {
+function macosInstallCommand(asset = collectorAsset("macos")) {
+  const fileName = asset?.fileName || "spacefoot-it-collector-macos.app.zip";
+  const version = String(asset?.version || "").replace(/^collector-v/i, "");
+  const appName = version ? `spacefoot-it-collector-macos-${version}.app` : fileName.replace(/\.zip$/i, "");
   return [
-    'app="/Applications/spacefoot-it-collector-macos.app"',
+    `app="$HOME/Applications/${appName}"`,
+    `if [ ! -d "$app" ]; then app="$HOME/Downloads/${appName}"; fi`,
+    'if [ ! -d "$app" ]; then app="/Applications/spacefoot-it-collector-macos.app"; fi',
     'if [ ! -d "$app" ]; then app="$HOME/Downloads/spacefoot-it-collector-macos.app"; fi',
     'xattr -dr com.apple.quarantine "$app"',
     'open "$app"',

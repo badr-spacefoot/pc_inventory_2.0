@@ -384,12 +384,21 @@ jobs:
         if: matrix.name == 'macos'
         shell: bash
         run: |
+          set -euo pipefail
           if [ ! -d "dist/${{ matrix.artifact }}.app" ]; then
             echo "No macOS .app bundle found to package."
             exit 0
           fi
+          version="${GITHUB_REF_NAME#collector-v}"
+          if [ "$version" = "$GITHUB_REF_NAME" ]; then
+            version="0.0.0-dev"
+          fi
           chmod +x "dist/${{ matrix.artifact }}.app/Contents/MacOS/"*
-          ditto -c -k --sequesterRsrc --keepParent "dist/${{ matrix.artifact }}.app" "dist/${{ matrix.artifact }}.app.zip"
+          staging="$RUNNER_TEMP/spacefoot-macos-package"
+          rm -rf "$staging"
+          mkdir -p "$staging"
+          cp -R "dist/${{ matrix.artifact }}.app" "$staging/${{ matrix.artifact }}-${version}.app"
+          ditto -c -k --sequesterRsrc --keepParent "$staging/${{ matrix.artifact }}-${version}.app" "dist/${{ matrix.artifact }}-${version}.app.zip"
 
       - name: Build Linux deb package
         if: matrix.name == 'linux'
@@ -478,13 +487,16 @@ jobs:
             -name "spacefoot-it-collector-linux-*.deb" -o \
             -name "spacefoot-it-collector-macos" -o \
             -name "spacefoot-it-collector-macos.app.zip" -o \
+            -name "spacefoot-it-collector-macos-*.app.zip" -o \
             -name "*.cer" \
           \) -exec cp {} release-upload/ \;
           find release-assets -type f -path "*.app/Contents/MacOS/*" -exec chmod 755 {} \;
-          find release-assets -maxdepth 1 -type d -name "*.app" -print0 | while IFS= read -r -d '' app; do
-            name="$(basename "$app")"
-            (cd "$(dirname "$app")" && zip -qry "$GITHUB_WORKSPACE/release-upload/${name}.zip" "$name")
-          done
+          if ! compgen -G "release-upload/spacefoot-it-collector-macos-*.app.zip" >/dev/null; then
+            find release-assets -maxdepth 1 -type d -name "*.app" -print0 | while IFS= read -r -d '' app; do
+              name="$(basename "$app")"
+              (cd "$(dirname "$app")" && zip -qry "$GITHUB_WORKSPACE/release-upload/${name}.zip" "$name")
+            done
+          fi
           version="${TAG_NAME#collector-v}"
           if [ -f "release-upload/Spacefoot-IT-Collector-${version}-Setup.exe" ]; then
             mv "release-upload/Spacefoot-IT-Collector-${version}-Setup.exe" "release-upload/spacefoot-it-collector-windows-${version}-setup.exe"
