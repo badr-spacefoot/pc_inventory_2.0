@@ -1103,7 +1103,40 @@ function depreciationFactor(age: number) {
   return 0.10;
 }
 
-function replacementPriority(device: Json, age: number, cpuScore: number, currentValue: number, category: string) {
+function roundCurrency(value: number) {
+  return Math.max(0, Math.round(value));
+}
+
+function replacementCostEstimate(launchPrice: number, category: string, cpuScore: number) {
+  let factor = 1.05;
+  if (category === "workstation") factor = 1.12;
+  if (category === "mini-pc") factor = 0.95;
+  if (cpuScore >= 18000) factor += 0.08;
+  return Math.round((launchPrice * factor) / 10) * 10;
+}
+
+function bookValueEstimate(launchPrice: number, age: number) {
+  const depreciationYears = 4;
+  if (age >= depreciationYears) return 0;
+  return roundCurrency(launchPrice * Math.max(0, 1 - age / depreciationYears));
+}
+
+function valuationMethod(marketCount: number, hasModelEvidence: boolean, hasBenchmark: boolean, cpuReleaseYear: number | null) {
+  if (marketCount >= 5) return "market_verified";
+  if (marketCount >= 3) return "market_blended";
+  if (hasModelEvidence && hasBenchmark) return "model_matched";
+  if (cpuReleaseYear) return "spec_estimate";
+  return "fallback_estimate";
+}
+
+function valuationConfidenceLabel(method: string, confidenceScore: number) {
+  if (method === "market_verified" && confidenceScore >= 85) return "A";
+  if (["market_blended", "model_matched"].includes(method) && confidenceScore >= 70) return "B";
+  if (["spec_estimate", "model_matched"].includes(method) && confidenceScore >= 50) return "C";
+  return "D";
+}
+
+function replacementPriority(device: Json, age: number, cpuScore: number, currentValue: number, category: string) {
   let score = 0;
   const reasons: string[] = [];
   if (age >= 6) { score += 40; reasons.push("6+ years old"); }
@@ -1139,13 +1172,21 @@ function recommendationForPriority(priority: number) {
 }
 
 function priceStats(prices: number[]) {
-  if (prices.length === 0) return { min: null, avg: null, max: null };
+  if (prices.length === 0) return { min: null, avg: null, median: null, max: null, count: 0 };
   const sorted = prices.slice().sort((a, b) => a - b);
-  const total = sorted.reduce((sum, price) => sum + price, 0);
+  const medianIndex = Math.floor(sorted.length / 2);
+
+  const median = sorted.length % 2 === 0 ? (sorted[medianIndex - 1] + sorted[medianIndex]) / 2 : sorted[medianIndex];
+
+  const total = sorted.reduce((sum, price) => sum + price, 0);
   return {
     min: sorted[0],
     avg: Math.round((total / sorted.length) * 100) / 100,
-    max: sorted[sorted.length - 1],
+    median: Math.round(median * 100) / 100,
+
+    max: sorted[sorted.length - 1],
+
+    count: sorted.length,
   };
 }
 
@@ -1212,13 +1253,27 @@ async function enrichOneDevice(device: Json, options: { force: boolean; useExter
   const newStats = priceStats(newPrices);
   const currentYear = new Date().getFullYear();
   const age = modelReleaseYear ? Math.max(0, currentYear - modelReleaseYear) : 4;
-  const depreciationValue = Math.round(launchPrice * depreciationFactor(age));
-  const currentValue = stats.avg === null ? depreciationValue : Math.round(stats.avg * 0.7 + depreciationValue * 0.3);
+  const depreciationValue = roundCurrency(launchPrice * depreciationFactor(age));
+  const marketObservationCount = stats.count;
+
+  const resaleValue = stats.median === null ? depreciationValue : roundCurrency(stats.median * 0.75 + depreciationValue * 0.25);
+
+  const replacementCost = replacementCostEstimate(launchPrice, category, cpuScore);
+
+  const bookValue = bookValueEstimate(launchPrice, age);
   const performanceIndex = Math.max(0, Math.min(100, Math.round((cpuScore / 18000) * 100)));
-  const priority = replacementPriority(device, age, cpuScore, currentValue, category);
+  const priority = replacementPriority(device, age, cpuScore, resaleValue, category);
   const recommendation = recommendationForPriority(priority.score);
-  const confidenceScore = prices.length >= 3
-    ? Math.min(100, 90 + Math.min(prices.length - 3, 10))
+  const hasModelEvidence = ["model-year", "known-model"].includes(modelRelease.match);
+
+  const method = valuationMethod(marketObservationCount, hasModelEvidence, Boolean(benchmark), cpuReleaseYear);
+
+  const confidenceScore = marketObservationCount >= 5
+    ? Math.min(100, 88 + Math.min(marketObservationCount, 12))
+
+    : marketObservationCount >= 3
+
+    ? 82
     : benchmark && ["model-year", "known-model"].includes(modelRelease.match)
     ? 78
     : cpuReleaseYear && category
@@ -1226,17 +1281,32 @@ async function enrichOneDevice(device: Json, options: { force: boolean; useExter
     : manufacturer || category
     ? 42
     : 25;
-  const sources = [
+  const confidenceLabel = valuationConfidenceLabel(method, confidenceScore);
+
+  const valuationReasons = [
+    `method:${method}`,
+    `confidence:${confidenceLabel}`,
+    `market_observations:${marketObservationCount}`,
+    `age:${age}`,
+    `category:${category}`,
+    `cpu_score:${cpuScore}`,
+    `model_match:${modelRelease.match}`,
+  ];
+
+  const sources = [
     benchmark?.source || (cpuName ? "cpu-generation-estimate" : ""),
     "category-price-rules",
     "age-depreciation",
     marketRows.length ? "ebay-optional" : "",
   ].filter(Boolean);
-  const hasModelEvidence = ["model-year", "known-model"].includes(modelRelease.match);
-  const enrichmentStatus = benchmark && launchPrice && (hasModelEvidence || prices.length >= 3) ? "completed" : "partial";
+  const enrichmentStatus = ["market_verified", "market_blended", "model_matched"].includes(method) ? "completed" : "partial";
   const noteParts = [
     `Launch price estimated from ${category} and ${cpuTier(cpuName)} CPU rules.`,
-    `Current value uses ${age}-year depreciation${stats.avg !== null ? " blended with optional market listings" : ""}.`,
+    `Resale value uses ${marketObservationCount >= 3 ? "external market median blended with depreciation" : `${age}-year depreciation estimate`}.`,
+
+    `Replacement cost is estimated separately from resale value.`,
+
+    `Book value uses a 4-year straight-line depreciation model.`,
     ...priority.reasons,
   ];
 
@@ -1251,11 +1321,25 @@ async function enrichOneDevice(device: Json, options: { force: boolean; useExter
     release_year: modelReleaseYear,
     estimated_launch_price: launchPrice,
     current_new_price: newStats.avg,
-    current_market_price_min: stats.min,
-    current_market_price_avg: currentValue,
-    current_market_price_max: stats.max,
-    estimated_current_value: currentValue,
-    market_source: sources.join(","),
+    current_market_price_min: marketObservationCount > 0 ? stats.min : null,
+    current_market_price_avg: marketObservationCount > 0 ? stats.avg : null,
+    current_market_price_max: marketObservationCount > 0 ? stats.max : null,
+    estimated_current_value: resaleValue,
+    resale_value: resaleValue,
+
+    replacement_cost: replacementCost,
+
+    book_value: bookValue,
+
+    valuation_method: method,
+
+    valuation_confidence_label: confidenceLabel,
+
+    valuation_reasons: valuationReasons,
+
+    market_observation_count: marketObservationCount,
+
+    market_source: marketObservationCount > 0 ? "ebay" : null,
     enrichment_source: sources.join(","),
     performance_index: performanceIndex,
     obsolescence_index: priority.score,
@@ -1271,7 +1355,14 @@ async function enrichOneDevice(device: Json, options: { force: boolean; useExter
       query,
       age,
       depreciation_factor: depreciationFactor(age),
-      cpu_match: cpuLookup.match,
+      resale_value: resaleValue,
+      replacement_cost: replacementCost,
+      book_value: bookValue,
+      valuation_method: method,
+      valuation_confidence_label: confidenceLabel,
+      market_observation_count: marketObservationCount,
+
+      cpu_match: cpuLookup.match,
       model_match: modelRelease.match,
       provider_counts: {
         ebay: marketRows.filter((row: Json) => row.source === "ebay").length,

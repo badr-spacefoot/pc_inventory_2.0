@@ -278,6 +278,13 @@ create table if not exists public.hardware_enrichment (
   obsolescence_index integer,
   recommendation text check (recommendation in ('keep', 'watch', 'replace')),
   confidence_score integer not null default 0 check (confidence_score between 0 and 100),
+  resale_value numeric,
+  replacement_cost numeric,
+  book_value numeric,
+  valuation_method text not null default 'fallback_estimate',
+  valuation_confidence_label text not null default 'D',
+  valuation_reasons jsonb not null default '[]'::jsonb,
+  market_observation_count integer not null default 0,
   last_enriched_at timestamptz not null default now(),
   raw_data jsonb not null default '{}'::jsonb
 );
@@ -295,6 +302,24 @@ alter table public.hardware_enrichment add column if not exists enrichment_sourc
 alter table public.hardware_enrichment add column if not exists replacement_priority integer not null default 0;
 alter table public.hardware_enrichment add column if not exists device_category text;
 alter table public.hardware_enrichment add column if not exists notes text;
+alter table public.hardware_enrichment add column if not exists resale_value numeric;
+alter table public.hardware_enrichment add column if not exists replacement_cost numeric;
+alter table public.hardware_enrichment add column if not exists book_value numeric;
+alter table public.hardware_enrichment add column if not exists valuation_method text not null default 'fallback_estimate';
+alter table public.hardware_enrichment add column if not exists valuation_confidence_label text not null default 'D';
+alter table public.hardware_enrichment add column if not exists valuation_reasons jsonb not null default '[]'::jsonb;
+alter table public.hardware_enrichment add column if not exists market_observation_count integer not null default 0;
+
+alter table public.hardware_enrichment
+  drop constraint if exists hardware_enrichment_valuation_confidence_label_check;
+alter table public.hardware_enrichment
+  add constraint hardware_enrichment_valuation_confidence_label_check
+  check (valuation_confidence_label in ('A', 'B', 'C', 'D'));
+alter table public.hardware_enrichment
+  drop constraint if exists hardware_enrichment_market_observation_count_check;
+alter table public.hardware_enrichment
+  add constraint hardware_enrichment_market_observation_count_check
+  check (market_observation_count >= 0);
 
 create table if not exists public.cpu_benchmarks (
   id uuid primary key default gen_random_uuid(),
@@ -461,7 +486,14 @@ select
   he.enrichment_source,
   he.replacement_priority,
   he.device_category,
-  he.notes as enrichment_notes
+  he.notes as enrichment_notes,
+  he.resale_value,
+  he.replacement_cost,
+  he.book_value,
+  he.valuation_method,
+  he.valuation_confidence_label,
+  he.valuation_reasons,
+  he.market_observation_count
 from public.devices d
 left join public.users u on u.id = d.assigned_user_id
 left join public.teams t on t.id = d.team_id

@@ -420,6 +420,20 @@ const englishTranslations = {
   "partial": "Partial",
   "failed": "Failed",
   "pending": "Pending",
+  "Valeur revente": "Resale value",
+  "Cout remplacement": "Replacement cost",
+  "Valeur comptable": "Book value",
+  "Methode valuation": "Valuation method",
+  "Confiance valuation": "Valuation confidence",
+  "Observations marche": "Market observations",
+  "Raisons valuation": "Valuation reasons",
+  "Prix marche observes": "Observed market prices",
+  "Confiance A-B": "A-B confidence",
+  "market_verified": "Market verified",
+  "market_blended": "Market blended",
+  "model_matched": "Model matched",
+  "spec_estimate": "Spec estimate",
+  "fallback_estimate": "Fallback estimate",
   "business-laptop": "Business laptop",
   "workstation": "Workstation",
   "mini-pc": "Mini PC",
@@ -629,15 +643,26 @@ function localizedEnrichmentValue(value) {
       "business-laptop": "Portable professionnel", workstation: "Station de travail",
       "mini-pc": "Mini PC", desktop: "Ordinateur fixe", "all-in-one": "Tout-en-un",
       keep: "Garder", watch: "Surveiller", replace: "Remplacer",
+      market_verified: "Prix marche verifie", market_blended: "Prix marche mixte",
+      model_matched: "Modele identifie", spec_estimate: "Estimation technique",
+      fallback_estimate: "Estimation prudente",
     },
     en: {
       completed: "Completed", partial: "Partial", failed: "Failed", pending: "Pending",
       "business-laptop": "Business laptop", workstation: "Workstation",
       "mini-pc": "Mini PC", desktop: "Desktop", "all-in-one": "All-in-one",
       keep: "Keep", watch: "Monitor", replace: "Replace",
+      market_verified: "Market verified", market_blended: "Market blended",
+      model_matched: "Model matched", spec_estimate: "Spec estimate",
+      fallback_estimate: "Fallback estimate",
     },
   };
   return labels[state.language]?.[value] || value;
+}
+
+function valuationReasonsDisplay(device) {
+  const reasons = Array.isArray(device.valuation_reasons) ? device.valuation_reasons : [];
+  return reasons.map((reason) => String(reason).replaceAll("_", " ")).join(" / ");
 }
 
 function translateElement(root) {
@@ -1523,7 +1548,7 @@ function money(value) {
 }
 
 function estimatedValue(device) {
-  return Number(device.estimated_current_value || device.current_market_price_avg || device.current_new_price || device.estimated_launch_price || 0);
+  return Number(device.resale_value || device.estimated_current_value || device.current_market_price_avg || device.current_new_price || device.estimated_launch_price || 0);
 }
 
 function cpuScoreBucket(device) {
@@ -2188,6 +2213,8 @@ function renderValuation() {
   const olderThanFour = ages.filter((age) => age > 4).length;
   const lowCpu = devices.filter((device) => Number(device.cpu_benchmark_score || device.cpu_score || 0) > 0 && Number(device.cpu_benchmark_score || device.cpu_score || 0) < 8000).length;
   const highPriority = devices.filter((device) => Number(device.replacement_priority || device.obsolescence_index || 0) >= 70).length;
+  const marketObserved = devices.filter((device) => Number(device.market_observation_count || 0) > 0).length;
+  const highConfidence = devices.filter((device) => ["A", "B"].includes(String(device.valuation_confidence_label || ""))).length;
 
   $("#valuation-metrics").innerHTML = [
     ["Valeur de lancement totale", money(launchValue)],
@@ -2197,6 +2224,8 @@ function renderValuation() {
     ["Plus de 4 ans", olderThanFour],
     ["CPU faible", lowCpu],
     ["Priorite elevee", highPriority],
+    ["Prix marche observes", marketObserved],
+    ["Confiance A-B", highConfidence],
   ].map(([label, value]) => `<article class="metric"><span>${translate(label)}</span><strong>${value}</strong></article>`).join("");
 
   const ageDistribution = { "0-1": 0, "2-3": 0, "4-5": 0, "6+": 0 };
@@ -2592,7 +2621,7 @@ function renderDetail(device, scans, history = []) {
     const name = `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.email;
     return `<option value="${user.id}" ${device.assigned_user_id === user.id ? "selected" : ""}>${escapeHtml(name)} (${escapeHtml(user.email)})</option>`;
   }).join("");
-  const detailRows = (rows) => `<dl class="detail-list">${rows.map(([key, value]) => `<div><dt>${escapeHtml(translate(key))}</dt><dd>${escapeHtml(value || "-")}</dd></div>`).join("")}</dl>`;
+  const detailRows = (rows) => `<dl class="detail-list">${rows.map(([key, value]) => `<div><dt>${escapeHtml(translate(key))}</dt><dd>${escapeHtml(value === 0 ? 0 : (value || "-"))}</dd></div>`).join("")}</dl>`;
   const priceRows = (device.priceHistory || [])
     .slice(0, 8)
     .map((row) => `<li>${formatDate(row.collected_at)} - ${row.source} - ${money(row.price)} - ${row.condition || "-"}</li>`)
@@ -2651,7 +2680,14 @@ function renderDetail(device, scans, history = []) {
         ["Type stockage", device.storage_type], ["Score CPU", device.cpu_benchmark_score || device.cpu_score],
         ["Génération CPU", device.cpu_generation], ["Annee modèle", device.release_year || device.model_release_year],
         ["Prix lancement", money(device.estimated_launch_price)],
-        ["Valeur actuelle estimée", money(device.estimated_current_value || device.current_market_price_avg)],
+        ["Valeur actuelle estimée", money(device.resale_value || device.estimated_current_value || device.current_market_price_avg)],
+        ["Valeur revente", money(device.resale_value || device.estimated_current_value)],
+        ["Cout remplacement", money(device.replacement_cost)],
+        ["Valeur comptable", money(device.book_value)],
+        ["Methode valuation", localizedEnrichmentValue(device.valuation_method)],
+        ["Confiance valuation", device.valuation_confidence_label ? `${device.valuation_confidence_label} (${device.price_confidence_score || device.confidence_score || 0}/100)` : ""],
+        ["Observations marche", device.market_observation_count],
+        ["Raisons valuation", valuationReasonsDisplay(device)],
       ])}
     </section>
     <section class="detail-tab-panel" data-detail-panel="network">
@@ -2690,7 +2726,10 @@ function renderDetail(device, scans, history = []) {
         ["Reco", localizedEnrichmentValue(device.recommendation)],
         ["Dernier enrichissement", formatDate(device.last_enriched_at)],
         ["Confiance prix", device.price_confidence_score ? `${device.price_confidence_score}/100` : ""],
-        ["Valeur actuelle estimée", money(device.estimated_current_value || device.current_market_price_avg)],
+        ["Valeur actuelle estimée", money(device.resale_value || device.estimated_current_value || device.current_market_price_avg)],
+        ["Cout remplacement", money(device.replacement_cost)],
+        ["Methode valuation", localizedEnrichmentValue(device.valuation_method)],
+        ["Confiance valuation", device.valuation_confidence_label || ""],
       ])}
     </section>
   `;
@@ -2983,6 +3022,13 @@ function exportCsv(enrichedExport = false) {
     "release_year",
     "current_market_price_avg",
     "estimated_current_value",
+    "resale_value",
+    "replacement_cost",
+    "book_value",
+    "valuation_method",
+    "valuation_confidence_label",
+    "valuation_reasons",
+    "market_observation_count",
     "price_confidence_score",
     "performance_index",
     "obsolescence_index",
