@@ -51,7 +51,7 @@ else:
 
 
 DEFAULT_API_URL = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
-COLLECTOR_VERSION = "0.1.40"
+COLLECTOR_VERSION = "0.1.41"
 COLLECTOR_BUILD_CHANNEL = "github-release"
 COLLECTOR_RELEASES_URL = "https://badr-spacefoot.github.io/pc_inventory_2.0/collector-releases.json"
 DRAFT_PATH = Path.home() / ".spacefoot_it_collector.json"
@@ -475,7 +475,13 @@ def launch_prefill_from_args(argv: list[str]) -> dict:
         result["launchUrl"] = launch_url
         parsed = urllib.parse.urlparse(launch_url)
         params = urllib.parse.parse_qs(parsed.query)
-        result["prefillCode"] = result["prefillCode"] or (params.get("prefillCode") or [""])[0].strip()
+        result["prefillCode"] = result["prefillCode"] or (
+            params.get("prefillCode")
+            or params.get("prefill")
+            or params.get("code")
+            or params.get("token")
+            or [""]
+        )[0].strip()
         result["apiUrl"] = result["apiUrl"] or normalize_api_url((params.get("apiUrl") or [""])[0])
     return {key: value for key, value in result.items() if value}
 
@@ -608,7 +614,6 @@ class CollectorApp(tk.Tk):
         self.after(300, self.load_organization_background)
         if self.launch_prefill_requested:
             self.status.set(self.t("Prefill link received. Loading profile..."))
-            self.mark_newest_prefill_file_seen()
             self.after(450, self.check_update_then_load_prefill)
         else:
             self.after(700, self.auto_load_prefill_file)
@@ -651,7 +656,6 @@ class CollectorApp(tk.Tk):
         self.launch_prefill_requested = True
         self.profile_visible.set(False)
         self.status.set(self.t("Prefill link received. Loading profile..."))
-        self.mark_newest_prefill_file_seen()
         self.persist_draft()
         self.check_update_then_load_prefill()
 
@@ -1716,7 +1720,16 @@ class CollectorApp(tk.Tk):
         except (OSError, json.JSONDecodeError):
             return
         code = str(data.get("prefillCode") or "").strip()
+        launch_url = str(data.get("launchUrl") or "").strip()
+        if launch_url.startswith("spacefoot-collector://"):
+            launch_prefill = launch_prefill_from_args([sys.argv[0], launch_url])
+            code = code or str(launch_prefill.get("prefillCode") or "").strip()
+            if launch_prefill.get("apiUrl") and not data.get("apiUrl"):
+                data["apiUrl"] = launch_prefill.get("apiUrl")
         if not code:
+            return
+        current_code = self.prefill_code.get().strip()
+        if current_code and code != current_code:
             return
         already_loaded = str(path) == self.last_loaded_prefill_file and mtime <= self.last_loaded_prefill_mtime
         if already_loaded:

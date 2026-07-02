@@ -3145,16 +3145,23 @@ function downloadPrefillFile(options = {}) {
   const payload = {
     apiUrl: CONFIG.apiBaseUrl,
     prefillCode: state.prefillCode,
+    launchUrl: state.collectorLaunchUrl,
     createdAt: new Date().toISOString(),
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
   link.download = `spacefoot-collector-prefill-${state.prefillCode || "draft"}.json`;
+  link.style.display = "none";
+  document.body.appendChild(link);
   link.click();
-  URL.revokeObjectURL(link.href);
-  if (options.silent) return;
+  window.setTimeout(() => {
+    URL.revokeObjectURL(link.href);
+    link.remove();
+  }, options.revokeDelayMs || 2500);
+  if (options.silent) return true;
   toast("Fichier de pre-remplissage telecharge. Ouvrez le collecteur: il le detectera automatiquement.", "success");
+  return true;
 }
 
 function updateCollectorDownloadUi() {
@@ -3915,13 +3922,14 @@ function bindEvents() {
     rememberCollectorDownload();
     window.setTimeout(updateCollectorDownloadUi, 250);
   });
-  $("#collector-open-app")?.addEventListener("click", () => {
+  $("#collector-open-app")?.addEventListener("click", async () => {
     if (!state.collectorLaunchUrl) {
       toast("Aucun code de pré-remplissage", "error");
       return;
     }
     if (state.detectedPlatform === "macos") {
-      downloadPrefillFile({ silent: true });
+      downloadPrefillFile({ silent: true, revokeDelayMs: 5000 });
+      await new Promise((resolve) => window.setTimeout(resolve, 450));
     }
     if (state.detectedPlatform === "windows") rememberCollectorLaunch();
     updateCollectorDownloadUi();

@@ -29,6 +29,7 @@ jobs:
             pyinstaller_mode: --onedir
             pyinstaller_icon: --icon frontend/assets/brand/app-icon.ico
             pyinstaller_bundle_id: ""
+            pyinstaller_extra: ""
           - name: macos
             os: macos-latest
             artifact: spacefoot-it-collector-macos
@@ -36,6 +37,7 @@ jobs:
             pyinstaller_mode: --onefile
             pyinstaller_icon: --icon build/app-icon.icns
             pyinstaller_bundle_id: "--osx-bundle-identifier com.spacefoot.itcollector"
+            pyinstaller_extra: "--argv-emulation"
           - name: linux
             os: ubuntu-latest
             artifact: spacefoot-it-collector-linux
@@ -43,6 +45,7 @@ jobs:
             pyinstaller_mode: --onefile
             pyinstaller_icon: ""
             pyinstaller_bundle_id: ""
+            pyinstaller_extra: ""
 
     steps:
       - name: Checkout
@@ -128,6 +131,7 @@ jobs:
           --name "${{ matrix.artifact }}"
           ${{ matrix.pyinstaller_icon }}
           ${{ matrix.pyinstaller_bundle_id }}
+          ${{ matrix.pyinstaller_extra }}
           --add-data "scripts/collect-cross-platform.py${{ matrix.separator }}scripts"
           --add-data "frontend/assets/brand/app-icon.png${{ matrix.separator }}assets/brand"
           --add-data "installer-assets/bundled-tools${{ matrix.separator }}bundled-tools"

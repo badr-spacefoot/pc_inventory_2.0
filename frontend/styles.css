@@ -1044,7 +1044,7 @@ pre {
 
 .launcher-downloads {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
   gap: 10px;
   max-width: 720px;
   width: 100%;
@@ -1054,6 +1054,9 @@ pre {
   min-height: 48px;
   justify-content: center;
   width: 100%;
+  min-width: 0;
+  white-space: normal;
+  text-align: center;
 }
 
 .launcher-downloads.is-ready-to-open #collector-open-app {
@@ -1172,16 +1175,6 @@ pre {
 
 .support-tools[open] > summary {
   color: var(--ink);
-}
-
-@media (min-width: 720px) {
-  .launcher-downloads {
-    grid-template-columns: minmax(300px, max-content) minmax(220px, max-content);
-  }
-
-  .launcher-downloads .action-button {
-    width: auto;
-  }
 }
 
 .pending-changes-list {
