@@ -109,9 +109,11 @@ jobs:
       - name: Bundle osquery for macOS
         if: matrix.name == 'macos'
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          release_json="$(curl -fsSL -H "User-Agent: spacefoot-it-collector-build" https://api.github.com/repos/osquery/osquery/releases/latest)"
+          release_json="$(curl -fsSL -H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GITHUB_TOKEN" -H "User-Agent: spacefoot-it-collector-build" https://api.github.com/repos/osquery/osquery/releases/latest)"
           osquery_pkg_url="$(python -c 'import json,sys; data=json.load(sys.stdin); assets=data.get("assets", []); urls=[a.get("browser_download_url", "") for a in assets if a.get("name", "").lower().endswith(".pkg") and "osquery" in a.get("name", "").lower()]; print(urls[0] if urls else "")' <<< "$release_json")"
           if [ -z "$osquery_pkg_url" ]; then
             echo "No macOS osquery .pkg asset was found in the latest osquery release."
