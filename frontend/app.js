@@ -2175,6 +2175,10 @@ function activeTeamName(device) {
   return isDetachedInventoryStatus(device.status) ? "" : device.team_name;
 }
 
+function normalizedDeviceOsFamily(device) {
+  return normalizeOsInfo([device.os_name, device.os_version].filter(Boolean).join(" ")).osFamily;
+}
+
 function applyFilters() {
   const search = normalize($("#global-search").value);
   const team = $("#filter-team").value;
@@ -2191,7 +2195,7 @@ function applyFilters() {
     if (search && !getSearchBlob(device).includes(search)) return false;
     if (team && activeTeamName(device) !== team) return false;
     if (establishment && device.establishment_name !== establishment) return false;
-    if (os && device.os_name !== os) return false;
+    if (os && normalizedDeviceOsFamily(device) !== os) return false;
     if (model && device.model !== model) return false;
     if (manufacturer && normalizeManufacturer(device.manufacturer, device.model).manufacturerName !== manufacturer) return false;
     if (status && device.status !== status) return false;
@@ -3115,7 +3119,7 @@ function renderBarChart(selector, title, data, suffix = "") {
 function renderCharts() {
   renderBarChart('[data-chart="establishments"]', "Machines par établissement", countBy(state.filtered, (d) => d.establishment_name));
   renderBarChart('[data-chart="teams"]', "Machines par équipe", countBy(state.filtered, activeTeamName));
-  renderBarChart('[data-chart="os"]', "OS", countBy(state.filtered, (d) => d.os_name));
+  renderBarChart('[data-chart="os"]', "OS", countBy(state.filtered, normalizedDeviceOsFamily));
   renderBarChart('[data-chart="stale"]', "Non mises a jour", {
     [`+${CONFIG.staleDays} jours`]: state.filtered.filter((d) => daysSince(d.last_seen_at) > CONFIG.staleDays).length,
     "A jour": state.filtered.filter((d) => daysSince(d.last_seen_at) <= CONFIG.staleDays).length,
@@ -3144,7 +3148,7 @@ function renderCharts() {
     translate("Fabricant et OS"),
     countBy(state.filtered, (device) => {
       const manufacturer = normalizeManufacturer(device.manufacturer, device.model).manufacturerName;
-      const os = normalizeOsInfo([device.os_name, device.os_version].filter(Boolean).join(" ")).osFamily;
+      const os = normalizedDeviceOsFamily(device);
       return `${manufacturer} / ${os}`;
     }),
   );
@@ -3999,7 +4003,7 @@ async function loadAdminData() {
   state.devices = data.devices || [];
   const teams = [...new Set(state.devices.map(activeTeamName))];
   const establishments = [...new Set(state.devices.map((d) => d.establishment_name))];
-  const os = [...new Set(state.devices.map((d) => d.os_name))];
+  const os = [...new Set(state.devices.map(normalizedDeviceOsFamily))];
   const models = [...new Set(state.devices.map((d) => d.model))];
   const manufacturers = [...new Set(state.devices.map((device) =>
     normalizeManufacturer(device.manufacturer, device.model).manufacturerName))];
