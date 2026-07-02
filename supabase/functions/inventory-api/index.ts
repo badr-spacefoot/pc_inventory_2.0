@@ -2925,14 +2925,12 @@ async function syncLatestInvoiceValuation(deviceId: string) {
 
     : {};
 
-  const note = "Purchase price backed by invoice. Book value uses a 4-year straight-line depreciation model.";
+  const note = "Actual purchase price backed by invoice. Book value uses a 4-year straight-line depreciation model. Launch/MSRP price is kept separate.";
   const existingNotes = safeString(existing?.notes, 1000);
 
   const values: Json = {
 
     device_id: deviceId,
-
-    estimated_launch_price: purchasePrice,
 
     book_value: bookValueEstimate(purchasePrice, age),
 

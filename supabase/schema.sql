@@ -478,6 +478,10 @@ select
   he.cpu_release_year,
   he.model_release_year,
   he.estimated_launch_price,
+  li.purchase_price as actual_purchase_price,
+  li.currency as actual_purchase_currency,
+  li.invoice_date as actual_purchase_date,
+  li.id as actual_purchase_invoice_id,
   he.current_new_price,
   he.current_market_price_min,
   he.current_market_price_avg,
@@ -523,7 +527,15 @@ from public.devices d
 left join public.users u on u.id = d.assigned_user_id
 left join public.teams t on t.id = d.team_id
 left join public.establishments e on e.id = d.establishment_id
-left join public.hardware_enrichment he on he.device_id = d.id;
+left join public.hardware_enrichment he on he.device_id = d.id
+left join lateral (
+  select di.id, di.purchase_price, di.currency, di.invoice_date
+  from public.device_invoices di
+  where di.device_id = d.id
+    and di.purchase_price is not null
+  order by di.invoice_date desc nulls last, di.created_at desc
+  limit 1
+) li on true;
 
 alter table public.teams enable row level security;
 alter table public.establishments enable row level security;

@@ -2657,6 +2657,10 @@ function renderInvoiceList(invoices = [], canEditDevice = false) {
   `;
 }
 
+function latestPurchaseInvoice(invoices = []) {
+  return invoices.find((invoice) => Number(invoice.purchase_price || 0) > 0) || null;
+}
+
 const maxInvoiceUploadBytes = 10 * 1024 * 1024;
 
 function readFileAsBase64(file) {
@@ -2712,6 +2716,17 @@ function renderDetail(device, scans, history = []) {
   const payload = latestScanPayload(scans);
   const memoryDetails = memorySummary(payload);
   const invoices = Array.isArray(device.invoices) ? device.invoices : [];
+  const purchaseInvoice = latestPurchaseInvoice(invoices);
+  const actualPurchaseRaw = purchaseInvoice?.purchase_price ?? device.actual_purchase_price;
+  const actualPurchaseCurrency = purchaseInvoice?.currency ?? device.actual_purchase_currency;
+  const actualPurchasePrice = Number(actualPurchaseRaw || 0) > 0 ? moneyWithCurrency(actualPurchaseRaw, actualPurchaseCurrency) : "";
+  const launchPriceNumber = Number(device.estimated_launch_price || 0);
+  const purchasePriceNumber = Number(actualPurchaseRaw || 0);
+  const launchLooksLikeInvoice = device.valuation_method === "invoice_backed"
+    && launchPriceNumber > 0
+    && purchasePriceNumber > 0
+    && Math.round(launchPriceNumber * 100) === Math.round(purchasePriceNumber * 100);
+  const launchPriceDisplay = launchLooksLikeInvoice ? "" : money(device.estimated_launch_price);
   const teamOptions = state.teams.map((team) =>
     `<option value="${team.id}" ${device.team_id === team.id ? "selected" : ""}>${escapeHtml(displayWithAbbreviation(team.name, team.abbreviation))}</option>`).join("");
   const establishmentOptions = state.establishments.map((site) =>
@@ -2779,7 +2794,8 @@ function renderDetail(device, scans, history = []) {
         ["Stockage", `${formatCapacityGb(device.storage_total_gb) || "-"} total / ${formatCapacityGb(device.storage_free_gb) || "-"} libres`],
         ["Type stockage", device.storage_type], ["Score CPU", device.cpu_benchmark_score || device.cpu_score],
         ["Génération CPU", device.cpu_generation], ["Annee modèle", device.release_year || device.model_release_year],
-        ["Prix lancement", money(device.estimated_launch_price)],
+        ["Prix achat reel", actualPurchasePrice],
+        ["Prix lancement", launchPriceDisplay],
         ["Valeur actuelle estimée", money(device.resale_value || device.estimated_current_value || device.current_market_price_avg)],
         ["Valeur revente", money(device.resale_value || device.estimated_current_value)],
         ["Cout remplacement", money(device.replacement_cost)],
@@ -2841,6 +2857,7 @@ function renderDetail(device, scans, history = []) {
         ["Reco", localizedEnrichmentValue(device.recommendation)],
         ["Dernier enrichissement", formatDate(device.last_enriched_at)],
         ["Confiance prix", device.price_confidence_score ? `${device.price_confidence_score}/100` : ""],
+        ["Prix achat reel", actualPurchasePrice],
         ["Valeur actuelle estimée", money(device.resale_value || device.estimated_current_value || device.current_market_price_avg)],
         ["Cout remplacement", money(device.replacement_cost)],
         ["Methode valuation", localizedEnrichmentValue(device.valuation_method)],
