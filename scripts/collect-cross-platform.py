@@ -15,7 +15,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-SCRIPT_VERSION = "1.5.2"
+SCRIPT_VERSION = "1.5.3"
 OSQUERY_ENGINE_VERSION = "0.1.0"
 
 PLACEHOLDER_VALUES = {
@@ -33,6 +33,30 @@ PLACEHOLDER_VALUES = {
     "not specified",
     "unknown",
     "-1",
+}
+
+MAC_MODEL_DETAILS = {
+    # Apple Silicon MacBook Pro mappings most useful for fleet inventory.
+    "MacBookPro18,1": {"family": "MacBook Pro", "size": "16-inch", "year": "2021"},
+    "MacBookPro18,2": {"family": "MacBook Pro", "size": "16-inch", "year": "2021"},
+    "MacBookPro18,3": {"family": "MacBook Pro", "size": "14-inch", "year": "2021"},
+    "MacBookPro18,4": {"family": "MacBook Pro", "size": "14-inch", "year": "2021"},
+    "Mac14,5": {"family": "MacBook Pro", "size": "14-inch", "year": "2023"},
+    "Mac14,6": {"family": "MacBook Pro", "size": "16-inch", "year": "2023"},
+    "Mac14,9": {"family": "MacBook Pro", "size": "14-inch", "year": "2023"},
+    "Mac14,10": {"family": "MacBook Pro", "size": "16-inch", "year": "2023"},
+    "Mac15,3": {"family": "MacBook Pro", "size": "14-inch", "year": "2023"},
+    "Mac15,6": {"family": "MacBook Pro", "size": "14-inch", "year": "2023"},
+    "Mac15,7": {"family": "MacBook Pro", "size": "16-inch", "year": "2023"},
+    "Mac15,8": {"family": "MacBook Pro", "size": "14-inch", "year": "2023"},
+    "Mac15,9": {"family": "MacBook Pro", "size": "16-inch", "year": "2023"},
+    "Mac15,10": {"family": "MacBook Pro", "size": "14-inch", "year": "2023"},
+    "Mac15,11": {"family": "MacBook Pro", "size": "16-inch", "year": "2023"},
+    "Mac16,1": {"family": "MacBook Pro", "size": "14-inch", "year": "2024"},
+    "Mac16,5": {"family": "MacBook Pro", "size": "14-inch", "year": "2024"},
+    "Mac16,6": {"family": "MacBook Pro", "size": "16-inch", "year": "2024"},
+    "Mac16,7": {"family": "MacBook Pro", "size": "14-inch", "year": "2024"},
+    "Mac16,8": {"family": "MacBook Pro", "size": "16-inch", "year": "2024"},
 }
 
 
@@ -300,32 +324,117 @@ def linux_info():
     }
 
 
+def walk_json_values(value):
+    if isinstance(value, dict):
+        yield value
+        for child in value.values():
+            yield from walk_json_values(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from walk_json_values(child)
+
+
+def mac_model_marketing_name(model_name, model_identifier):
+    model_name = clean_identifier(model_name)
+    model_identifier = clean_identifier(model_identifier)
+    details = MAC_MODEL_DETAILS.get(model_identifier)
+    if details:
+        return f"{details['family']} {details['size']} {details['year']}"
+    if model_name and model_identifier:
+        return f"{model_name} ({model_identifier})"
+    return first_clean(model_name, model_identifier)
+
+
+def macos_display_gpu(chip):
+    display_raw = run(["system_profiler", "SPDisplaysDataType", "-json"])
+    try:
+        displays = json.loads(display_raw)
+    except json.JSONDecodeError:
+        displays = {}
+    names = []
+    for item in walk_json_values(displays):
+        name = first_clean(item.get("sppci_model"), item.get("spdisplays_chipset-model"), item.get("chipset_model"))
+        if name and name not in names:
+            names.append(name)
+    if names:
+        return " + ".join(names[:3])
+    if re.search(r"\bApple\s+M\d", str(chip or ""), re.I):
+        return f"{clean_identifier(chip)} integrated GPU"
+    return ""
+
+
+def macos_storage_details(default_total_gb, default_free_gb):
+    profiler = {}
+    for data_type in ("SPNVMeDataType", "SPSerialATADataType", "SPStorageDataType"):
+        raw = run(["system_profiler", data_type, "-json"])
+        try:
+            loaded = json.loads(raw)
+        except json.JSONDecodeError:
+            loaded = {}
+        profiler.update(loaded)
+    physical_disks = []
+    totals = []
+    seen_disks = set()
+    storage_type = ""
+    for item in walk_json_values(profiler):
+        name = first_clean(item.get("_name"), item.get("device_model"), item.get("bsd_name"), item.get("physical_drive"))
+        size_bytes = first_clean(item.get("size_in_bytes"), item.get("capacity_in_bytes"))
+        size_gb = bytes_to_gb(size_bytes) if size_bytes else None
+        medium = first_clean(item.get("medium_type"), item.get("physical_drive"), item.get("device_model"))
+        if name and size_gb and size_gb > 16:
+            disk_key = (name.lower(), round(size_gb, 1))
+            if disk_key in seen_disks:
+                continue
+            seen_disks.add(disk_key)
+            physical_disks.append({"name": name, "sizeGb": size_gb, "type": "SSD" if re.search(r"ssd|solid|nvme|apple", medium, re.I) else ""})
+            totals.append(size_gb)
+        if re.search(r"ssd|solid|nvme|apple", medium, re.I):
+            storage_type = "SSD"
+    return {
+        "storageTotalGb": sum(totals) if totals else default_total_gb,
+        "storageFreeGb": default_free_gb,
+        "storageType": storage_type or "SSD",
+        "physicalDisks": physical_disks,
+    }
+
+
 def macos_info():
     hardware_raw = run(["system_profiler", "SPHardwareDataType", "-json"])
-    storage_raw = run(["system_profiler", "SPStorageDataType", "-json"])
     try:
         hardware = json.loads(hardware_raw).get("SPHardwareDataType", [{}])[0]
     except json.JSONDecodeError:
         hardware = {}
-    try:
-        storage = json.loads(storage_raw).get("SPStorageDataType", [])
-    except json.JSONDecodeError:
-        storage = []
     disk = shutil.disk_usage("/")
     chip = hardware.get("chip_type") or hardware.get("cpu_type") or run(["sysctl", "-n", "machdep.cpu.brand_string"])
-    capacity = " ".join(str(item.get("physical_drive", "")) for item in storage).lower()
+    model_identifier = first_clean(hardware.get("machine_model"), run(["sysctl", "-n", "hw.model"]))
+    model_name = hardware.get("machine_name")
+    storage_details = macos_storage_details(bytes_to_gb(disk.total), bytes_to_gb(disk.free))
+    serial = first_clean(hardware.get("serial_number"), hardware.get("serial_number_system"))
+    marketing_model = mac_model_marketing_name(model_name, model_identifier)
+    gpu = macos_display_gpu(chip)
     return {
         "osName": "macOS",
         "osVersion": f"macOS {run(['sw_vers', '-productVersion'])}".strip(),
         "manufacturer": "Apple Inc.",
-        "model": hardware.get("machine_name") or hardware.get("machine_model") or platform.machine(),
-        "serialNumber": hardware.get("serial_number", ""),
+        "model": marketing_model or platform.machine(),
+        "modelNumber": model_identifier,
+        "serialNumber": serial,
+        "serviceTag": serial,
         "cpu": chip,
-        "gpu": run(["sh", "-c", "system_profiler SPDisplaysDataType | awk -F': ' '/Chipset Model/{print $2; exit}'"]),
-        "ramTotalGb": bytes_to_gb(run(["sysctl", "-n", "hw.memsize"])),
-        "storageTotalGb": bytes_to_gb(disk.total),
-        "storageFreeGb": bytes_to_gb(disk.free),
-        "storageType": "SSD" if "solid state" in capacity or "ssd" in capacity else "",
+        "gpu": gpu,
+        "gpus": [{"name": gpu}] if gpu else [],
+        "ramTotalGb": normalized_memory_gb(bytes_to_gb(run(["sysctl", "-n", "hw.memsize"]))),
+        **storage_details,
+        "hardwareIdentity": {
+            "manufacturer": "Apple Inc.",
+            "model": marketing_model,
+            "systemFamily": first_clean(model_name, "Mac"),
+            "systemSku": model_identifier,
+            "productName": model_name,
+            "productNumber": model_identifier,
+            "serviceTag": serial,
+            "biosSerialNumber": serial,
+        },
     }
 
 
@@ -527,6 +636,8 @@ def collect_with_osquery(include_mac):
     logical_drives = mounts
     linux_details = linux_info() if system == "Linux" else {}
     linux_identity = linux_details.get("hardwareIdentity") if isinstance(linux_details.get("hardwareIdentity"), dict) else {}
+    macos_details = macos_info() if system == "Darwin" else {}
+    macos_identity = macos_details.get("hardwareIdentity") if isinstance(macos_details.get("hardwareIdentity"), dict) else {}
     if system == "Linux":
         physical_storage = linux_physical_storage_summary()
         if physical_storage.get("storageTotalGb"):
@@ -537,6 +648,9 @@ def collect_with_osquery(include_mac):
         fallback_storage = fallback_logical_storage()
         storage = fallback_storage["storage"]
         logical_drives = fallback_storage["logicalDrives"]
+    if system == "Darwin" and macos_details.get("storageTotalGb"):
+        storage["storageTotalGb"] = macos_details.get("storageTotalGb")
+        storage["storageFreeGb"] = macos_details.get("storageFreeGb") or storage.get("storageFreeGb")
     network = osquery_network(include_mac, interface_details, interface_addresses)
     os_user = clean_identifier(first_row(logged_in_users).get("user")) or getpass.getuser()
     physical_memory = as_int(system_info.get("physical_memory") or system_info.get("memory_total"))
@@ -547,11 +661,13 @@ def collect_with_osquery(include_mac):
         ram_total_gb = windows_memory_gb()
     manufacturer = first_clean(
         linux_details.get("manufacturer"),
+        macos_details.get("manufacturer"),
         system_info.get("hardware_vendor"),
         system_info.get("vendor"),
         system_info.get("computer_name") if system != "Linux" else "",
     )
     model = first_clean(
+        macos_details.get("model"),
         linux_details.get("model"),
         system_info.get("hardware_model"),
         system_info.get("hardware_version"),
@@ -559,6 +675,8 @@ def collect_with_osquery(include_mac):
         platform.machine() if system != "Linux" else "",
     )
     serial = first_clean(
+        macos_details.get("serialNumber"),
+        macos_details.get("serviceTag"),
         linux_details.get("serialNumber"),
         linux_details.get("serviceTag"),
         system_info.get("hardware_serial"),
@@ -588,25 +706,25 @@ def collect_with_osquery(include_mac):
     hardware_identity = {
         "manufacturer": manufacturer,
         "model": model,
-        "systemFamily": first_clean(linux_identity.get("systemFamily"), system_info.get("hardware_family")),
-        "systemSku": first_clean(linux_identity.get("systemSku"), linux_details.get("modelNumber"), system_info.get("hardware_sku")),
+        "systemFamily": first_clean(macos_identity.get("systemFamily"), linux_identity.get("systemFamily"), system_info.get("hardware_family")),
+        "systemSku": first_clean(macos_identity.get("systemSku"), linux_identity.get("systemSku"), linux_details.get("modelNumber"), system_info.get("hardware_sku")),
         "productName": model,
-        "productNumber": first_clean(linux_identity.get("productNumber"), system_info.get("hardware_version")),
+        "productNumber": first_clean(macos_identity.get("productNumber"), linux_identity.get("productNumber"), system_info.get("hardware_version")),
         "baseboardProduct": clean_identifier(linux_identity.get("baseboardProduct")),
         "baseboardManufacturer": first_clean(linux_identity.get("baseboardManufacturer"), manufacturer),
-        "biosSerialNumber": first_clean(linux_identity.get("biosSerialNumber"), serial),
+        "biosSerialNumber": first_clean(macos_identity.get("biosSerialNumber"), linux_identity.get("biosSerialNumber"), serial),
         "chassisSerialNumber": clean_identifier(linux_identity.get("chassisSerialNumber")),
         "assetTag": clean_identifier(linux_identity.get("assetTag")),
         "serviceTag": serial,
         "uuid": first_clean(linux_identity.get("uuid"), system_info.get("uuid")),
     }
-    gpu = first_clean(linux_details.get("gpu")) if system == "Linux" else ""
+    gpu = first_clean(macos_details.get("gpu")) if system == "Darwin" else first_clean(linux_details.get("gpu")) if system == "Linux" else ""
     return {
         "osName": first_clean(os_version.get("name"), "macOS" if system == "Darwin" else system or "Unknown"),
         "osVersion": first_clean(os_version.get("version"), os_version.get("major"), platform.platform()),
         "manufacturer": manufacturer,
         "model": model,
-        "modelNumber": first_clean(linux_details.get("modelNumber"), hardware_identity.get("systemSku"), hardware_identity.get("productNumber")),
+        "modelNumber": first_clean(macos_details.get("modelNumber"), linux_details.get("modelNumber"), hardware_identity.get("systemSku"), hardware_identity.get("productNumber")),
         "serialNumber": serial,
         "serviceTag": serial,
         "cpu": first_clean(system_info.get("cpu_brand"), platform.processor()),
@@ -615,9 +733,9 @@ def collect_with_osquery(include_mac):
         "ramTotalGb": ram_total_gb,
         "memoryModules": memory_modules,
         **storage,
-        "storageType": first_clean(linux_details.get("storageType"), " + ".join(storage_types[:4])),
+        "storageType": first_clean(macos_details.get("storageType"), linux_details.get("storageType"), " + ".join(storage_types[:4])),
         "logicalDrives": logical_drives,
-        "physicalDisks": disk_info,
+        "physicalDisks": macos_details.get("physicalDisks") if system == "Darwin" and macos_details.get("physicalDisks") else disk_info,
         "hardwareIdentity": hardware_identity,
         "osType": "macOS" if system == "Darwin" else system or "Unknown",
         "hostname": first_clean(system_info.get("hostname"), socket.gethostname()),
