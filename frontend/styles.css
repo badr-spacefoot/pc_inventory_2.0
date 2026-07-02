@@ -1830,6 +1830,11 @@ pre {
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }
 
+.clear-filters-button {
+  align-self: end;
+  justify-content: center;
+}
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(420px, 0.8fr);

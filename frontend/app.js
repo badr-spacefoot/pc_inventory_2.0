@@ -2223,6 +2223,25 @@ function applyFilters() {
   renderValuation();
 }
 
+function clearFleetFilters() {
+  [
+    "global-search",
+    "filter-team",
+    "filter-establishment",
+    "filter-os",
+    "filter-age",
+    "filter-model",
+    "filter-manufacturer",
+    "filter-status",
+    "filter-cpu-score",
+    "filter-value",
+  ].forEach((id) => {
+    $(`#${id}`).value = "";
+  });
+  $("#sort-devices").value = "last_seen";
+  applyFilters();
+}
+
 function renderMetrics() {
   const total = state.filtered.length;
   const stale = state.filtered.filter((d) => daysSince(d.last_seen_at) > CONFIG.staleDays).length;
@@ -4616,6 +4635,7 @@ function bindEvents() {
   });
   $("#export-enriched-csv").addEventListener("click", () => exportCsv(true));
   $("#export-csv").addEventListener("click", () => exportCsv(false));
+  $("#clear-filters").addEventListener("click", clearFleetFilters);
   ["global-search", "filter-team", "filter-establishment", "filter-os", "filter-age", "filter-model", "filter-manufacturer", "filter-status", "filter-cpu-score", "filter-value", "sort-devices"].forEach((id) => {
     $(`#${id}`).addEventListener("input", applyFilters);
   });
