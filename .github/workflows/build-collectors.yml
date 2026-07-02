@@ -109,30 +109,24 @@ jobs:
       - name: Bundle osquery for macOS
         if: matrix.name == 'macos'
         shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          release_json="$(curl -fsSL -H "Accept: application/vnd.github+json" -H "Authorization: Bearer $GITHUB_TOKEN" -H "User-Agent: spacefoot-it-collector-build" https://api.github.com/repos/osquery/osquery/releases/latest)"
-          osquery_pkg_url="$(python -c 'import json,sys; data=json.load(sys.stdin); assets=data.get("assets", []); urls=[a.get("browser_download_url", "") for a in assets if a.get("name", "").lower().endswith(".pkg") and "osquery" in a.get("name", "").lower()]; print(urls[0] if urls else "")' <<< "$release_json")"
-          if [ -z "$osquery_pkg_url" ]; then
-            echo "No macOS osquery .pkg asset was found in the latest osquery release."
-            exit 1
+          if ! command -v osqueryi >/dev/null 2>&1; then
+            brew install osquery
           fi
-          echo "Using osquery package: $osquery_pkg_url"
-          curl -fsSL "$osquery_pkg_url" -o installer-assets/osquery.pkg
-          rm -rf installer-assets/osquery-expanded
-          pkgutil --expand-full installer-assets/osquery.pkg installer-assets/osquery-expanded
-          osqueryi_path="$(find installer-assets/osquery-expanded -name osqueryi -type f | head -n 1)"
+          osqueryi_path="$(command -v osqueryi || true)"
+          osquery_prefix="$(brew --prefix osquery 2>/dev/null || true)"
+          if [ -z "$osqueryi_path" ] && [ -n "$osquery_prefix" ]; then
+            osqueryi_path="$(find "$osquery_prefix" -name osqueryi -type f | head -n 1)"
+          fi
           if [ -z "$osqueryi_path" ]; then
-            echo "osqueryi was not found inside the downloaded macOS osquery package."
+            echo "osqueryi was not found after installing osquery with Homebrew."
             exit 1
           fi
           chmod +x "$osqueryi_path"
-          osquery_root="$(dirname "$(dirname "$osqueryi_path")")"
-          if [ -d "$osquery_root/bin" ]; then
+          if [ -n "$osquery_prefix" ] && [ -d "$osquery_prefix" ]; then
             mkdir -p installer-assets/bundled-tools/osquery
-            cp -a "$osquery_root"/. installer-assets/bundled-tools/osquery/
+            cp -a "$osquery_prefix"/. installer-assets/bundled-tools/osquery/
             find installer-assets/bundled-tools/osquery -name osqueryi -exec chmod +x {} \;
           fi
           cp "$osqueryi_path" installer-assets/bundled-tools/osqueryi
