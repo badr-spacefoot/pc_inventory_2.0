@@ -431,6 +431,7 @@ const englishTranslations = {
   "Confiance A-B": "A-B confidence",
   "market_verified": "Market verified",
   "market_blended": "Market blended",
+  "manufacturer_msrp": "Manufacturer MSRP",
   "model_matched": "Model matched",
   "spec_estimate": "Spec estimate",
   "fallback_estimate": "Fallback estimate",
@@ -667,7 +668,7 @@ function localizedEnrichmentValue(value) {
       "business-laptop": "Portable professionnel", workstation: "Station de travail",
       "mini-pc": "Mini PC", desktop: "Ordinateur fixe", "all-in-one": "Tout-en-un",
       keep: "Garder", watch: "Surveiller", replace: "Remplacer",
-      market_verified: "Prix marche verifie", market_blended: "Prix marche mixte",
+      market_verified: "Prix marche verifie", market_blended: "Prix marche mixte", manufacturer_msrp: "Prix constructeur verifie",
       model_matched: "Modele identifie", spec_estimate: "Estimation technique",
       fallback_estimate: "Estimation prudente", invoice_backed: "Facture verifiee",
     },
@@ -676,7 +677,7 @@ function localizedEnrichmentValue(value) {
       "business-laptop": "Business laptop", workstation: "Workstation",
       "mini-pc": "Mini PC", desktop: "Desktop", "all-in-one": "All-in-one",
       keep: "Keep", watch: "Monitor", replace: "Replace",
-      market_verified: "Market verified", market_blended: "Market blended",
+      market_verified: "Market verified", market_blended: "Market blended", manufacturer_msrp: "Manufacturer MSRP",
       model_matched: "Model matched", spec_estimate: "Spec estimate",
       fallback_estimate: "Fallback estimate", invoice_backed: "Invoice backed",
     },
@@ -1568,14 +1569,26 @@ function ageBucket(device) {
 function money(value) {
   const number = Number(value || 0);
   if (!number) return "-";
-  return new Intl.NumberFormat(state.language === "en" ? "en-GB" : "fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(number);
+  const hasCents = Math.round(number * 100) % 100 !== 0;
+  return new Intl.NumberFormat(state.language === "en" ? "en-GB" : "fr-FR", {
+    style: "currency",
+    currency: "EUR",
+    minimumFractionDigits: hasCents ? 2 : 0,
+    maximumFractionDigits: hasCents ? 2 : 0,
+  }).format(number);
 }
 
 function moneyWithCurrency(value, currency = "EUR") {
   const number = Number(value || 0);
   if (!number) return "-";
   const safeCurrency = /^[A-Z]{3}$/.test(String(currency || "").toUpperCase()) ? String(currency).toUpperCase() : "EUR";
-  return new Intl.NumberFormat(state.language === "en" ? "en-GB" : "fr-FR", { style: "currency", currency: safeCurrency, maximumFractionDigits: 0 }).format(number);
+  const hasCents = Math.round(number * 100) % 100 !== 0;
+  return new Intl.NumberFormat(state.language === "en" ? "en-GB" : "fr-FR", {
+    style: "currency",
+    currency: safeCurrency,
+    minimumFractionDigits: hasCents ? 2 : 0,
+    maximumFractionDigits: hasCents ? 2 : 0,
+  }).format(number);
 }
 
 function estimatedValue(device) {

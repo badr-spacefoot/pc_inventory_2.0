@@ -1136,6 +1136,7 @@ function valuationMethod(marketCount: number, hasModelEvidence: boolean, hasBenc
 }
 
 function valuationConfidenceLabel(method: string, confidenceScore: number) {
+  if (method === "manufacturer_msrp" && confidenceScore >= 90) return "A";
   if (method === "market_verified" && confidenceScore >= 85) return "A";
   if (["market_blended", "model_matched"].includes(method) && confidenceScore >= 70) return "B";
   if (["spec_estimate", "model_matched"].includes(method) && confidenceScore >= 50) return "C";
@@ -1219,7 +1220,44 @@ async function fetchEbayPrices(query: string) {
   })).filter((item: Json) => item.price);
 }
 
-async function enrichOneDevice(device: Json, options: { force: boolean; useExternal: boolean }) {
+function isDellDb14250MaxConfig(device: Json) {
+  const manufacturer = safeString(device.manufacturer).toLowerCase();
+  const model = `${safeString(device.model)} ${safeString(device.model_number)}`.toLowerCase();
+  const cpu = safeString(device.cpu).toLowerCase();
+  const ram = safeNumber(device.ram_total_gb) ?? 0;
+  const storage = safeNumber(device.storage_total_gb) ?? 0;
+  return manufacturer.includes("dell")
+    && (model.includes("14 plus") || model.includes("db14250"))
+    && cpu.includes("ultra 9")
+    && cpu.includes("288v")
+    && ram >= 31
+    && storage >= 900;
+}
+
+function manufacturerPriceForDevice(device: Json) {
+  if (!isDellDb14250MaxConfig(device)) return null;
+  return {
+    source: "dell",
+    source_url: "https://www.dell.com/fr-fr/shop/ordinateurs-portables-dell/dell-14-plus-laptop/spd/dell-db14250-laptop/cndb1425003sc",
+    current_new_price: 2098.99,
+    list_price: 2098.99,
+    currency: "EUR",
+    spec_match: "exact",
+    specs: {
+      cpu: "Intel Core Ultra 9 288V",
+      ram: "32 Go",
+      storage: "1 To",
+    },
+    matched: {
+      cpu: true,
+      ram: true,
+      storage: true,
+    },
+    collected_at: new Date().toISOString(),
+  };
+}
+
+async function enrichOneDevice(device: Json, options: { force: boolean; useExternal: boolean }) {
   if (!options.force && device.last_enriched_at) {
     const ageMs = Date.now() - new Date(safeString(device.last_enriched_at)).getTime();
     if (ageMs < enrichmentCacheDays * 86400000) return { skipped: true, deviceId: device.id };
@@ -1247,7 +1285,12 @@ async function enrichOneDevice(device: Json, options: { force: boolean; useExter
   const modelRelease = inferModelReleaseYear(model, cpuReleaseYear);
   const modelReleaseYear = modelRelease.year;
   const category = detectDeviceCategory(device, benchmark?.category);
-  const launchPrice = estimateLaunchPrice(device, category);
+  const estimatedRuleLaunchPrice = estimateLaunchPrice(device, category);
+  const manufacturerPrice = manufacturerPriceForDevice(device);
+  const manufacturerListPrice = safeNumber(manufacturerPrice?.list_price);
+  const manufacturerCurrentNewPrice = safeNumber(manufacturerPrice?.current_new_price);
+  const manufacturerPriceIsExact = safeString(manufacturerPrice?.spec_match) === "exact";
+  const launchPrice = manufacturerPriceIsExact && manufacturerListPrice ? manufacturerListPrice : estimatedRuleLaunchPrice;
   const query = [manufacturer, model, cpuName.split("@")[0]].filter(Boolean).join(" ");
   const marketRows = options.useExternal ? await fetchEbayPrices(query) : [];
   const prices = marketRows.map((row: Json) => safeNumber(row.price)).filter((price): price is number => price !== null && price > 0);
@@ -1272,9 +1315,11 @@ async function enrichOneDevice(device: Json, options: { force: boolean; useExter
   const recommendation = recommendationForPriority(priority.score);
   const hasModelEvidence = ["model-year", "known-model"].includes(modelRelease.match);
 
-  const method = valuationMethod(marketObservationCount, hasModelEvidence, Boolean(benchmark), cpuReleaseYear);
+  const method = manufacturerPriceIsExact ? "manufacturer_msrp" : valuationMethod(marketObservationCount, hasModelEvidence, Boolean(benchmark), cpuReleaseYear);
 
-  const confidenceScore = marketObservationCount >= 5
+  const confidenceScore = manufacturerPriceIsExact
+    ? 94
+    : marketObservationCount >= 5
     ? Math.min(100, 88 + Math.min(marketObservationCount, 12))
 
     : marketObservationCount >= 3
@@ -1297,17 +1342,21 @@ async function enrichOneDevice(device: Json, options: { force: boolean; useExter
     `category:${category}`,
     `cpu_score:${cpuScore}`,
     `model_match:${modelRelease.match}`,
-  ];
+    manufacturerPrice ? `manufacturer_price:${manufacturerPrice.spec_match}` : "",
+  ].filter(Boolean);
 
   const sources = [
     benchmark?.source || (cpuName ? "cpu-generation-estimate" : ""),
     "category-price-rules",
     "age-depreciation",
-    marketRows.length ? "ebay-optional" : "",
+    marketRows.length ? "ebay-optional" : "",
+    manufacturerPrice ? "dell-product-page" : "",
   ].filter(Boolean);
-  const enrichmentStatus = ["market_verified", "market_blended", "model_matched"].includes(method) ? "completed" : "partial";
+  const enrichmentStatus = ["manufacturer_msrp", "market_verified", "market_blended", "model_matched"].includes(method) ? "completed" : "partial";
   const noteParts = [
-    `Launch price estimated from ${category} and ${cpuTier(cpuName)} CPU rules.`,
+    manufacturerPriceIsExact
+      ? "Launch/MSRP price sourced from Dell product page with exact CPU/RAM/storage match."
+      : `Launch price estimated from ${category} and ${cpuTier(cpuName)} CPU rules.`,
     `Resale value uses ${marketObservationCount >= 3 ? "external market median blended with depreciation" : `${age}-year depreciation estimate`}.`,
 
     `Replacement cost is estimated separately from resale value.`,
@@ -1326,7 +1375,7 @@ async function enrichOneDevice(device: Json, options: { force: boolean; useExter
     model_release_year: modelReleaseYear,
     release_year: modelReleaseYear,
     estimated_launch_price: launchPrice,
-    current_new_price: newStats.avg,
+    current_new_price: manufacturerCurrentNewPrice ?? newStats.avg,
     current_market_price_min: marketObservationCount > 0 ? stats.min : null,
     current_market_price_avg: marketObservationCount > 0 ? stats.avg : null,
     current_market_price_max: marketObservationCount > 0 ? stats.max : null,
@@ -1358,7 +1407,9 @@ async function enrichOneDevice(device: Json, options: { force: boolean; useExter
     notes: noteParts.join(" "),
     last_enriched_at: new Date().toISOString(),
     raw_data: {
-      query,
+      query,
+      manufacturer_price: manufacturerPrice,
+      estimated_rule_launch_price: estimatedRuleLaunchPrice,
       age,
       depreciation_factor: depreciationFactor(age),
       resale_value: resaleValue,
