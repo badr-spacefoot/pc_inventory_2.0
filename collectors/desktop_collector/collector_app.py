@@ -14,6 +14,7 @@ import re
 import shlex
 import shutil
 import socket
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -51,7 +52,7 @@ else:
 
 
 DEFAULT_API_URL = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
-COLLECTOR_VERSION = "0.1.46"
+COLLECTOR_VERSION = "0.1.47"
 COLLECTOR_BUILD_CHANNEL = "github-release"
 COLLECTOR_RELEASES_URL = "https://badr-spacefoot.github.io/pc_inventory_2.0/collector-releases.json"
 DRAFT_PATH = Path.home() / ".spacefoot_it_collector.json"
@@ -91,6 +92,28 @@ def bundled_asset_path(relative_path: str) -> Path:
     if getattr(sys, "frozen", False):
         return Path(getattr(sys, "_MEIPASS")) / relative_path
     return Path(__file__).resolve().parents[2] / "frontend" / relative_path
+
+
+_HTTP_SSL_CONTEXT = None
+
+
+def http_ssl_context():
+    global _HTTP_SSL_CONTEXT
+    if _HTTP_SSL_CONTEXT is not None:
+        return _HTTP_SSL_CONTEXT
+    cafile = os.environ.get("SSL_CERT_FILE")
+    if not cafile:
+        try:
+            import certifi
+
+            cafile = certifi.where()
+        except Exception:
+            cafile = ""
+    if cafile and Path(cafile).exists():
+        _HTTP_SSL_CONTEXT = ssl.create_default_context(cafile=cafile)
+    else:
+        _HTTP_SSL_CONTEXT = ssl.create_default_context()
+    return _HTTP_SSL_CONTEXT
 
 TRANSLATIONS = {
     "fr": {
@@ -298,13 +321,13 @@ def fetch_json_url(url: str, timeout=10) -> dict:
         "Cache-Control": "no-cache",
         "Pragma": "no-cache",
     })
-    with urllib.request.urlopen(request, timeout=timeout) as response:
+    with urllib.request.urlopen(request, timeout=timeout, context=http_ssl_context()) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
 def download_file(url: str, destination: Path, timeout=60) -> None:
     request = urllib.request.Request(url, headers={"User-Agent": f"spacefoot-it-collector/{COLLECTOR_VERSION}"})
-    with urllib.request.urlopen(request, timeout=timeout) as response:
+    with urllib.request.urlopen(request, timeout=timeout, context=http_ssl_context()) as response:
         with destination.open("wb") as output:
             shutil.copyfileobj(response, output)
 
@@ -318,7 +341,7 @@ def api_request(api_url: str, path: str, method="GET", body=None, headers=None, 
         headers={"Content-Type": "application/json", **(headers or {})},
         method=method,
     )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
+    with urllib.request.urlopen(request, timeout=timeout, context=http_ssl_context()) as response:
         raw = response.read().decode("utf-8")
         return json.loads(raw) if raw else {}
 
@@ -2183,7 +2206,7 @@ class CollectorApp(tk.Tk):
                 headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
                 method="POST",
             )
-            with urllib.request.urlopen(request, timeout=25) as response:
+            with urllib.request.urlopen(request, timeout=25, context=http_ssl_context()) as response:
                 result = json.loads(response.read().decode("utf-8"))
             clear_sensitive_draft()
             self.submitted = True

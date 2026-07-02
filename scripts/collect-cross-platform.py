@@ -15,7 +15,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-SCRIPT_VERSION = "1.5.3"
+SCRIPT_VERSION = "1.5.4"
 OSQUERY_ENGINE_VERSION = "0.1.0"
 
 PLACEHOLDER_VALUES = {
@@ -364,32 +364,45 @@ def macos_display_gpu(chip):
 
 
 def macos_storage_details(default_total_gb, default_free_gb):
-    profiler = {}
+    physical_profiler = {}
+    storage_profiler = {}
     for data_type in ("SPNVMeDataType", "SPSerialATADataType", "SPStorageDataType"):
         raw = run(["system_profiler", data_type, "-json"])
         try:
             loaded = json.loads(raw)
         except json.JSONDecodeError:
             loaded = {}
-        profiler.update(loaded)
+        if data_type == "SPStorageDataType":
+            storage_profiler = loaded
+        else:
+            physical_profiler.update(loaded)
     physical_disks = []
     totals = []
     seen_disks = set()
     storage_type = ""
-    for item in walk_json_values(profiler):
-        name = first_clean(item.get("_name"), item.get("device_model"), item.get("bsd_name"), item.get("physical_drive"))
+
+    def add_physical_disk(item, allow_volume_fallback=False):
+        nonlocal storage_type
+        name = first_clean(item.get("device_model"), item.get("physical_drive"), item.get("_name") if allow_volume_fallback else "")
         size_bytes = first_clean(item.get("size_in_bytes"), item.get("capacity_in_bytes"))
         size_gb = bytes_to_gb(size_bytes) if size_bytes else None
-        medium = first_clean(item.get("medium_type"), item.get("physical_drive"), item.get("device_model"))
+        medium = first_clean(item.get("medium_type"), item.get("physical_drive"), item.get("device_model"), item.get("_name"))
         if name and size_gb and size_gb > 16:
             disk_key = (name.lower(), round(size_gb, 1))
             if disk_key in seen_disks:
-                continue
+                return
             seen_disks.add(disk_key)
             physical_disks.append({"name": name, "sizeGb": size_gb, "type": "SSD" if re.search(r"ssd|solid|nvme|apple", medium, re.I) else ""})
             totals.append(size_gb)
         if re.search(r"ssd|solid|nvme|apple", medium, re.I):
             storage_type = "SSD"
+
+    for item in walk_json_values(physical_profiler):
+        add_physical_disk(item)
+    if not totals:
+        for item in walk_json_values(storage_profiler):
+            if item.get("physical_drive") or item.get("device_model"):
+                add_physical_disk(item, allow_volume_fallback=True)
     return {
         "storageTotalGb": sum(totals) if totals else default_total_gb,
         "storageFreeGb": default_free_gb,

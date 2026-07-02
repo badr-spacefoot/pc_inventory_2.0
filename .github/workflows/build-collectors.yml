@@ -57,7 +57,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install PyInstaller
-        run: python -m pip install --upgrade pyinstaller
+        run: python -m pip install --upgrade pyinstaller certifi
 
       - name: Prepare bundled tools directory
         shell: bash
@@ -162,6 +162,7 @@ jobs:
           --add-data "frontend/assets/brand/app-icon.png${{ matrix.separator }}assets/brand"
           --add-data "installer-assets/bundled-tools${{ matrix.separator }}bundled-tools"
           --hidden-import argparse
+          --hidden-import certifi
           --hidden-import ctypes
           --hidden-import datetime
           --hidden-import getpass
