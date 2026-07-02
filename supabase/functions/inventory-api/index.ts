@@ -30,7 +30,11 @@ const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const adminPassword = Deno.env.get("ADMIN_PASSWORD") ?? "";
 const adminSessionSecret = Deno.env.get("ADMIN_SESSION_SECRET") ?? "";
 const collectionAccessToken = Deno.env.get("COLLECTION_ACCESS_TOKEN") ?? "";
-const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ?? "*").split(",").map((origin) => origin.trim());
+const defaultAllowedOrigins = "https://badr-spacefoot.github.io,http://localhost:8080,http://127.0.0.1:8080";
+
+const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ?? defaultAllowedOrigins).split(",").map((origin) => origin.trim());
+
+const allowLegacyAdminLogin = ["1", "true", "yes"].includes((Deno.env.get("ALLOW_LEGACY_ADMIN_LOGIN") ?? "").trim().toLowerCase());
 const allowedEmailDomains = (Deno.env.get("ALLOWED_EMAIL_DOMAINS") ?? "")
   .split(",")
   .map((domain) => domain.trim().toLowerCase().replace(/^@/, ""))
@@ -685,7 +689,7 @@ async function handleAdminLogin(request: Request) {
     }
   }
 
-  if (!username && password === adminPassword) {
+  if (!username && allowLegacyAdminLogin && password === adminPassword) {
     const session: AdminSession = { id: "legacy-admin", username: "legacy-admin", displayName: "Legacy Admin", role: "ADMIN", legacy: true };
     return json(request, { token: await createAdminToken(session), user: session });
   }
@@ -758,13 +762,25 @@ function mergePrefillPayload(base: Json, override: Json) {
   return merged;
 }
 
-async function handleCreateCollectionPrefill(request: Request) {
+async function cleanupExpiredCollectionPrefills() {
+
+  const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { error } = await supabase.from("collection_prefills").delete().lt("expires_at", cutoff);
+
+  if (error) console.warn("Expired prefill cleanup failed", error.message);
+
+}
+
+async function handleCreateCollectionPrefill(request: Request) {
   const accessToken = request.headers.get("x-collection-access-token") ?? "";
   const token = await validateCollectionAccessTokenValue(accessToken);
   if (!token || safeString(token.invalid_reason)) {
     return badRequest(request, "Token temporaire invalide, expiré, révoqué ou épuisé.", 401);
   }
-  const body = await request.json().catch(() => ({}));
+  await cleanupExpiredCollectionPrefills();
+
+  const body = await request.json().catch(() => ({}));
   const payload = prefillPayload(body);
   if (payload.email) {
     const emailError = emailValidationError(payload.email);
@@ -834,12 +850,14 @@ async function handleGetCollectionInvite(request: Request, code: string) {
   });
 }
 
-async function handleCreateInvitePrefill(request: Request, code: string) {
+async function handleCreateInvitePrefill(request: Request, code: string) {
   const invite = await validateCollectionInviteValue(code);
   if (!invite || safeString(invite.invalid_reason)) {
     return badRequest(request, "Invitation de collecte invalide, expirée ou révoquée.", 401);
   }
-  const body = await request.json().catch(() => ({}));
+  await cleanupExpiredCollectionPrefills();
+
+  const body = await request.json().catch(() => ({}));
   const payload = mergePrefillPayload(
     (invite.payload && typeof invite.payload === "object") ? (invite.payload as Json) : {},
     prefillPayload(body),

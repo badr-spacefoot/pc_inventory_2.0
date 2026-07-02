@@ -355,6 +355,7 @@ create index if not exists idx_market_price_history_device_collected on public.m
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
+set search_path = public
 as $$
 begin
   new.updated_at = now();
@@ -395,7 +396,7 @@ create trigger set_devices_updated_at
 before update on public.devices
 for each row execute function public.set_updated_at();
 
-create or replace view public.device_inventory_view as
+create or replace view public.device_inventory_view with (security_invoker = true) as
 select
   d.id,
   d.dedupe_key,
@@ -488,3 +489,9 @@ alter table public.cpu_benchmarks enable row level security;
 
 -- Les lectures/ecritures applicatives passent par la Edge Function avec la service role key.
 -- Aucune policy publique n'est creee afin d'eviter l'exposition depuis GitHub Pages.
+
+revoke all privileges on all tables in schema public from anon, authenticated;
+revoke all privileges on all sequences in schema public from anon, authenticated;
+revoke all privileges on public.device_inventory_view from anon, authenticated;
+revoke execute on function public.consume_collection_access_token(text) from public, anon, authenticated;
+revoke execute on function public.set_updated_at() from public, anon, authenticated;

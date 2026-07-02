@@ -2400,16 +2400,16 @@ function historyGroupKey(event) {
 }
 
 function groupHistoryEvents(history = []) {
-  return history.reduce((groups, event) => {
+  const groupedByKey = new Map();
+  history.forEach((event) => {
     const key = historyGroupKey(event);
-    const last = groups[groups.length - 1];
-    if (last && last.key === key) {
-      last.events.push(event);
+    if (groupedByKey.has(key)) {
+      groupedByKey.get(key).events.push(event);
     } else {
-      groups.push({ key, events: [event] });
+      groupedByKey.set(key, { key, events: [event] });
     }
-    return groups;
-  }, []);
+  });
+  return Array.from(groupedByKey.values());
 }
 
 function historyGroupLabel(events) {
