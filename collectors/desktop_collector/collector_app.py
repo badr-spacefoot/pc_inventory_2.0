@@ -51,7 +51,7 @@ else:
 
 
 DEFAULT_API_URL = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
-COLLECTOR_VERSION = "0.1.41"
+COLLECTOR_VERSION = "0.1.42"
 COLLECTOR_BUILD_CHANNEL = "github-release"
 COLLECTOR_RELEASES_URL = "https://badr-spacefoot.github.io/pc_inventory_2.0/collector-releases.json"
 DRAFT_PATH = Path.home() / ".spacefoot_it_collector.json"
@@ -1741,6 +1741,9 @@ class CollectorApp(tk.Tk):
         self.last_loaded_prefill_mtime = mtime
         self.status.set(self.t("Prefill file loaded automatically. You can edit before submitting."))
         self.persist_draft()
+        if data.get("accessToken") or any(data.get(key) for key in ("firstName", "lastName", "email", "team", "establishment")):
+            self.apply_prefill(data)
+            return
         self.load_prefill()
 
     def start_prefill_file_watch(self) -> None:

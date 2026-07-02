@@ -44,6 +44,7 @@ const state = {
   collectorReleases: null,
   detectedPlatform: "unknown",
   prefillCode: "",
+  prefillPayload: null,
   collectorLaunchUrl: "",
   collectorInstallState: JSON.parse(localStorage.getItem(COLLECTOR_INSTALL_STATE_KEY) || "null"),
   collectorDownloadState: JSON.parse(localStorage.getItem(COLLECTOR_DOWNLOAD_STATE_KEY) || "null"),
@@ -3143,6 +3144,7 @@ function downloadPrefillFile(options = {}) {
     return;
   }
   const payload = {
+    ...(state.prefillPayload || {}),
     apiUrl: CONFIG.apiBaseUrl,
     prefillCode: state.prefillCode,
     launchUrl: state.collectorLaunchUrl,
@@ -3886,6 +3888,16 @@ function bindEvents() {
       $("#collector-prefill-code").textContent = result.prefillCode || "";
       state.prefillCode = result.prefillCode || "";
       state.collectorLaunchUrl = result.launchUrl || "";
+      state.prefillPayload = {
+        ...payload,
+        prefillCode: result.prefillCode || "",
+        accessToken: result.accessToken || (hasInvite
+          ? `invite_${state.currentInviteCode || form.inviteCode || result.inviteCode || ""}`
+          : form.accessToken || ""),
+        expiresAt: result.expiresAt || "",
+        apiUrl: result.apiUrl || CONFIG.apiBaseUrl,
+        launchUrl: result.launchUrl || "",
+      };
       $("#powershell-command").textContent = state.language === "en"
         ? "Use the native collector app. Install it once, then open it from this page to load the profile automatically. The script fallback is reserved for IT support."
         : "Utilisez l'application collecteur native. Installez-la une fois, puis ouvrez-la depuis cette page pour charger le profil automatiquement. Le script fallback reste réservé au support IT.";

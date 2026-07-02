@@ -210,7 +210,7 @@ Commande Ubuntu utilisateur:
 ```bash
 downloads="$(xdg-user-dir DOWNLOAD 2>/dev/null || echo "$HOME/Téléchargements")"
 cd "$downloads" || cd "$HOME/Downloads"
-sudo apt install ./spacefoot-it-collector-linux-0.1.41.deb
+sudo apt install ./spacefoot-it-collector-linux-0.1.42.deb
 ```
 
 macOS:
