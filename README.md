@@ -513,6 +513,10 @@ Dans Admin > Valorisation, cliquer sur `Importer benchmarks CPU`, choisir le CSV
 Variables optionnelles:
 
 ```powershell
+supabase secrets set EBAY_CLIENT_ID="..."
+supabase secrets set EBAY_CLIENT_SECRET="..."
+supabase secrets set EBAY_MARKETPLACE_ID="EBAY_FR"
+# Optionnel pour test manuel seulement. Preferer EBAY_CLIENT_ID + EBAY_CLIENT_SECRET en production.
 supabase secrets set EBAY_BROWSE_API_TOKEN="..."
 supabase secrets set GOOGLE_MAPS_API_KEY="..."
 supabase secrets set ENRICHMENT_CACHE_DAYS="90"

@@ -1,7 +1,18 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import cpuBenchmarkSeed from "./cpu_benchmarks.json" with { type: "json" };
 
-type Json = Record<string, unknown>;
+type Json = Record<string, unknown>;
+type DeviceHistoryRow = {
+  device_id: string;
+  event_type: string;
+  field_name?: string;
+  old_value?: string | null;
+  new_value?: string | null;
+  changed_by: string;
+  source: string;
+  notes?: string;
+  changed_at: string;
+};
 type Role = "ADMIN" | "MANAGER" | "VIEWER" | "READ_ONLY" | "COLLECTOR_USER";
 type Action =
   | "DEVICE_VIEW"
@@ -45,7 +56,13 @@ const allowedEmailDomains = (Deno.env.get("ALLOWED_EMAIL_DOMAINS") ?? "")
   .split(",")
   .map((domain) => domain.trim().toLowerCase().replace(/^@/, ""))
   .filter(Boolean);
-const ebayBrowseApiToken = Deno.env.get("EBAY_BROWSE_API_TOKEN") ?? "";
+const ebayBrowseApiToken = Deno.env.get("EBAY_BROWSE_API_TOKEN") ?? "";
+const ebayClientId = Deno.env.get("EBAY_CLIENT_ID") ?? "";
+const ebayClientSecret = Deno.env.get("EBAY_CLIENT_SECRET") ?? "";
+const ebayOAuthScope = Deno.env.get("EBAY_OAUTH_SCOPE") ?? "https://api.ebay.com/oauth/api_scope";
+const ebayMarketplaceId = Deno.env.get("EBAY_MARKETPLACE_ID") ?? "EBAY_FR";
+let ebayGeneratedToken = "";
+let ebayGeneratedTokenExpiresAt = 0;
 const googleMapsApiKey = Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
 const enrichmentCacheDays = Number(Deno.env.get("ENRICHMENT_CACHE_DAYS") ?? 90);
 const organizationPalette = [
@@ -506,7 +523,7 @@ async function openAssignmentPeriod(
   if (error) throw error;
 }
 
-function changedDeviceHistory(deviceId: string, previous: Json | null, current: Json, source: string, changedAt: string) {
+function changedDeviceHistory(deviceId: string, previous: Json | null, current: Json, source: string, changedAt: string): DeviceHistoryRow[] {
   if (!previous) {
     return [{
       device_id: deviceId,
@@ -517,7 +534,7 @@ function changedDeviceHistory(deviceId: string, previous: Json | null, current: 
       changed_at: changedAt,
     }];
   }
-  const changes = deviceHistoryFields.flatMap(({ field, eventType }) => {
+  const changes: DeviceHistoryRow[] = deviceHistoryFields.flatMap(({ field, eventType }) => {
     const oldValue = historyValue(previous[field]);
     const newValue = historyValue(current[field]);
     if (oldValue === newValue) return [];
@@ -1199,15 +1216,47 @@ function priceStats(prices: number[]) {
   };
 }
 
-async function fetchEbayPrices(query: string) {
-  if (!ebayBrowseApiToken) return [];
+async function getEbayBrowseToken() {
+  const now = Date.now();
+  if (ebayGeneratedToken && ebayGeneratedTokenExpiresAt > now + 60_000) return ebayGeneratedToken;
+  if (ebayClientId && ebayClientSecret) {
+    const credentials = btoa(`${ebayClientId}:${ebayClientSecret}`);
+    const body = new URLSearchParams({
+      grant_type: "client_credentials",
+      scope: ebayOAuthScope,
+    });
+    const response = await fetch("https://api.ebay.com/identity/v1/oauth2/token", {
+      method: "POST",
+      signal: AbortSignal.timeout(5000),
+      headers: {
+        Authorization: `Basic ${credentials}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body,
+    }).catch(() => null);
+    if (response?.ok) {
+      const data = await response.json();
+      ebayGeneratedToken = safeString(data.access_token, 5000);
+      const expiresIn = safeNumber(data.expires_in) ?? 7200;
+      ebayGeneratedTokenExpiresAt = now + Math.max(60, expiresIn - 120) * 1000;
+      if (ebayGeneratedToken) return ebayGeneratedToken;
+    }
+  }
+  return ebayBrowseApiToken;
+}
+
+
+async function fetchEbayPrices(query: string) {
+  const browseToken = await getEbayBrowseToken();
+
+  if (!browseToken) return [];
   const url = new URL("https://api.ebay.com/buy/browse/v1/item_summary/search");
   url.searchParams.set("q", query);
   url.searchParams.set("limit", "10");
   url.searchParams.set("filter", "buyingOptions:{FIXED_PRICE}");
   const response = await fetch(url, {
     signal: AbortSignal.timeout(5000),
-    headers: { Authorization: `Bearer ${ebayBrowseApiToken}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_FR" },
+    headers: { Authorization: `Bearer ${browseToken}`, "X-EBAY-C-MARKETPLACE-ID": ebayMarketplaceId },
   }).catch(() => null);
   if (!response) return [];
   if (!response.ok) return [];
@@ -1295,11 +1344,11 @@ async function enrichOneDevice(device: Json, options: { force: boolean; useExter
   const launchPrice = manufacturerPriceIsExact && manufacturerListPrice ? manufacturerListPrice : estimatedRuleLaunchPrice;
   const query = [manufacturer, model, cpuName.split("@")[0]].filter(Boolean).join(" ");
   const marketRows = options.useExternal ? await fetchEbayPrices(query) : [];
-  const prices = marketRows.map((row: Json) => safeNumber(row.price)).filter((price): price is number => price !== null && price > 0);
+  const prices = marketRows.map((row: Json) => safeNumber(row.price)).filter((price: number | null): price is number => price !== null && price > 0);
   const newPrices = marketRows
     .filter((row: Json) => safeString(row.condition).toLowerCase().includes("new") || safeString(row.condition).toLowerCase().includes("neuf"))
     .map((row: Json) => safeNumber(row.price))
-    .filter((price): price is number => price !== null && price > 0);
+    .filter((price: number | null): price is number => price !== null && price > 0);
   const stats = priceStats(prices);
   const newStats = priceStats(newPrices);
   const currentYear = new Date().getFullYear();
