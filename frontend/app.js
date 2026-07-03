@@ -3052,7 +3052,7 @@ function renderDetail(device, scans, history = []) {
         method: "POST",
         body: JSON.stringify({ deviceId: device.id, limit: 1, force: true, mode: "refresh", useExternal: true }),
       });
-      toast(result.failed ? "Erreur serveur." : "Enrichissement termine.");
+      toast(result.failed ? "Erreur serveur." : enrichmentResultMessage(result));
       await loadAdminData();
       await selectDevice(device.id);
     } catch (error) {
@@ -4062,7 +4062,7 @@ async function runEnrichment({ mode = "refresh", deviceId = "", button = null } 
     const message = state.language === "en"
       ? `${result.enriched} enriched, ${result.skipped} skipped, ${result.failed || 0} failed.`
       : `${result.enriched} enrichie(s), ${result.skipped} ignoree(s), ${result.failed || 0} en échec.`;
-    toast(message);
+    toast(enrichmentResultMessage(result));
     await loadAdminData();
     return result;
   } finally {
@@ -4071,6 +4071,17 @@ async function runEnrichment({ mode = "refresh", deviceId = "", button = null } 
       button.textContent = originalText;
     }
   }
+}
+
+function enrichmentResultMessage(result) {
+  const rows = Array.isArray(result?.results) ? result.results : [];
+  const ebayCount = rows.reduce((sum, item) => sum + Number(item?.providerCounts?.ebay || 0), 0);
+  const statuses = [...new Set(rows.map((item) => item?.providerStatus?.ebay?.status).filter(Boolean))];
+  const statusLabel = statuses.length ? statuses.join(", ") : "disabled";
+  if (state.language === "en") {
+    return `${result?.enriched || 0} enriched, ${result?.skipped || 0} skipped, ${result?.failed || 0} failed. eBay: ${ebayCount} result(s) (${statusLabel}).`;
+  }
+  return `${result?.enriched || 0} enrichie(s), ${result?.skipped || 0} ignoree(s), ${result?.failed || 0} en echec. eBay: ${ebayCount} resultat(s) (${statusLabel}).`;
 }
 
 async function importCpuBenchmarkFile(file) {

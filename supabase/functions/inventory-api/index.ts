@@ -1246,10 +1246,17 @@ async function getEbayBrowseToken() {
 }
 
 
-async function fetchEbayPrices(query: string) {
+type MarketFetchResult = {
+  rows: Json[];
+  status: string;
+  statusCode?: number;
+  error?: string;
+};
+
+async function fetchEbayPriceResult(query: string): Promise<MarketFetchResult> {
   const browseToken = await getEbayBrowseToken();
 
-  if (!browseToken) return [];
+  if (!browseToken) return { rows: [], status: "missing_token" };
   const url = new URL("https://api.ebay.com/buy/browse/v1/item_summary/search");
   url.searchParams.set("q", query);
   url.searchParams.set("limit", "10");
@@ -1257,20 +1264,31 @@ async function fetchEbayPrices(query: string) {
   const response = await fetch(url, {
     signal: AbortSignal.timeout(5000),
     headers: { Authorization: `Bearer ${browseToken}`, "X-EBAY-C-MARKETPLACE-ID": ebayMarketplaceId },
-  }).catch(() => null);
-  if (!response) return [];
-  if (!response.ok) return [];
+  }).catch((error) => ({ error }));
+  if (!response || "error" in response) return { rows: [], status: "network_error", error: safeString(response?.error?.message, 300) };
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "");
+    return { rows: [], status: `http_${response.status}`, statusCode: response.status, error: safeString(errorText, 500) };
+  }
   const data = await response.json();
-  return (data.itemSummaries ?? []).map((item: Json) => ({
+  const rows = (data.itemSummaries ?? []).map((item: Json) => ({
     source: "ebay",
     search_query: query,
     price: safeNumber((item.price as Json | undefined)?.value),
     currency: safeString((item.price as Json | undefined)?.currency, 8) || "EUR",
     condition: safeString(item.condition, 120),
     listing_url: safeString(item.itemWebUrl, 1000),
-  })).filter((item: Json) => item.price);
-}
+  })).filter((item: Json) => item.price);
 
+  return { rows, status: rows.length ? "ok" : "empty", statusCode: response.status };
+
+}
+
+async function fetchEbayPrices(query: string) {
+  return (await fetchEbayPriceResult(query)).rows;
+
+}
+
 function isDellDb14250MaxConfig(device: Json) {
   const manufacturer = safeString(device.manufacturer).toLowerCase();
   const model = `${safeString(device.model)} ${safeString(device.model_number)}`.toLowerCase();
@@ -1343,7 +1361,10 @@ async function enrichOneDevice(device: Json, options: { force: boolean; useExter
   const manufacturerPriceIsExact = safeString(manufacturerPrice?.spec_match) === "exact";
   const launchPrice = manufacturerPriceIsExact && manufacturerListPrice ? manufacturerListPrice : estimatedRuleLaunchPrice;
   const query = [manufacturer, model, cpuName.split("@")[0]].filter(Boolean).join(" ");
-  const marketRows = options.useExternal ? await fetchEbayPrices(query) : [];
+  const marketResult = options.useExternal
+    ? await fetchEbayPriceResult(query)
+    : { rows: [], status: "disabled" };
+  const marketRows = marketResult.rows;
   const prices = marketRows.map((row: Json) => safeNumber(row.price)).filter((price: number | null): price is number => price !== null && price > 0);
   const newPrices = marketRows
     .filter((row: Json) => safeString(row.condition).toLowerCase().includes("new") || safeString(row.condition).toLowerCase().includes("neuf"))
@@ -1471,7 +1492,14 @@ async function enrichOneDevice(device: Json, options: { force: boolean; useExter
       market_observation_count: marketObservationCount,
 
       cpu_match: cpuLookup.match,
-      model_match: modelRelease.match,
+      model_match: modelRelease.match,
+      provider_status: {
+        ebay: {
+          status: marketResult.status,
+          status_code: marketResult.statusCode ?? null,
+          error: marketResult.error ?? null,
+        },
+      },
       provider_counts: {
         ebay: marketRows.filter((row: Json) => row.source === "ebay").length,
       },
@@ -1488,7 +1516,25 @@ async function enrichOneDevice(device: Json, options: { force: boolean; useExter
     if (historyError) throw historyError;
   }
 
-  return { skipped: false, deviceId: device.id, recommendation, priority: priority.score, status: enrichmentStatus };
+  return {
+    skipped: false,
+    deviceId: device.id,
+    recommendation,
+    priority: priority.score,
+    status: enrichmentStatus,
+    marketObservationCount,
+    providerCounts: {
+      ebay: marketRows.filter((row: Json) => row.source === "ebay").length,
+    },
+    providerStatus: {
+      ebay: {
+        status: marketResult.status,
+        statusCode: marketResult.statusCode ?? null,
+        error: marketResult.error ?? null,
+      },
+    },
+    query,
+  };
 }
 
 async function persistScan(request: Request, user: { id: string; team_id: string; establishment_id: string }, rawBody: Json, tokenId?: string) {
