@@ -3050,7 +3050,7 @@ function renderDetail(device, scans, history = []) {
     try {
       const result = await api("/admin/enrich", {
         method: "POST",
-        body: JSON.stringify({ deviceId: device.id, limit: 1, force: true, mode: "refresh", useExternal: false }),
+        body: JSON.stringify({ deviceId: device.id, limit: 1, force: true, mode: "refresh", useExternal: true }),
       });
       toast(result.failed ? "Erreur serveur." : "Enrichissement termine.");
       await loadAdminData();
@@ -4056,7 +4056,7 @@ async function runEnrichment({ mode = "refresh", deviceId = "", button = null } 
         limit: deviceId ? 1 : 100,
         force: mode === "recalculate",
         mode,
-        useExternal: false,
+        useExternal: mode !== "recalculate",
       }),
     });
     const message = state.language === "en"
