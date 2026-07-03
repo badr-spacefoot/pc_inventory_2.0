@@ -1251,12 +1251,14 @@ type MarketFetchResult = {
   status: string;
   statusCode?: number;
   error?: string;
+  query?: string;
+  attemptedQueries?: string[];
 };
 
 async function fetchEbayPriceResult(query: string): Promise<MarketFetchResult> {
   const browseToken = await getEbayBrowseToken();
 
-  if (!browseToken) return { rows: [], status: "missing_token" };
+  if (!browseToken) return { rows: [], status: "missing_token", query };
   const url = new URL("https://api.ebay.com/buy/browse/v1/item_summary/search");
   url.searchParams.set("q", query);
   url.searchParams.set("limit", "10");
@@ -1265,10 +1267,10 @@ async function fetchEbayPriceResult(query: string): Promise<MarketFetchResult> {
     signal: AbortSignal.timeout(5000),
     headers: { Authorization: `Bearer ${browseToken}`, "X-EBAY-C-MARKETPLACE-ID": ebayMarketplaceId },
   }).catch((error) => ({ error }));
-  if (!response || "error" in response) return { rows: [], status: "network_error", error: safeString(response?.error?.message, 300) };
+  if (!response || "error" in response) return { rows: [], status: "network_error", error: safeString(response?.error?.message, 300), query };
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
-    return { rows: [], status: `http_${response.status}`, statusCode: response.status, error: safeString(errorText, 500) };
+    return { rows: [], status: `http_${response.status}`, statusCode: response.status, error: safeString(errorText, 500), query };
   }
   const data = await response.json();
   const rows = (data.itemSummaries ?? []).map((item: Json) => ({
@@ -1280,13 +1282,139 @@ async function fetchEbayPriceResult(query: string): Promise<MarketFetchResult> {
     listing_url: safeString(item.itemWebUrl, 1000),
   })).filter((item: Json) => item.price);
 
-  return { rows, status: rows.length ? "ok" : "empty", statusCode: response.status };
+  return { rows, status: rows.length ? "ok" : "empty", statusCode: response.status, query };
 
 }
 
 async function fetchEbayPrices(query: string) {
   return (await fetchEbayPriceResult(query)).rows;
 
+}
+
+function compactSpaces(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function cleanMarketToken(value: string) {
+  return compactSpaces(value
+    .replace(/[\u00ae\u2122]/g, "")
+    .replace(/\((?:R|TM|C)\)/gi, "")
+    .replace(/[_/]+/g, " ")
+    .replace(/[^\p{L}\p{N}+\-. ]/gu, " "));
+}
+
+function marketManufacturerName(value: string) {
+  const manufacturer = cleanMarketToken(value);
+  const lower = manufacturer.toLowerCase();
+  if (lower.includes("asustek") || lower === "asus") return "ASUS";
+  if (lower.includes("dell")) return "Dell";
+  if (lower.includes("lenovo")) return "Lenovo";
+  if (lower.includes("hewlett") || lower === "hp") return "HP";
+  if (lower.includes("samsung")) return "Samsung";
+  if (lower.includes("apple")) return "Apple";
+  if (lower.includes("micro-star") || lower.includes("msi")) return "MSI";
+  return compactSpaces(manufacturer
+    .replace(/\b(inc|ltd|limited|corp|corporation|co|company|computer|electronics)\b\.?/gi, "")
+    .replace(/\b(s\.a\.|s\.a|gmbh)\b/gi, ""));
+}
+
+function marketModelName(manufacturer: string, model: string) {
+  const cleanManufacturer = marketManufacturerName(manufacturer);
+  let cleanModel = cleanMarketToken(model)
+    .replace(/\bASUSLaptop\b/gi, "")
+    .replace(/\bComputer\b/gi, "")
+    .replace(/\bInc\b\.?/gi, "");
+  if (cleanManufacturer && cleanModel.toLowerCase().startsWith(cleanManufacturer.toLowerCase())) {
+    cleanModel = compactSpaces(cleanModel.slice(cleanManufacturer.length));
+  }
+  return compactSpaces(cleanModel);
+}
+
+function marketCpuName(cpuName: string) {
+  const cleanCpu = cleanMarketToken(cpuName)
+    .replace(/\b\d+(?:st|nd|rd|th)\s+Gen\b/gi, "")
+    .replace(/\bIntel\b/gi, "")
+    .replace(/\bAMD\b/gi, "")
+    .replace(/\bCPU\b/gi, "")
+    .replace(/\bw\/\b.*$/i, "")
+    .replace(/\bwith\s+Radeon\b.*$/i, "")
+    .replace(/\bGraphics\b.*$/i, "");
+  const ultra = cleanCpu.match(/\bCore\s+Ultra\s+\d+\s+[A-Z0-9]+/i)?.[0];
+  if (ultra) return compactSpaces(ultra);
+  const intelCore = cleanCpu.match(/\bCore\s+i[3579]-\d+[A-Z]*/i)?.[0];
+  if (intelCore) return compactSpaces(intelCore);
+  const ryzen = cleanCpu.match(/\bRyzen\s+\d+\s+\d+[A-Z]*/i)?.[0];
+  if (ryzen) return compactSpaces(ryzen);
+  const apple = cleanCpu.match(/\bApple\s+M\d(?:\s+(?:Pro|Max|Ultra))?/i)?.[0] ?? cleanCpu.match(/\bM\d(?:\s+(?:Pro|Max|Ultra))?/i)?.[0];
+  if (apple) return compactSpaces(apple.replace(/^Apple\s+/i, "Apple "));
+  return compactSpaces(cleanCpu.split("@")[0]).slice(0, 80);
+}
+
+function nearestCapacity(value: number, options: number[]) {
+  return options.reduce((closest, option) => Math.abs(option - value) < Math.abs(closest - value) ? option : closest, options[0]);
+}
+
+function formatMarketMemoryGb(value: unknown) {
+  const number = safeNumber(value);
+  if (number === null || number <= 0) return "";
+  return `${nearestCapacity(number, [4, 8, 12, 16, 24, 32, 48, 64, 96, 128])}GB`;
+}
+
+function formatMarketStorage(value: unknown) {
+  const number = safeNumber(value);
+  if (number === null || number <= 0) return "";
+  const nearest = nearestCapacity(number, [128, 256, 512, 1024, 2048, 4096, 8192]);
+  if (nearest >= 1024) {
+    const tb = nearest / 1024;
+    return `${Number.isInteger(tb) ? tb : tb.toFixed(1)}TB`;
+  }
+  return `${nearest}GB`;
+}
+
+function uniqueMarketQueries(queries: string[]) {
+  const seen = new Set<string>();
+  return queries
+    .map((query) => compactSpaces(query))
+    .filter((query) => {
+      const key = query.toLowerCase();
+      if (!query || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function buildMarketSearchQueries(device: Json) {
+  const manufacturer = marketManufacturerName(safeString(device.manufacturer, 160));
+  const model = marketModelName(manufacturer, safeString(device.model, 160));
+  const modelNumber = cleanMarketToken(safeString(device.model_number, 160));
+  const cpu = marketCpuName(safeString(device.cpu || device.enrichment_cpu_name, 260));
+  const ram = formatMarketMemoryGb(device.ram_total_gb);
+  const storage = formatMarketStorage(device.storage_total_gb);
+  const baseModel = [manufacturer, model || modelNumber].filter(Boolean).join(" ");
+  const modelWithNumber = modelNumber && !model.toLowerCase().includes(modelNumber.toLowerCase())
+    ? [baseModel, modelNumber].filter(Boolean).join(" ")
+    : baseModel;
+
+  return uniqueMarketQueries([
+    [modelWithNumber, cpu, ram, storage].filter(Boolean).join(" "),
+    [modelWithNumber, cpu, ram].filter(Boolean).join(" "),
+    [modelWithNumber, cpu].filter(Boolean).join(" "),
+    [modelWithNumber, ram, storage].filter(Boolean).join(" "),
+    modelWithNumber,
+    [manufacturer, modelNumber, cpu].filter(Boolean).join(" "),
+  ]);
+}
+
+async function fetchEbayMarketPricesForDevice(device: Json): Promise<MarketFetchResult> {
+  const attemptedQueries = buildMarketSearchQueries(device);
+  if (attemptedQueries.length === 0) return { rows: [], status: "empty", attemptedQueries };
+  let lastResult: MarketFetchResult = { rows: [], status: "empty", attemptedQueries };
+  for (const query of attemptedQueries) {
+    const result = await fetchEbayPriceResult(query);
+    lastResult = { ...result, attemptedQueries };
+    if (result.rows.length > 0 || result.status !== "empty") return lastResult;
+  }
+  return lastResult;
 }
 
 function isDellDb14250MaxConfig(device: Json) {
@@ -1360,10 +1488,11 @@ async function enrichOneDevice(device: Json, options: { force: boolean; useExter
   const manufacturerCurrentNewPrice = safeNumber(manufacturerPrice?.current_new_price);
   const manufacturerPriceIsExact = safeString(manufacturerPrice?.spec_match) === "exact";
   const launchPrice = manufacturerPriceIsExact && manufacturerListPrice ? manufacturerListPrice : estimatedRuleLaunchPrice;
-  const query = [manufacturer, model, cpuName.split("@")[0]].filter(Boolean).join(" ");
-  const marketResult = options.useExternal
-    ? await fetchEbayPriceResult(query)
-    : { rows: [], status: "disabled" };
+  const marketQueries = buildMarketSearchQueries(device);
+  const query = marketQueries[0] || [manufacturer, model, cpuName.split("@")[0]].filter(Boolean).join(" ");
+  const marketResult: MarketFetchResult = options.useExternal
+    ? await fetchEbayMarketPricesForDevice(device)
+    : { rows: [], status: "disabled", query, attemptedQueries: marketQueries };
   const marketRows = marketResult.rows;
   const prices = marketRows.map((row: Json) => safeNumber(row.price)).filter((price: number | null): price is number => price !== null && price > 0);
   const newPrices = marketRows
@@ -1479,7 +1608,8 @@ async function enrichOneDevice(device: Json, options: { force: boolean; useExter
     notes: noteParts.join(" "),
     last_enriched_at: new Date().toISOString(),
     raw_data: {
-      query,
+      query: marketResult.query ?? query,
+      attempted_queries: marketResult.attemptedQueries ?? marketQueries,
       manufacturer_price: manufacturerPrice,
       estimated_rule_launch_price: estimatedRuleLaunchPrice,
       age,
@@ -1498,6 +1628,8 @@ async function enrichOneDevice(device: Json, options: { force: boolean; useExter
           status: marketResult.status,
           status_code: marketResult.statusCode ?? null,
           error: marketResult.error ?? null,
+          query: marketResult.query ?? query,
+          attempted_queries: marketResult.attemptedQueries ?? marketQueries,
         },
       },
       provider_counts: {
@@ -1531,11 +1663,13 @@ async function enrichOneDevice(device: Json, options: { force: boolean; useExter
         status: marketResult.status,
         statusCode: marketResult.statusCode ?? null,
         error: marketResult.error ?? null,
+        query: marketResult.query ?? query,
+        attemptedQueries: marketResult.attemptedQueries ?? marketQueries,
       },
     },
-    query,
+    query: marketResult.query ?? query,
   };
-}
+}
 
 async function persistScan(request: Request, user: { id: string; team_id: string; establishment_id: string }, rawBody: Json, tokenId?: string) {
   const body = normalizeScanPayload(rawBody);
