@@ -52,6 +52,7 @@ const state = {
   mapProvider: "openstreetmap",
 };
 let pendingRetirement = null;
+let activeEnrichmentRun = null;
 
 const statusLabels = {
   fr: { active: "Actif", replace: "A remplacer", stock: "En stock", lost: "Perdu", retired: "Sorti du parc" },
@@ -4041,6 +4042,7 @@ async function loadAdminData() {
   setOptions($("#filter-team"), state.teams.map((team) => team.name), "Toutes", true);
   setOptions($("#filter-establishment"), state.establishments.map((site) => site.name), "Tous", true);
   applyFilters();
+  resumeActiveEnrichmentJob().catch(() => {});
 }
 
 async function runEnrichment({ mode = "refresh", deviceId = "", button = null } = {}) {
@@ -4082,54 +4084,103 @@ async function runEnrichment({ mode = "refresh", deviceId = "", button = null } 
 }
 
 async function runEnrichmentBatches({ mode = "refresh", button = null } = {}) {
-  const totalHint = Math.max(state.devices.length || 0, ENRICHMENT_BATCH_SIZE);
-  const maxBatches = Math.ceil(totalHint / ENRICHMENT_BATCH_SIZE) + 10;
-  const result = {
-    ok: true,
-    enriched: 0,
-    skipped: 0,
-    failed: 0,
-    processed: 0,
-    batches: 0,
-    results: [],
-  };
-
-  for (let batchIndex = 0; batchIndex < maxBatches; batchIndex += 1) {
-    if (button) {
-      const progress = Math.min(result.processed + ENRICHMENT_BATCH_SIZE, totalHint);
-      button.textContent = `${translate("Enrichissement...")} ${progress}/${totalHint}`;
-    }
-
-    const batch = await api("/admin/enrich", {
+  if (activeEnrichmentRun) return activeEnrichmentRun;
+  activeEnrichmentRun = (async () => {
+    const started = await api("/admin/enrichment-jobs", {
       method: "POST",
       body: JSON.stringify({
-        limit: ENRICHMENT_BATCH_SIZE,
         force: true,
         mode,
         useExternal: mode !== "recalculate",
       }),
     });
+    return await continueEnrichmentJob(started.job, { button });
+  })();
+  try {
+    return await activeEnrichmentRun;
+  } finally {
+    activeEnrichmentRun = null;
+  }
+}
 
-    const rows = Array.isArray(batch.results) ? batch.results : [];
-    const processed = Number(batch.processed ?? rows.length);
-    result.ok = result.ok && batch.ok !== false;
-    result.enriched += Number(batch.enriched || 0);
-    result.skipped += Number(batch.skipped || 0);
-    result.failed += Number(batch.failed || 0);
-    result.processed += processed;
-    result.batches += 1;
-    result.results.push(...rows);
+function updateEnrichmentButtonProgress(button, job) {
+  if (!button || !job) return;
+  const total = Math.max(Number(job.totalCount || 0), 1);
+  const processed = Math.min(Number(job.processedCount || 0), total);
+  button.textContent = `${translate("Enrichissement...")} ${processed}/${total}`;
+}
 
-    if (!batch.hasMore || processed < ENRICHMENT_BATCH_SIZE) break;
+function enrichmentJobResult(job, results = []) {
+  return {
+    ok: job?.status !== "failed",
+    enriched: Number(job?.enrichedCount || 0),
+    skipped: Number(job?.skippedCount || 0),
+    failed: Number(job?.failedCount || 0),
+    processed: Number(job?.processedCount || 0),
+    total: Number(job?.totalCount || 0),
+    batches: 0,
+    ebayResultCount: Number(job?.ebayResultCount || 0),
+    providerStatuses: job?.providerStatuses || {},
+    results,
+  };
+}
+
+async function continueEnrichmentJob(initialJob, { button = null } = {}) {
+  let job = initialJob;
+  const results = [];
+  const maxBatches = Math.ceil(Math.max(Number(job?.totalCount || state.devices.length || 0), 1) / ENRICHMENT_BATCH_SIZE) + 10;
+
+  for (let batchIndex = 0; batchIndex < maxBatches; batchIndex += 1) {
+    if (!job || !["queued", "running"].includes(job.status)) break;
+    updateEnrichmentButtonProgress(button, job);
+    const batch = await api("/admin/enrichment-jobs/process", {
+      method: "POST",
+      body: JSON.stringify({
+        jobId: job.id,
+        limit: ENRICHMENT_BATCH_SIZE,
+      }),
+    });
+    if (Array.isArray(batch.results)) results.push(...batch.results);
+    job = batch.job;
+    updateEnrichmentButtonProgress(button, job);
+    if (!job || !["queued", "running"].includes(job.status)) break;
   }
 
-  return result;
+  return enrichmentJobResult(job, results);
+}
+
+async function resumeActiveEnrichmentJob() {
+  if (activeEnrichmentRun || !state.adminToken || !canPerformAction("DEVICE_EDIT")) return;
+  const active = await api("/admin/enrichment-jobs/active");
+  if (!active.job) return;
+  const button = $("#enrich-admin") || $("#valuation-enrich-all");
+  const originalText = button?.textContent || "";
+  if (button) {
+    button.disabled = true;
+    updateEnrichmentButtonProgress(button, active.job);
+  }
+  activeEnrichmentRun = continueEnrichmentJob(active.job, { button });
+  try {
+    const result = await activeEnrichmentRun;
+    toast(enrichmentResultMessage(result));
+    await loadAdminData();
+  } finally {
+    activeEnrichmentRun = null;
+    if (button) {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+  }
 }
 
 function enrichmentResultMessage(result) {
   const rows = Array.isArray(result?.results) ? result.results : [];
-  const ebayCount = rows.reduce((sum, item) => sum + Number(item?.providerCounts?.ebay || 0), 0);
-  const statuses = [...new Set(rows.map((item) => item?.providerStatus?.ebay?.status).filter(Boolean))];
+  const ebayCount = Number(result?.ebayResultCount ?? rows.reduce((sum, item) => sum + Number(item?.providerCounts?.ebay || 0), 0));
+  const jobStatuses = Array.isArray(result?.providerStatuses?.ebay) ? result.providerStatuses.ebay : [];
+  const statuses = [...new Set([
+    ...jobStatuses,
+    ...rows.map((item) => item?.providerStatus?.ebay?.status).filter(Boolean),
+  ])];
   const statusLabel = statuses.length ? statuses.join(", ") : "disabled";
   if (state.language === "en") {
     return `${result?.enriched || 0} enriched, ${result?.skipped || 0} skipped, ${result?.failed || 0} failed. eBay: ${ebayCount} result(s) (${statusLabel}).`;

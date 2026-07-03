@@ -179,6 +179,27 @@ create table if not exists public.audit_logs (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.enrichment_jobs (
+  id uuid primary key default gen_random_uuid(),
+  status text not null default 'running'
+    check (status in ('queued', 'running', 'completed', 'failed', 'canceled')),
+  mode text not null default 'refresh',
+  force boolean not null default true,
+  use_external boolean not null default true,
+  total_count integer not null default 0 check (total_count >= 0),
+  processed_count integer not null default 0 check (processed_count >= 0),
+  enriched_count integer not null default 0 check (enriched_count >= 0),
+  skipped_count integer not null default 0 check (skipped_count >= 0),
+  failed_count integer not null default 0 check (failed_count >= 0),
+  ebay_result_count integer not null default 0 check (ebay_result_count >= 0),
+  provider_statuses jsonb not null default '{}'::jsonb,
+  last_error text,
+  actor_label text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  finished_at timestamptz
+);
+
 create table if not exists public.admin_users (
   id uuid primary key default gen_random_uuid(),
   username text not null unique,
@@ -383,6 +404,7 @@ create index if not exists idx_notifications_unread_role on public.notifications
 create index if not exists idx_notifications_target_user on public.notifications(target_user_id, is_read, created_at desc);
 create index if not exists idx_pending_changes_status_created on public.pending_changes(status, created_at desc);
 create index if not exists idx_pending_changes_type_value on public.pending_changes(type, lower(proposed_value));
+create index if not exists idx_enrichment_jobs_status_updated on public.enrichment_jobs(status, updated_at desc);
 create index if not exists idx_collection_tokens_hash on public.collection_tokens(token_hash);
 create index if not exists idx_collection_access_tokens_hash on public.collection_access_tokens(token_hash);
 create index if not exists idx_collection_access_tokens_expiry on public.collection_access_tokens(expires_at desc);
@@ -547,6 +569,7 @@ alter table public.collection_access_tokens enable row level security;
 alter table public.collection_prefills enable row level security;
 alter table public.collection_invites enable row level security;
 alter table public.audit_logs enable row level security;
+alter table public.enrichment_jobs enable row level security;
 alter table public.admin_users enable row level security;
 alter table public.notifications enable row level security;
 alter table public.pending_changes enable row level security;

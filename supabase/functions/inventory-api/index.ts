@@ -3075,7 +3075,202 @@ async function handleAdminCpuBenchmarkStats(request: Request) {
   return json(request, { importedCount: count ?? 0, bundledCount: (cpuBenchmarkSeed as CpuBenchmark[]).length });
 }
 
-async function handleAdminEnrich(request: Request) {
+function summarizeEnrichmentResults(results: Json[]) {
+  const enriched = results.filter((result) => !result.skipped && !result.failed).length;
+  const failed = results.filter((result) => result.failed).length;
+  const skipped = results.filter((result) => result.skipped).length;
+  const ebayResultCount = results.reduce((sum, result) => sum + Number((result.providerCounts as Json | undefined)?.ebay || 0), 0);
+  const statuses = new Set<string>();
+  for (const result of results) {
+    const ebayStatus = ((result.providerStatus as Json | undefined)?.ebay as Json | undefined)?.status;
+    if (ebayStatus) statuses.add(safeString(ebayStatus, 80));
+  }
+  return {
+    enriched,
+    failed,
+    skipped,
+    processed: results.length,
+    ebayResultCount,
+    providerStatuses: { ebay: Array.from(statuses) },
+  };
+}
+
+async function enrichDeviceRows(devices: Json[], options: { force: boolean; useExternal: boolean }) {
+  const results: Json[] = [];
+  for (const device of devices ?? []) {
+    try {
+      results.push(await enrichOneDevice(device, options));
+    } catch (error) {
+      console.error("Device enrichment failed", device.id, error);
+      await supabase.from("hardware_enrichment").upsert({
+        device_id: safeString(device.id),
+        enrichment_status: "failed",
+        enrichment_source: "enrichment-service",
+        notes: safeString(error instanceof Error ? error.message : "Unknown enrichment error", 1000),
+        last_enriched_at: new Date().toISOString(),
+      }, { onConflict: "device_id" });
+      results.push({ skipped: false, failed: true, deviceId: device.id });
+    }
+  }
+  return { results, ...summarizeEnrichmentResults(results) };
+}
+
+function serializeEnrichmentJob(job: Json | null) {
+  if (!job) return null;
+  const total = Number(job.total_count || 0);
+  const processed = Number(job.processed_count || 0);
+  return {
+    id: safeString(job.id),
+    status: safeString(job.status),
+    mode: safeString(job.mode),
+    force: Boolean(job.force),
+    useExternal: Boolean(job.use_external),
+    totalCount: total,
+    processedCount: processed,
+    enrichedCount: Number(job.enriched_count || 0),
+    skippedCount: Number(job.skipped_count || 0),
+    failedCount: Number(job.failed_count || 0),
+    ebayResultCount: Number(job.ebay_result_count || 0),
+    providerStatuses: job.provider_statuses || {},
+    lastError: safeString(job.last_error, 1000),
+    createdAt: safeString(job.created_at),
+    updatedAt: safeString(job.updated_at),
+    finishedAt: safeString(job.finished_at),
+    progress: total > 0 ? Math.min(1, processed / total) : 0,
+  };
+}
+
+async function getActiveEnrichmentJob() {
+  const activeSince = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from("enrichment_jobs")
+    .select("*")
+    .in("status", ["queued", "running"])
+    .gte("updated_at", activeSince)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function handleActiveEnrichmentJob(request: Request) {
+  if (!(await isAdmin(request, "DEVICE_EDIT"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
+  return json(request, { job: serializeEnrichmentJob(await getActiveEnrichmentJob()) });
+}
+
+async function handleStartEnrichmentJob(request: Request) {
+  const { response, session } = await requireAction(request, "DEVICE_EDIT");
+  if (response) return response;
+
+  const body = await request.json().catch(() => ({}));
+  const mode = safeString(body.mode, 40) || "refresh";
+  const force = Boolean(body.force ?? true) || mode === "recalculate";
+  const useExternal = Boolean(body.useExternal ?? true) && mode !== "recalculate";
+  const active = await getActiveEnrichmentJob();
+  if (active) return json(request, { job: serializeEnrichmentJob(active), resumed: true });
+
+  const { count, error: countError } = await supabase
+    .from("device_inventory_view")
+    .select("id", { count: "exact", head: true });
+  if (countError) throw countError;
+
+  const { data, error } = await supabase
+    .from("enrichment_jobs")
+    .insert({
+      status: "running",
+      mode,
+      force,
+      use_external: useExternal,
+      total_count: count ?? 0,
+      actor_label: session?.displayName || session?.username || "admin",
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+
+  await audit("hardware_enrichment_job_started", "device", null, { jobId: data.id, mode, force, useExternal, totalCount: count ?? 0 });
+  return json(request, { job: serializeEnrichmentJob(data), resumed: false });
+}
+
+async function handleProcessEnrichmentJob(request: Request) {
+  if (!(await isAdmin(request, "DEVICE_EDIT"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
+
+  const body = await request.json().catch(() => ({}));
+  const jobId = safeString(body.jobId);
+  const limit = Math.max(1, Math.min(Number(body.limit || 10), 25));
+  if (!jobId) return badRequest(request, "Job enrichissement manquant.");
+
+  const { data: job, error: jobError } = await supabase
+    .from("enrichment_jobs")
+    .select("*")
+    .eq("id", jobId)
+    .single();
+  if (jobError) throw jobError;
+  if (!job) return badRequest(request, "Job enrichissement introuvable.", 404);
+
+  const status = safeString(job.status);
+  if (!["queued", "running"].includes(status)) return json(request, { job: serializeEnrichmentJob(job), results: [] });
+
+  const totalCount = Number(job.total_count || 0);
+  const processedBefore = Number(job.processed_count || 0);
+  if (processedBefore >= totalCount) {
+    const { data: completed, error } = await supabase
+      .from("enrichment_jobs")
+      .update({ status: "completed", updated_at: new Date().toISOString(), finished_at: new Date().toISOString() })
+      .eq("id", jobId)
+      .select("*")
+      .single();
+    if (error) throw error;
+    return json(request, { job: serializeEnrichmentJob(completed), results: [] });
+  }
+
+  const { data: devices, error } = await supabase
+    .from("device_inventory_view")
+    .select("*")
+    .order("last_enriched_at", { ascending: true, nullsFirst: true })
+    .limit(Math.min(limit, totalCount - processedBefore));
+  if (error) throw error;
+
+  const batch = await enrichDeviceRows(devices ?? [], { force: Boolean(job.force), useExternal: Boolean(job.use_external) });
+  const processedCount = processedBefore + batch.processed;
+  const completed = processedCount >= totalCount || batch.processed === 0;
+  const previousProviderStatuses = job.provider_statuses && typeof job.provider_statuses === "object" ? job.provider_statuses as Json : {};
+  const previousEbayStatuses = Array.isArray(previousProviderStatuses.ebay) ? previousProviderStatuses.ebay.map((status) => safeString(status, 80)).filter(Boolean) : [];
+  const batchEbayStatuses = Array.isArray((batch.providerStatuses as Json).ebay) ? ((batch.providerStatuses as Json).ebay as unknown[]).map((status) => safeString(status, 80)).filter(Boolean) : [];
+  const updateValues = {
+    status: completed ? "completed" : "running",
+    processed_count: processedCount,
+    enriched_count: Number(job.enriched_count || 0) + batch.enriched,
+    skipped_count: Number(job.skipped_count || 0) + batch.skipped,
+    failed_count: Number(job.failed_count || 0) + batch.failed,
+    ebay_result_count: Number(job.ebay_result_count || 0) + batch.ebayResultCount,
+    provider_statuses: { ...previousProviderStatuses, ebay: Array.from(new Set([...previousEbayStatuses, ...batchEbayStatuses])) },
+    updated_at: new Date().toISOString(),
+    finished_at: completed ? new Date().toISOString() : null,
+  };
+  const { data: updated, error: updateError } = await supabase
+    .from("enrichment_jobs")
+    .update(updateValues)
+    .eq("id", jobId)
+    .select("*")
+    .single();
+  if (updateError) throw updateError;
+
+  if (completed) {
+    await audit("hardware_enrichment_job_completed", "device", null, {
+      jobId,
+      processed: processedCount,
+      enriched: updateValues.enriched_count,
+      failed: updateValues.failed_count,
+      skipped: updateValues.skipped_count,
+    });
+  }
+
+  return json(request, { job: serializeEnrichmentJob(updated), results: batch.results });
+}
+
+async function handleAdminEnrich(request: Request) {
   if (!(await isAdmin(request, "DEVICE_EDIT"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
   const body = await request.json().catch(() => ({}));
   const mode = safeString(body.mode, 40) || "refresh";
@@ -3641,7 +3836,10 @@ Deno.serve(async (request) => {
     if (request.method === "DELETE" && establishmentMatch) {
       return await handleAdminDeleteEstablishment(request, establishmentMatch[1]);
     }
-    if (request.method === "POST" && path.endsWith("/admin/enrich")) return await handleAdminEnrich(request);
+    if (request.method === "GET" && path.endsWith("/admin/enrichment-jobs/active")) return await handleActiveEnrichmentJob(request);
+    if (request.method === "POST" && path.endsWith("/admin/enrichment-jobs")) return await handleStartEnrichmentJob(request);
+    if (request.method === "POST" && path.endsWith("/admin/enrichment-jobs/process")) return await handleProcessEnrichmentJob(request);
+    if (request.method === "POST" && path.endsWith("/admin/enrich")) return await handleAdminEnrich(request);
     if (request.method === "GET" && path.endsWith("/admin/cpu-benchmarks")) return await handleAdminCpuBenchmarkStats(request);
     if (request.method === "POST" && path.endsWith("/admin/cpu-benchmarks/import")) return await handleAdminImportCpuBenchmarks(request);
     if (request.method === "GET" && path.endsWith("/admin/access-tokens")) return await handleAdminListAccessTokens(request);
