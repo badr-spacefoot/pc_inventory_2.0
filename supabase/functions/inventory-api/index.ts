@@ -1197,9 +1197,9 @@ function recommendationForPriority(priority: number) {
   return "keep";
 }
 
-function priceStats(prices: number[]) {
+function priceStats(prices: number[]) {
   if (prices.length === 0) return { min: null, avg: null, median: null, max: null, count: 0 };
-  const sorted = prices.slice().sort((a, b) => a - b);
+  const sorted = prices.slice().sort((a, b) => a - b);
   const medianIndex = Math.floor(sorted.length / 2);
 
   const median = sorted.length % 2 === 0 ? (sorted[medianIndex - 1] + sorted[medianIndex]) / 2 : sorted[medianIndex];
@@ -1213,9 +1213,30 @@ function priceStats(prices: number[]) {
     max: sorted[sorted.length - 1],
 
     count: sorted.length,
-  };
-}
-
+  };
+}
+
+function isExcludedMarketListing(title: string) {
+  const lower = title.toLowerCase();
+  if (!lower) return false;
+  return /\b(charger|chargeur|adapter|adaptateur|battery|batterie|screen|ecran|écran|lcd|keyboard|clavier|palmrest|cover|case|housse|sleeve|skin|cable|cordon|dc jack|hinge|charniere|charnière|fan|ventilateur|motherboard|carte mere|carte mère|touchpad|trackpad|webcam|speaker|haut-parleur|bezel|bottom cover|top case|rubber feet|screw|vis)\b/i.test(lower)
+    || /\b(for parts|spares|broken|defective|defect|defekt|non fonctionnel|hors service|pour pieces|pour pièces|reparation|réparation|repair only)\b/i.test(lower);
+}
+
+function marketPriceFloor(launchPrice: number, category: string) {
+  if (!Number.isFinite(launchPrice) || launchPrice <= 0) return category === "mini-pc" ? 80 : 140;
+  const ratio = category === "mini-pc" ? 0.12 : category === "desktop" ? 0.15 : 0.18;
+  return Math.max(category === "mini-pc" ? 80 : 140, Math.min(450, launchPrice * ratio));
+}
+
+function filterMarketRowsByPrice(rows: Json[], launchPrice: number, category: string) {
+  const floor = marketPriceFloor(launchPrice, category);
+  return rows.filter((row) => {
+    const price = safeNumber(row.price);
+    return price !== null && price >= floor;
+  });
+}
+
 async function getEbayBrowseToken() {
   const now = Date.now();
   if (ebayGeneratedToken && ebayGeneratedTokenExpiresAt > now + 60_000) return ebayGeneratedToken;
@@ -1272,16 +1293,23 @@ async function fetchEbayPriceResult(query: string): Promise<MarketFetchResult> {
     const errorText = await response.text().catch(() => "");
     return { rows: [], status: `http_${response.status}`, statusCode: response.status, error: safeString(errorText, 500), query };
   }
-  const data = await response.json();
-  const rows = (data.itemSummaries ?? []).map((item: Json) => ({
-    source: "ebay",
-    search_query: query,
-    price: safeNumber((item.price as Json | undefined)?.value),
-    currency: safeString((item.price as Json | undefined)?.currency, 8) || "EUR",
-    condition: safeString(item.condition, 120),
-    listing_url: safeString(item.itemWebUrl, 1000),
-  })).filter((item: Json) => item.price);
-
+  const data = await response.json();
+  const rows = [];
+  for (const item of data.itemSummaries ?? []) {
+    const title = safeString(item.title, 300);
+    if (isExcludedMarketListing(title)) continue;
+    const price = safeNumber((item.price as Json | undefined)?.value);
+    if (!price) continue;
+    rows.push({
+      source: "ebay",
+      search_query: query,
+      price,
+      currency: safeString((item.price as Json | undefined)?.currency, 8) || "EUR",
+      condition: safeString(item.condition, 120),
+      listing_url: safeString(item.itemWebUrl, 1000),
+    });
+  }
+
   return { rows, status: rows.length ? "ok" : "empty", statusCode: response.status, query };
 
 }
@@ -1533,7 +1561,7 @@ async function enrichOneDevice(device: Json, options: { force: boolean; useExter
   const marketResult: MarketFetchResult = options.useExternal
     ? await fetchEbayMarketPricesForDevice(device)
     : { rows: [], status: "disabled", query, attemptedQueries: marketQueries };
-  const marketRows = marketResult.rows;
+  const marketRows = filterMarketRowsByPrice(marketResult.rows, launchPrice, category);
   const prices = marketRows.map((row: Json) => safeNumber(row.price)).filter((price: number | null): price is number => price !== null && price > 0);
   const newPrices = marketRows
     .filter((row: Json) => safeString(row.condition).toLowerCase().includes("new") || safeString(row.condition).toLowerCase().includes("neuf"))
