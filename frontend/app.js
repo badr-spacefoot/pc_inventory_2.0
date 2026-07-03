@@ -4054,7 +4054,7 @@ async function runEnrichment({ mode = "refresh", deviceId = "", button = null } 
       body: JSON.stringify({
         deviceId: deviceId || undefined,
         limit: deviceId ? 1 : 100,
-        force: mode === "recalculate",
+        force: true,
         mode,
         useExternal: mode !== "recalculate",
       }),
