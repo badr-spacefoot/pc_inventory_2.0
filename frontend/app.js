@@ -10,6 +10,7 @@ const CONFIG = {
 
 const COLLECTOR_INSTALL_STATE_KEY = "it_inventory_collector_install_state";
 const COLLECTOR_DOWNLOAD_STATE_KEY = "it_inventory_collector_download_state";
+const ENRICHMENT_BATCH_SIZE = 10;
 
 const state = {
   adminToken: localStorage.getItem("it_inventory_admin_token") || "",
@@ -4049,6 +4050,13 @@ async function runEnrichment({ mode = "refresh", deviceId = "", button = null } 
     button.textContent = translate("Enrichissement...");
   }
   try {
+    if (!deviceId) {
+      const result = await runEnrichmentBatches({ mode, button });
+      toast(enrichmentResultMessage(result));
+      await loadAdminData();
+      return result;
+    }
+
     const result = await api("/admin/enrich", {
       method: "POST",
       body: JSON.stringify({
@@ -4071,6 +4079,51 @@ async function runEnrichment({ mode = "refresh", deviceId = "", button = null } 
       button.textContent = originalText;
     }
   }
+}
+
+async function runEnrichmentBatches({ mode = "refresh", button = null } = {}) {
+  const totalHint = Math.max(state.devices.length || 0, ENRICHMENT_BATCH_SIZE);
+  const maxBatches = Math.ceil(totalHint / ENRICHMENT_BATCH_SIZE) + 10;
+  const result = {
+    ok: true,
+    enriched: 0,
+    skipped: 0,
+    failed: 0,
+    processed: 0,
+    batches: 0,
+    results: [],
+  };
+
+  for (let batchIndex = 0; batchIndex < maxBatches; batchIndex += 1) {
+    if (button) {
+      const progress = Math.min(result.processed + ENRICHMENT_BATCH_SIZE, totalHint);
+      button.textContent = `${translate("Enrichissement...")} ${progress}/${totalHint}`;
+    }
+
+    const batch = await api("/admin/enrich", {
+      method: "POST",
+      body: JSON.stringify({
+        limit: ENRICHMENT_BATCH_SIZE,
+        force: true,
+        mode,
+        useExternal: mode !== "recalculate",
+      }),
+    });
+
+    const rows = Array.isArray(batch.results) ? batch.results : [];
+    const processed = Number(batch.processed ?? rows.length);
+    result.ok = result.ok && batch.ok !== false;
+    result.enriched += Number(batch.enriched || 0);
+    result.skipped += Number(batch.skipped || 0);
+    result.failed += Number(batch.failed || 0);
+    result.processed += processed;
+    result.batches += 1;
+    result.results.push(...rows);
+
+    if (!batch.hasMore || processed < ENRICHMENT_BATCH_SIZE) break;
+  }
+
+  return result;
 }
 
 function enrichmentResultMessage(result) {

@@ -3106,9 +3106,11 @@ async function handleAdminEnrich(request: Request) {
   }
   const enriched = results.filter((result) => !result.skipped && !result.failed).length;
   const failed = results.filter((result) => result.failed).length;
-  const skipped = results.filter((result) => result.skipped).length;
-  await audit("hardware_enrichment_run", "device", deviceId || null, { enriched, failed, skipped, force, useExternal, mode, limit });
-  return json(request, { ok: failed === 0, enriched, failed, skipped, results });
+  const skipped = results.filter((result) => result.skipped).length;
+  const processed = results.length;
+  const hasMore = !deviceId && processed === limit;
+  await audit("hardware_enrichment_run", "device", deviceId || null, { enriched, failed, skipped, processed, hasMore, force, useExternal, mode, limit });
+  return json(request, { ok: failed === 0, enriched, failed, skipped, processed, hasMore, results });
 }
 
 function invoiceDateValue(value: unknown) {
