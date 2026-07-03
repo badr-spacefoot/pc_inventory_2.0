@@ -1306,28 +1306,44 @@ function cleanMarketToken(value: string) {
 function marketManufacturerName(value: string) {
   const manufacturer = cleanMarketToken(value);
   const lower = manufacturer.toLowerCase();
-  if (lower.includes("asustek") || lower === "asus") return "ASUS";
+  if (lower.includes("asustek") || lower === "asus" || /\b(zenbook|vivobook|rog|tuf)\b/i.test(manufacturer)) return "ASUS";
   if (lower.includes("dell")) return "Dell";
-  if (lower.includes("lenovo")) return "Lenovo";
+  if (lower.includes("lenovo") || /\b(thinkpad|ideapad|yoga)\b/i.test(manufacturer)) return "Lenovo";
   if (lower.includes("hewlett") || lower === "hp") return "HP";
   if (lower.includes("samsung")) return "Samsung";
-  if (lower.includes("apple")) return "Apple";
+  if (lower.includes("apple") || /\b(macbook|imac|mac\s+mini|mac\s+studio)\b/i.test(manufacturer)) return "Apple";
   if (lower.includes("micro-star") || lower.includes("msi")) return "MSI";
   return compactSpaces(manufacturer
     .replace(/\b(inc|ltd|limited|corp|corporation|co|company|computer|electronics)\b\.?/gi, "")
     .replace(/\b(s\.a\.|s\.a|gmbh)\b/gi, ""));
 }
 
+function dedupeMarketWords(value: string) {
+  const words = compactSpaces(value).split(" ");
+  const deduped: string[] = [];
+  for (const word of words) {
+    const previous = deduped[deduped.length - 1];
+    if (previous && previous.toLowerCase() === word.toLowerCase()) continue;
+    deduped.push(word);
+  }
+  return deduped.join(" ");
+}
+
 function marketModelName(manufacturer: string, model: string) {
   const cleanManufacturer = marketManufacturerName(manufacturer);
   let cleanModel = cleanMarketToken(model)
     .replace(/\bASUSLaptop\b/gi, "")
+    .replace(/\bLENOVO\s+MT\s+[A-Z0-9]+\s+BU\s+idea\s+FM\s+/gi, "")
+    .replace(/\bMacBookPro\s*\d+[,. ]\s*\d+\b/gi, "")
+    .replace(/\bMacBookAir\s*\d+[,. ]\s*\d+\b/gi, "")
+    .replace(/\b(\d{2})\s*-\s*inch\b/gi, "$1")
+    .replace(/\b(\d{2})\s*pouces?\b/gi, "$1")
     .replace(/\bComputer\b/gi, "")
     .replace(/\bInc\b\.?/gi, "");
   if (cleanManufacturer && cleanModel.toLowerCase().startsWith(cleanManufacturer.toLowerCase())) {
     cleanModel = compactSpaces(cleanModel.slice(cleanManufacturer.length));
   }
-  return compactSpaces(cleanModel);
+  return dedupeMarketWords(cleanModel);
 }
 
 function marketCpuName(cpuName: string) {
@@ -1341,13 +1357,38 @@ function marketCpuName(cpuName: string) {
     .replace(/\bGraphics\b.*$/i, "");
   const ultra = cleanCpu.match(/\bCore\s+Ultra\s+\d+\s+[A-Z0-9]+/i)?.[0];
   if (ultra) return compactSpaces(ultra);
-  const intelCore = cleanCpu.match(/\bCore\s+i[3579]-\d+[A-Z]*/i)?.[0];
+  const intelCore = cleanCpu.match(/\bCore\s+i[3579]-\d+[A-Z0-9]*/i)?.[0];
   if (intelCore) return compactSpaces(intelCore);
   const ryzen = cleanCpu.match(/\bRyzen\s+\d+\s+\d+[A-Z]*/i)?.[0];
   if (ryzen) return compactSpaces(ryzen);
   const apple = cleanCpu.match(/\bApple\s+M\d(?:\s+(?:Pro|Max|Ultra))?/i)?.[0] ?? cleanCpu.match(/\bM\d(?:\s+(?:Pro|Max|Ultra))?/i)?.[0];
   if (apple) return compactSpaces(apple.replace(/^Apple\s+/i, "Apple "));
   return compactSpaces(cleanCpu.split("@")[0]).slice(0, 80);
+}
+
+function marketModelNumberName(manufacturer: string, modelNumber: string, model: string) {
+  const cleanManufacturer = marketManufacturerName(manufacturer);
+  const cleanModelNumber = cleanMarketToken(modelNumber)
+    .replace(/\bLENOVO\s+MT\s+[A-Z0-9]+\s+BU\s+idea\s+FM\s+/gi, "")
+    .replace(/\bASUSLaptop\b/gi, "");
+  const normalized = compactSpaces(cleanModelNumber);
+  if (!normalized) return "";
+  if (/^1(?:\.0+)?$/i.test(normalized)) return "";
+  if (/^0[A-Z0-9]{2,5}$/i.test(normalized)) return "";
+  if (/^[A-F0-9-]{8,}$/i.test(normalized)) return "";
+  if (cleanManufacturer === "Apple" && /\b(?:MacBookPro|MacBookAir|Macmini|iMac)\s*\d+/i.test(normalized)) return "";
+  if (model && model.toLowerCase().includes(normalized.toLowerCase())) return "";
+  return normalized;
+}
+
+function marketBaseModel(manufacturer: string, model: string, modelNumber: string) {
+  const cleanManufacturer = marketManufacturerName(manufacturer);
+  const cleanModel = marketModelName(cleanManufacturer, model);
+  const cleanModelNumber = marketModelNumberName(cleanManufacturer, modelNumber, cleanModel);
+  const baseModel = cleanModel || cleanModelNumber;
+  if (!cleanManufacturer) return baseModel;
+  if (!baseModel) return cleanManufacturer;
+  return compactSpaces(`${cleanManufacturer} ${baseModel}`);
 }
 
 function nearestCapacity(value: number, options: number[]) {
@@ -1374,7 +1415,7 @@ function formatMarketStorage(value: unknown) {
 function uniqueMarketQueries(queries: string[]) {
   const seen = new Set<string>();
   return queries
-    .map((query) => compactSpaces(query))
+    .map((query) => compactSpaces(query).slice(0, 100))
     .filter((query) => {
       const key = query.toLowerCase();
       if (!query || seen.has(key)) return false;
@@ -1386,22 +1427,21 @@ function uniqueMarketQueries(queries: string[]) {
 function buildMarketSearchQueries(device: Json) {
   const manufacturer = marketManufacturerName(safeString(device.manufacturer, 160));
   const model = marketModelName(manufacturer, safeString(device.model, 160));
-  const modelNumber = cleanMarketToken(safeString(device.model_number, 160));
-  const cpu = marketCpuName(safeString(device.cpu || device.enrichment_cpu_name, 260));
+  const modelNumber = marketModelNumberName(manufacturer, safeString(device.model_number, 160), model);
+  const cpu = marketCpuName(safeString(device.cpu || device.enrichment_cpu_name, 260))
+    .replace(manufacturer === "Apple" ? /^Apple\s+/i : /^$/, "");
   const ram = formatMarketMemoryGb(device.ram_total_gb);
   const storage = formatMarketStorage(device.storage_total_gb);
-  const baseModel = [manufacturer, model || modelNumber].filter(Boolean).join(" ");
-  const modelWithNumber = modelNumber && !model.toLowerCase().includes(modelNumber.toLowerCase())
-    ? [baseModel, modelNumber].filter(Boolean).join(" ")
-    : baseModel;
+  const baseModel = marketBaseModel(manufacturer, model, modelNumber);
+  const fallbackModel = !model && modelNumber ? [manufacturer, modelNumber].filter(Boolean).join(" ") : "";
 
   return uniqueMarketQueries([
-    [modelWithNumber, cpu, ram, storage].filter(Boolean).join(" "),
-    [modelWithNumber, cpu, ram].filter(Boolean).join(" "),
-    [modelWithNumber, cpu].filter(Boolean).join(" "),
-    [modelWithNumber, ram, storage].filter(Boolean).join(" "),
-    modelWithNumber,
-    [manufacturer, modelNumber, cpu].filter(Boolean).join(" "),
+    [baseModel, cpu, ram, storage].filter(Boolean).join(" "),
+    [baseModel, cpu, ram].filter(Boolean).join(" "),
+    [baseModel, cpu].filter(Boolean).join(" "),
+    [baseModel, ram, storage].filter(Boolean).join(" "),
+    baseModel,
+    [fallbackModel, cpu].filter(Boolean).join(" "),
   ]);
 }
 
