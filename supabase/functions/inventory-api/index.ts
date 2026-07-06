@@ -972,6 +972,21 @@ type CpuBenchmark = {
   source?: string;
 };
 
+type CpuReleaseReference = {
+
+  releaseYear: number | null;
+
+  generation?: string;
+
+  category?: string;
+
+  source: string;
+
+  confidence: string;
+
+};
+
+
 function normalizeCpuName(cpuName: unknown) {
   return safeString(cpuName, 260)
     .toLowerCase()
@@ -984,13 +999,34 @@ function normalizeCpuName(cpuName: unknown) {
     .replace(/\s+/g, " ");
 }
 
+function intelGenerationLabel(generation: number) {
+  const suffix = generation % 100 >= 11 && generation % 100 <= 13
+    ? "th"
+    : generation % 10 === 1
+    ? "st"
+    : generation % 10 === 2
+    ? "nd"
+    : generation % 10 === 3
+    ? "rd"
+    : "th";
+  return `${generation}${suffix} Gen Intel`;
+}
+
+function canonicalCpuText(cpuName: string) {
+  return cpuName.toLowerCase()
+    .replace(/\(r\)|\(tm\)|\u00ae|\u2122/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+
 function inferCpuGeneration(cpuName: string) {
-  const cpu = cpuName.toLowerCase().replace(/\(r\)|\(tm\)|[®™]/g, " ");
+  const cpu = canonicalCpuText(cpuName);
   const intel = cpu.match(/i[3579]-?(\d{4,5})/i);
   if (intel) {
     const digits = intel[1];
     const generation = digits.length === 5 || /^1[0-5]/.test(digits) ? Number(digits.slice(0, 2)) : Number(digits.slice(0, 1));
-    return `${generation}th Gen Intel`;
+    return intelGenerationLabel(generation);
   }
   const intelCoreUltra = cpu.match(/\bcore\s+ultra\s+[579]\s+(\d{3})([a-z])\b/i);
   if (intelCoreUltra) {
@@ -1015,7 +1051,9 @@ function inferCpuGeneration(cpuName: string) {
 }
 
 function inferCpuReleaseYear(cpuName: string) {
-  const cpu = cpuName.toLowerCase().replace(/\(r\)|\(tm\)|[®™]/g, " ");
+  const cpu = canonicalCpuText(cpuName);
+  if (/\bryzen\s+5\s+7520u\b/.test(cpu)) return 2022;
+  if (/\bapple\s+m1\s+(?:pro|max)\b/.test(cpu)) return 2021;
   const intel = cpu.match(/i[3579]-?(\d{4,5})/i);
   if (intel) {
     const digits = intel[1];
@@ -1033,7 +1071,7 @@ function inferCpuReleaseYear(cpuName: string) {
   }
   if (/\bcore\s+ultra\s+[579]\s+2\d{2}v\b/.test(cpu)) return 2024;
   if (/\bcore\s+ultra\s+[579]\s+1\d{2}[hup]\b/.test(cpu)) return 2023;
-  if (/\bcore\s+[357]\s+1\d{2}[hup]?\b/.test(cpu)) return 2023;
+  if (/\bcore\s+[357]\s+1\d{2}[hup]?\b/.test(cpu)) return 2024;
   const amd = cpu.match(/ryzen\s+[3579]\s+(\d{4})/i);
   if (amd) {
     const family = Number(amd[1][0]);
@@ -1042,6 +1080,7 @@ function inferCpuReleaseYear(cpuName: string) {
   const amdAi = cpu.match(/\bryzen\s+ai\s+[3579]\s+(\d{3})\b/i);
   if (amdAi) {
     const model = Number(amdAi[1]);
+    if (model >= 400 && model < 500) return 2026;
     if (model >= 360 && model < 400) return 2024;
     if (model >= 300 && model < 500) return 2025;
   }
@@ -1054,7 +1093,7 @@ function inferCpuReleaseYear(cpuName: string) {
 }
 
 function estimateCpuScore(cpuName: string) {
-  const cpu = cpuName.toLowerCase().replace(/\(r\)|\(tm\)|[®™]/g, " ");
+  const cpu = canonicalCpuText(cpuName);
   const year = inferCpuReleaseYear(cpuName) ?? 2017;
   let score = 2800 + Math.max(0, year - 2015) * 1450;
   if (cpu.includes("celeron") || cpu.includes("pentium") || cpu.includes("athlon")) score *= 0.42;
@@ -1071,17 +1110,47 @@ function estimateCpuScore(cpuName: string) {
 async function lookupCpuBenchmark(cpuName: string) {
   const normalized = normalizeCpuName(cpuName);
   if (!normalized) return { benchmark: null, match: "none" };
+  const reference = knownCpuReleaseReference(cpuName);
 
   const { data: imported } = await supabase
     .from("cpu_benchmarks")
     .select("cpu_name,cpu_mark_score,release_year,generation,category,source")
     .eq("normalized_name", normalized)
     .maybeSingle();
-  if (imported) return { benchmark: imported as CpuBenchmark, match: "imported-exact" };
+  if (imported) {
+    const importedBenchmark = imported as CpuBenchmark;
+    if (reference?.releaseYear) {
+      return {
+        benchmark: {
+          ...importedBenchmark,
+          release_year: reference.releaseYear,
+          generation: reference.generation || importedBenchmark.generation || inferCpuGeneration(cpuName),
+          category: reference.category || importedBenchmark.category,
+          source: reference.source,
+        },
+        match: "reference-imported",
+      };
+    }
+    return { benchmark: importedBenchmark, match: "imported-exact" };
+  }
 
   const seed = (cpuBenchmarkSeed as CpuBenchmark[]).find((item) => normalizeCpuName(item.cpu_name) === normalized);
   if (seed) return { benchmark: { ...seed, source: "bundled-cpu-seed" }, match: "seed-exact" };
 
+  if (reference?.releaseYear) {
+    return {
+      benchmark: {
+        cpu_name: safeString(cpuName, 260),
+        cpu_mark_score: estimateCpuScore(cpuName),
+        release_year: reference.releaseYear,
+        generation: reference.generation || inferCpuGeneration(cpuName),
+        category: reference.category || "mobile",
+        source: reference.source,
+      },
+      match: "reference",
+    };
+  }
+
   const modelToken = normalized.match(/(?:i[3579]\s*\d{4,5}[a-z]*|core\s*ultra\s*[579]\s*\d{3}[a-z]*|core\s*[357]\s*\d{3}[a-z]*|ryzen\s*ai\s*[3579]\s*\d{3}|ryzen\s*[3579]\s*\d{4}[a-z]*|snapdragon\s*x(?:\s*plus)?\s*x1[pem]?\s*\d{5}|x1[pem]?\s*\d{5}|apple\s*m[1-4](?:\s*(?:pro|max|ultra))?)/)?.[0];
   if (modelToken) {
     const candidate = (cpuBenchmarkSeed as CpuBenchmark[]).find((item) => normalizeCpuName(item.cpu_name).includes(modelToken));
@@ -1161,6 +1230,119 @@ function knownOfficialCpuReleaseDate(cpuName: string) {
   return null;
 }
 
+function knownCpuReleaseReference(cpuName: string): CpuReleaseReference | null {
+  const cpu = canonicalCpuText(cpuName);
+  const exactRules: Array<[RegExp, CpuReleaseReference]> = [
+    [/\bryzen\s+5\s+7520u\b/, {
+      releaseYear: 2022,
+      generation: "Ryzen 7000",
+      category: "mobile",
+      source: "official-amd-product-spec",
+      confidence: "official-model",
+    }],
+    [/\bapple\s+m1\s+pro\b/, {
+      releaseYear: 2021,
+      generation: "Apple M1 Pro",
+      category: "mobile",
+      source: "official-apple-newsroom",
+      confidence: "official-model",
+    }],
+    [/\bapple\s+m1\s+max\b/, {
+      releaseYear: 2021,
+      generation: "Apple M1 Max",
+      category: "mobile",
+      source: "official-apple-newsroom",
+      confidence: "official-model",
+    }],
+    [/\bcore\s+7\s+150u\b/, {
+      releaseYear: 2024,
+      generation: "Intel Core Series 1",
+      category: "mobile",
+      source: "official-intel-core-series-1",
+      confidence: "official-model",
+    }],
+  ];
+
+  const exactRule = exactRules.find(([pattern]) => pattern.test(cpu));
+  if (exactRule) return exactRule[1];
+
+  if (/\bcore\s+ultra\s+[579]\s+2\d{2}v\b/.test(cpu)) {
+    return {
+      releaseYear: 2024,
+      generation: "Intel Core Ultra 200V",
+      category: "mobile",
+      source: "official-intel-core-ultra-200v",
+      confidence: "official-family",
+    };
+  }
+  if (/\bcore\s+ultra\s+[579]\s+1\d{2}[hup]\b/.test(cpu)) {
+    return {
+      releaseYear: 2023,
+      generation: "Intel Core Ultra Series 1",
+      category: "mobile",
+      source: "official-intel-core-ultra-series-1",
+      confidence: "official-family",
+    };
+  }
+  if (/\bcore\s+[357]\s+1\d{2}[hup]?\b/.test(cpu)) {
+    return {
+      releaseYear: 2024,
+      generation: "Intel Core Series 1",
+      category: "mobile",
+      source: "official-intel-core-series-1",
+      confidence: "official-family",
+    };
+  }
+  if (/\bryzen\s+ai\s+[3579]\s+4\d{2}\b/.test(cpu)) {
+    return {
+      releaseYear: 2026,
+      generation: "AMD Ryzen AI 400",
+      category: "mobile",
+      source: "amd-ryzen-ai-400-family-rule",
+      confidence: "family-rule",
+    };
+  }
+  if (/\bryzen\s+ai\s+[3579]\s+3[0-5]\d\b/.test(cpu)) {
+    return {
+      releaseYear: 2025,
+      generation: "AMD Ryzen AI 300",
+      category: "mobile",
+      source: "official-amd-ryzen-ai-family",
+      confidence: "official-family",
+    };
+  }
+  if (/\bryzen\s+ai\s+[3579]\s+3[6-9]\d\b/.test(cpu)) {
+    return {
+      releaseYear: 2024,
+      generation: "AMD Ryzen AI 300",
+      category: "mobile",
+      source: "official-amd-ryzen-ai-300-family",
+      confidence: "official-family",
+    };
+  }
+  if (/\bsnapdragon(?:\s+x\s+plus)?.*\bx1p/i.test(cpu)) {
+    return {
+      releaseYear: 2024,
+      generation: "Qualcomm Snapdragon X",
+      category: "mobile",
+      source: "official-qualcomm-snapdragon-x-plus",
+      confidence: "official-family",
+    };
+  }
+  if (/\bsnapdragon\s+x\b|\bx1-?\d{5}\b/i.test(cpu)) {
+    return {
+      releaseYear: 2025,
+      generation: "Qualcomm Snapdragon X",
+      category: "mobile",
+      source: "official-qualcomm-snapdragon-x",
+      confidence: "official-family",
+    };
+  }
+
+  return null;
+}
+
+
 function parseLaunchYearFromOfficialText(text: string) {
   const normalized = text.replace(/\s+/g, " ");
   const patterns = [
@@ -1207,13 +1389,15 @@ async function lookupCpuReleaseDate(cpuName: string) {
   const cleanCpu = safeString(cpuName, 260);
   const vendor = cpuVendor(cleanCpu);
   const searchUrl = officialCpuSearchUrl(cleanCpu, vendor);
-  const knownOfficial = knownOfficialCpuReleaseDate(cleanCpu);
+  const knownOfficial = knownCpuReleaseReference(cleanCpu) ?? knownOfficialCpuReleaseDate(cleanCpu);
   if (knownOfficial) return { ...knownOfficial, searchUrl };
   const officialText = await fetchOfficialCpuText(searchUrl);
   const officialYear = parseLaunchYearFromOfficialText(officialText);
   if (officialYear) {
     return {
       releaseYear: officialYear,
+      generation: inferCpuGeneration(cleanCpu) || undefined,
+      category: "mobile",
       source: vendor === "intel" ? "official-intel-ark-search" : vendor === "amd" ? "official-amd-product-search" : "official-product-search",
       confidence: "official-search",
       searchUrl,
@@ -1222,6 +1406,8 @@ async function lookupCpuReleaseDate(cpuName: string) {
   const fallbackYear = inferCpuReleaseYear(cleanCpu);
   return {
     releaseYear: fallbackYear,
+    generation: inferCpuGeneration(cleanCpu) || undefined,
+    category: fallbackYear ? "mobile" : undefined,
     source: fallbackYear ? `${vendor}-family-rule` : "unknown",
     confidence: fallbackYear ? "family-rule" : "none",
     searchUrl,
@@ -3358,7 +3544,7 @@ async function handleAdminImportCpuBenchmarks(request: Request) {
       normalized_name: normalizeCpuName(cpuName),
       cpu_mark_score: Math.round(score),
       release_year: safeNumber(row.release_year),
-      génération: safeString(row.génération, 120) || null,
+      generation: safeString(row.generation || row.cpu_generation || row["g\u00e9n\u00e9ration"], 120) || inferCpuGeneration(cpuName) || null,
       category: safeString(row.category, 80) || null,
       source: "admin-csv-import",
       updated_at: new Date().toISOString(),
@@ -3410,7 +3596,12 @@ async function handleAdminRefreshCpuReleaseDates(request: Request) {
     const candidateCpuName = safeString(candidate.cpuName, 260);
     const existing = existingByName.get(normalizedName);
     const existingSource = safeString(existing?.source, 120);
-    if (!force && existing?.release_year && (existingSource.startsWith("official-") || existingSource === "admin-csv-import")) {
+    const reference = knownCpuReleaseReference(candidateCpuName);
+    const referenceGeneration = reference?.generation || inferCpuGeneration(candidateCpuName);
+    const existingGeneration = safeString(existing?.generation, 120);
+    const existingNeedsCorrection = Boolean(reference?.releaseYear && Number(existing?.release_year) !== reference.releaseYear) ||
+      Boolean(referenceGeneration && (!existingGeneration || existingGeneration === "1th Gen Intel" || (reference?.generation && existingGeneration !== referenceGeneration)));
+    if (!force && !existingNeedsCorrection && existing?.release_year && (existingSource.startsWith("official-") || existingSource === "admin-csv-import")) {
       skipped += 1;
       resultRows.push({ cpuName: candidateCpuName, releaseYear: existing.release_year, source: existingSource, status: "kept" });
       continue;
@@ -3424,13 +3615,15 @@ async function handleAdminRefreshCpuReleaseDates(request: Request) {
     }
 
     const cpuScore = Number(existing?.cpu_mark_score || candidate.cpu_benchmark_score || candidate.cpu_score || estimateCpuScore(candidateCpuName));
+    const generation = safeString(lookup.generation || referenceGeneration || candidate.cpu_generation || existing?.generation, 120) || null;
+    const category = safeString(lookup.category || reference?.category || existing?.category, 80) || null;
     rows.push({
       cpu_name: safeString(existing?.cpu_name || candidateCpuName, 260),
       normalized_name: normalizedName,
       cpu_mark_score: Math.round(Math.max(800, cpuScore)),
       release_year: lookup.releaseYear,
-      generation: safeString(existing?.generation || candidate.cpu_generation || inferCpuGeneration(candidateCpuName), 120) || null,
-      category: safeString(existing?.category, 80) || null,
+      generation,
+      category,
       source: lookup.source,
       updated_at: now,
     });
