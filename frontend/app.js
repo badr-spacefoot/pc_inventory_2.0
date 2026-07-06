@@ -1957,10 +1957,14 @@ function renderNotifications() {
   });
   $("#notifications-list").innerHTML = notifications.map((item) => `
     <article class="notification-item ${item.is_read ? "is-read" : ""} severity-${String(item.severity || "INFO").toLowerCase()}" role="button" tabindex="0" data-id="${escapeHtml(item.id)}">
-      <div>
-        <span class="notification-severity">${escapeHtml(item.severity || "INFO")}</span>
-        <strong>${escapeHtml(notificationTitle(item))}</strong>
+      ${notificationIcon(item)}
+      <div class="notification-content">
+        <div class="notification-heading">
+          <span class="notification-severity">${escapeHtml(item.severity || "INFO")}</span>
+          <strong>${escapeHtml(notificationTitle(item))}</strong>
+        </div>
         <p>${escapeHtml(notificationMessage(item))}</p>
+        ${notificationFacts(item)}
         <small>${formatDate(item.created_at)} (${formatRelativeDate(item.created_at)}) - ${escapeHtml(notificationTypeLabel(item.type))}</small>
       </div>
       ${item.is_read ? "" : `<button class="secondary mark-notification-read" type="button" data-id="${item.id}">${translate("Marquer lu")}</button>`}
@@ -2019,12 +2023,47 @@ function notificationTypeKey(type) {
 }
 
 function notificationTitle(item) {
+  const device = notificationDevice(item);
+  if (device) {
+    const manufacturer = normalizeManufacturer(device.manufacturer, device.model);
+    const brand = manufacturer.manufacturerName === "Unknown" ? translate("Machine") : manufacturer.manufacturerName;
+    const machine = notificationDeviceLabel(device);
+    const user = notificationUserLabel(device);
+    const type = String(item.type || "");
+    const isEnglish = state.language === "en";
+    if (type === "COLLECTOR_SUBMISSION_RECEIVED") {
+      return isEnglish ? `${brand} collection received` : `Collecte ${brand} recue`;
+    }
+    if (type === "DEVICE_REASSIGNED" || type === "DEVICE_OWNER_CHANGED") {
+      return isEnglish ? `${machine} assigned to ${user}` : `${machine} affecte a ${user}`;
+    }
+    if (type === "DEVICE_RETIRED") {
+      return isEnglish ? `${machine} retired` : `${machine} sorti du parc`;
+    }
+    if (type === "DEVICE_REACTIVATED") {
+      return isEnglish ? `${machine} reactivated` : `${machine} reactive`;
+    }
+  }
   if (String(item.title || "").startsWith("notification.")) return translate(item.title);
   const key = notificationTypeKey(item.type);
   return key ? translate(`${key}.title`) : translate(item.title || item.type || "Notification");
 }
 
 function notificationMessage(item) {
+  const device = notificationDevice(item);
+  if (device) {
+    const manufacturer = normalizeManufacturer(device.manufacturer, device.model);
+    const model = [manufacturer.manufacturerName === "Unknown" ? "" : manufacturer.manufacturerName, fullDeviceModel(device)]
+      .filter((value) => value && value !== "-")
+      .join(" ") || translate("Non renseigné");
+    const user = notificationUserLabel(device);
+    const team = displayWithAbbreviation(device.team_name || "", device.team_abbreviation) || translate("Non renseigné");
+    const site = displayWithAbbreviation(device.establishment_name || "", device.establishment_abbreviation) || translate("Non renseigné");
+    if (state.language === "en") {
+      return `${notificationDeviceLabel(device)} (${model}) is linked to ${user}. Team: ${team}. Location: ${site}.`;
+    }
+    return `${notificationDeviceLabel(device)} (${model}) est lie a ${user}. Equipe : ${team}. Etablissement : ${site}.`;
+  }
   if (String(item.message || "").startsWith("notification.")) return translate(item.message);
   const key = notificationTypeKey(item.type);
   return key ? translate(`${key}.message`) : translate(item.message || "");
@@ -2033,6 +2072,47 @@ function notificationMessage(item) {
 function notificationTypeLabel(type) {
   const key = notificationTypeKey(type);
   return key ? translate(`${key}.title`) : translate(type || "");
+}
+
+function notificationDevice(item) {
+  return item?.device && typeof item.device === "object" ? item.device : null;
+}
+
+function notificationDeviceLabel(device = {}) {
+  return device.hostname || device.serial_number || translate("Machine");
+}
+
+function notificationUserLabel(device = {}) {
+  return [device.first_name, device.last_name].filter(Boolean).join(" ") || device.email || translate("Non renseigné");
+}
+
+function notificationIcon(item) {
+  const device = notificationDevice(item);
+  if (device) {
+    const manufacturer = normalizeManufacturer(device.manufacturer, device.model);
+    return `<span class="notification-icon notification-oem ${manufacturer.colorClass}" title="${escapeHtml(manufacturer.manufacturerName)}">${renderManufacturerLogo(manufacturer)}</span>`;
+  }
+  const label = String(item.severity || "INFO").slice(0, 1).toUpperCase();
+  return `<span class="notification-icon notification-initial">${escapeHtml(label)}</span>`;
+}
+
+function notificationFacts(item) {
+  const device = notificationDevice(item);
+  if (!device) return "";
+  const manufacturer = normalizeManufacturer(device.manufacturer, device.model);
+  const model = [manufacturer.manufacturerName === "Unknown" ? "" : manufacturer.manufacturerName, fullDeviceModel(device)]
+    .filter((value) => value && value !== "-")
+    .join(" ");
+  const facts = [
+    ["Machine", notificationDeviceLabel(device)],
+    ["Utilisateur", notificationUserLabel(device)],
+    ["Équipe", displayWithAbbreviation(device.team_name || "", device.team_abbreviation) || translate("Non renseigné")],
+    ["Établissement", displayWithAbbreviation(device.establishment_name || "", device.establishment_abbreviation) || translate("Non renseigné")],
+    ["Modèle", model || translate("Non renseigné")],
+  ];
+  return `<div class="notification-facts">${facts.map(([label, value]) => `
+    <span><strong>${escapeHtml(translate(label))}</strong>${escapeHtml(value)}</span>
+  `).join("")}</div>`;
 }
 
 async function openNotificationTarget(id) {

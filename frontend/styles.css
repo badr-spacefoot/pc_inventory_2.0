@@ -1959,8 +1959,8 @@ tbody tr.is-selected {
 
 .notification-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 14px;
   align-items: center;
   border: 1px solid var(--line);
   border-left: 4px solid var(--brand);
@@ -1986,6 +1986,39 @@ tbody tr.is-selected {
 .notification-item.severity-warning { border-left-color: var(--accent); }
 .notification-item.severity-error { border-left-color: var(--danger); }
 
+.notification-icon {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface), var(--soft) 46%);
+}
+
+.notification-icon img {
+  max-width: 26px;
+  max-height: 26px;
+  object-fit: contain;
+}
+
+.notification-initial {
+  color: var(--brand);
+  font-weight: 900;
+}
+
+.notification-content {
+  min-width: 0;
+}
+
+.notification-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
 .notification-item strong,
 .notification-item p,
 .notification-item small {
@@ -1995,6 +2028,34 @@ tbody tr.is-selected {
 .notification-item p {
   margin: 6px 0;
   color: var(--muted);
+}
+
+.notification-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 6px;
+}
+
+.notification-facts span {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  max-width: 280px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 8px;
+  background: color-mix(in srgb, var(--soft), transparent 18%);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.notification-facts strong {
+  display: inline;
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
 }
 
 .notification-item small {
@@ -2434,6 +2495,15 @@ tbody tr.is-selected {
     position: static;
     max-height: none;
     overflow: visible;
+  }
+
+  .notification-item {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .notification-item .mark-notification-read {
+    grid-column: 2;
+    justify-self: flex-start;
   }
 }
 

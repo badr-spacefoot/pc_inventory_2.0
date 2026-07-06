@@ -619,7 +619,7 @@ async function upsertUserProfile(body: Json) {
       },
       { onConflict: "email" },
     )
-    .select("id,team_id,establishment_id")
+    .select("id,first_name,last_name,email,team_id,establishment_id")
     .single();
 
   if (userError) throw userError;
@@ -1742,7 +1742,12 @@ async function enrichOneDevice(device: Json, options: { force: boolean; useExter
   };
 }
 
-async function persistScan(request: Request, user: { id: string; team_id: string; establishment_id: string }, rawBody: Json, tokenId?: string) {
+async function persistScan(
+  request: Request,
+  user: { id: string; first_name?: string; last_name?: string; email?: string; team_id: string; establishment_id: string },
+  rawBody: Json,
+  tokenId?: string,
+) {
   const body = normalizeScanPayload(rawBody);
   if (!safeString(body.hostname)) return badRequest(request, "hostname requis.");
   if (!safeString(body.model)) return badRequest(request, "model requis.");
@@ -1862,13 +1867,16 @@ async function persistScan(request: Request, user: { id: string; team_id: string
   }
   await appendDeviceHistory(historyRows);
   if (!previousDevice) {
-    await notify("COLLECTOR_SUBMISSION_RECEIVED", "Nouvelle machine collectee", `${deviceValues.hostname} a ete ajoutee au parc.`, {
+    const userName = [safeString(user.first_name), safeString(user.last_name)].filter(Boolean).join(" ") || safeString(user.email) || "utilisateur non renseigne";
+    const deviceLabel = [safeString(deviceValues.manufacturer), safeString(deviceValues.model)].filter(Boolean).join(" ") || safeString(deviceValues.hostname) || "machine";
+
+    await notify("COLLECTOR_SUBMISSION_RECEIVED", "Nouvelle machine collectee", `${deviceLabel} (${deviceValues.hostname}) a ete ajoutee au parc pour ${userName}.`, {
       severity: "SUCCESS",
       targetRole: "ADMIN",
       relatedEntityType: "device",
       relatedEntityId: device.id,
     });
-  } else if (historyRows.some((row) => ["OS_CHANGED", "HARDWARE_CHANGED", "USER_REASSIGNED", "DEVICE_RESET", "IMPORT_UPDATE"].includes(safeString(row.event_type)))) {
+  } else if (historyRows.some((row) => ["OS_CHANGED", "HARDWARE_CHANGED", "USER_REASSIGNED", "DEVICE_RESET", "IMPORT_UPDATE", "STATUS_CHANGED"].includes(safeString(row.event_type)))) {
     await notify("COLLECTOR_SUBMISSION_RECEIVED", "Machine mise à jour", `${deviceValues.hostname} a remonté des changements matériels ou système.`, {
       severity: "INFO",
       targetRole: "ADMIN",
@@ -2032,7 +2040,30 @@ async function handleAdminListNotifications(request: Request) {
   }
   const { data, error } = await query;
   if (error) throw error;
-  return json(request, { notifications: data ?? [], unread: (data ?? []).filter((item) => !item.is_read).length });
+  const notifications = data ?? [];
+  const deviceIds = Array.from(new Set(notifications
+    .filter((item) => safeString(item.related_entity_type).toLowerCase() === "device")
+    .map((item) => safeString(item.related_entity_id))
+    .filter(Boolean)));
+  let devicesById: Record<string, Json> = {};
+
+  if (deviceIds.length > 0) {
+    const { data: devices, error: devicesError } = await supabase
+      .from("device_inventory_view")
+      .select("id,hostname,manufacturer,model,model_number,serial_number,first_name,last_name,email,team_name,team_abbreviation,establishment_name,establishment_abbreviation,status")
+      .in("id", deviceIds);
+    if (devicesError) throw devicesError;
+    devicesById = Object.fromEntries((devices ?? []).map((device) => [safeString(device.id), device]));
+  }
+
+  const enriched = notifications.map((item) => ({
+    ...item,
+    device: safeString(item.related_entity_type).toLowerCase() === "device"
+      ? devicesById[safeString(item.related_entity_id)] ?? null
+      : null,
+  }));
+
+  return json(request, { notifications: enriched, unread: enriched.filter((item) => !item.is_read).length });
 }
 
 async function handleAdminMarkNotification(request: Request, id?: string) {
