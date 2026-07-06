@@ -488,7 +488,7 @@ async function closeOpenAssignmentPeriod(deviceId: string, endedAt: string, unas
   if (error) throw error;
 }
 
-async function openAssignmentPeriod(
+async function openAssignmentPeriod(
   deviceId: string,
   userId: string | null,
   teamId: string | null,
@@ -1807,16 +1807,20 @@ async function persistScan(
     .select("id")
     .single();
   if (deviceError) throw deviceError;
-  const assignmentChanged =
+  const userAssignmentChanged =
+    Boolean(previousAssignment) &&
+    historyValue(previousAssignment?.assigned_user_id) !== historyValue(deviceValues.assigned_user_id);
+  const assignmentContextChanged =
     Boolean(previousAssignment) &&
     (
-      historyValue(previousAssignment?.assigned_user_id) !== historyValue(deviceValues.assigned_user_id) ||
       historyValue(previousAssignment?.team_id) !== historyValue(deviceValues.team_id) ||
       historyValue(previousAssignment?.establishment_id) !== historyValue(deviceValues.establishment_id)
     );
-  if (updateAssignmentFromScan && assignmentChanged) {
+  if (updateAssignmentFromScan && userAssignmentChanged) {
     await closeOpenAssignmentPeriod(device.id, collectedAt, "collector", "Device assignment updated by collector scan.");
     await openAssignmentPeriod(device.id, deviceValues.assigned_user_id, deviceValues.team_id, deviceValues.establishment_id, collectedAt, "collector", "COLLECTOR", "Device assignment updated by collector scan.");
+  } else if (updateAssignmentFromScan && assignmentContextChanged && deviceValues.assigned_user_id) {
+    await updateOpenAssignmentPeriodContext(device.id, deviceValues.team_id, deviceValues.establishment_id, "Assignment context updated by collector scan.");
   } else if (updateAssignmentFromScan && !previousAssignment && deviceValues.assigned_user_id) {
     await openAssignmentPeriod(device.id, deviceValues.assigned_user_id, deviceValues.team_id, deviceValues.establishment_id, collectedAt, "collector", "COLLECTOR", "Device assigned by first collector scan.");
   }
@@ -3018,14 +3022,22 @@ async function handleAdminDeviceAssignment(request: Request, id: string) {
   if (error) throw error;
   if (!data) return badRequest(request, "Machine introuvable.", 404);
   const changedAt = new Date().toISOString();
-  const assignmentChanged =
-    historyValue(currentAssignment?.assigned_user_id) !== historyValue(assignedUserId) ||
-    historyValue(currentAssignment?.team_id) !== historyValue(teamId) ||
-    historyValue(currentAssignment?.establishment_id) !== historyValue(establishmentId);
-  if (assignmentChanged) {
-    await closeOpenAssignmentPeriod(id, changedAt, auth.session?.username || "admin", "Device assignment changed.");
-    await openAssignmentPeriod(id, assignedUserId, teamId, establishmentId, changedAt, auth.session?.username || "admin", "MANUAL_ADMIN", "Device assigned by admin.");
-  }
+  const assignmentChanged =
+    historyValue(currentAssignment?.assigned_user_id) !== historyValue(assignedUserId) ||
+    historyValue(currentAssignment?.team_id) !== historyValue(teamId) ||
+    historyValue(currentAssignment?.establishment_id) !== historyValue(establishmentId);
+  const userAssignmentChanged = historyValue(currentAssignment?.assigned_user_id) !== historyValue(assignedUserId);
+  const assignmentContextChanged =
+    historyValue(currentAssignment?.team_id) !== historyValue(teamId) ||
+    historyValue(currentAssignment?.establishment_id) !== historyValue(establishmentId);
+  if (assignmentChanged) {
+    if (userAssignmentChanged) {
+      await closeOpenAssignmentPeriod(id, changedAt, auth.session?.username || "admin", "Device assignment changed.");
+      await openAssignmentPeriod(id, assignedUserId, teamId, establishmentId, changedAt, auth.session?.username || "admin", "MANUAL_ADMIN", "Device assigned by admin.");
+    } else if (assignmentContextChanged && assignedUserId) {
+      await updateOpenAssignmentPeriodContext(id, teamId, establishmentId, "Assignment context updated by admin.");
+    }
+  }
   const oldUser = [currentDevice.first_name, currentDevice.last_name].filter(Boolean).join(" ") || currentDevice.email || null;
   const newUser = targetUser ? [targetUser.first_name, targetUser.last_name].filter(Boolean).join(" ") || targetUser.email : null;
   const historyRows = [
@@ -3579,6 +3591,58 @@ async function syncLatestInvoiceValuation(deviceId: string) {
   };
 
   const { error } = await supabase.from("hardware_enrichment").upsert(values, { onConflict: "device_id" });
+
+  if (error) throw error;
+
+}
+
+
+
+async function updateOpenAssignmentPeriodContext(
+
+  deviceId: string,
+
+  teamId: string | null,
+
+  establishmentId: string | null,
+
+  reason = "",
+
+) {
+
+  const [{ data: team, error: teamError }, { data: site, error: siteError }] = await Promise.all([
+
+    teamId ? supabase.from("teams").select("name").eq("id", teamId).maybeSingle() : Promise.resolve({ data: null, error: null }),
+
+    establishmentId ? supabase.from("establishments").select("name").eq("id", establishmentId).maybeSingle() : Promise.resolve({ data: null, error: null }),
+
+  ]);
+
+  if (teamError) throw teamError;
+
+  if (siteError) throw siteError;
+
+  const { error } = await supabase
+
+    .from("device_assignment_periods")
+
+    .update({
+
+      team_id: teamId,
+
+      team_name: safeString(team?.name) || null,
+
+      establishment_id: establishmentId,
+
+      establishment_name: safeString(site?.name) || null,
+
+      ...(reason ? { reason } : {}),
+
+    })
+
+    .eq("device_id", deviceId)
+
+    .is("ended_at", null);
 
   if (error) throw error;
 

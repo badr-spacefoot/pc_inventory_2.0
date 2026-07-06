@@ -2686,6 +2686,46 @@ function sameLegacyAssignment(left, right) {
     cleanImportedText(left?.[field]).toLowerCase() === cleanImportedText(right?.[field]).toLowerCase());
 }
 
+function sameAssignmentPeriodUser(left, right) {
+  const leftId = cleanImportedText(left?.user_id).toLowerCase();
+  const rightId = cleanImportedText(right?.user_id).toLowerCase();
+  if (leftId && rightId) return leftId === rightId;
+  const leftEmail = cleanImportedText(left?.user_email).toLowerCase();
+  const rightEmail = cleanImportedText(right?.user_email).toLowerCase();
+  if (leftEmail && rightEmail) return leftEmail === rightEmail;
+  const leftName = cleanImportedText(left?.user_name).toLowerCase();
+  const rightName = cleanImportedText(right?.user_name).toLowerCase();
+  return Boolean(leftName && rightName && leftName === rightName);
+}
+
+function mergeSameUserAssignmentPeriods(periods = []) {
+  const sorted = periods
+    .filter(Boolean)
+    .slice()
+    .sort((left, right) => new Date(left.started_at || 0).getTime() - new Date(right.started_at || 0).getTime());
+  const merged = [];
+  sorted.forEach((period) => {
+    const previous = merged[merged.length - 1];
+    if (previous && sameAssignmentPeriodUser(previous, period)) {
+      const previousEnd = previous.ended_at ? new Date(previous.ended_at).getTime() : Infinity;
+      const periodEnd = period.ended_at ? new Date(period.ended_at).getTime() : Infinity;
+      previous.ended_at = previousEnd === Infinity || periodEnd === Infinity
+        ? null
+        : new Date(Math.max(previousEnd, periodEnd)).toISOString();
+      previous.unassigned_by = previous.ended_at ? (period.unassigned_by || previous.unassigned_by || "") : "";
+      previous.team_id = period.team_id || previous.team_id || null;
+      previous.team_name = period.team_name || previous.team_name || "";
+      previous.establishment_id = period.establishment_id || previous.establishment_id || null;
+      previous.establishment_name = period.establishment_name || previous.establishment_name || "";
+      previous.source = period.source || previous.source;
+      previous.reason = period.reason || previous.reason;
+      return;
+    }
+    merged.push({ ...period });
+  });
+  return merged.sort((left, right) => new Date(right.started_at || 0).getTime() - new Date(left.started_at || 0).getTime());
+}
+
 function assignmentPeriodsFromLegacyHistory(history = [], fallbackPeriods = []) {
   const legacyEvents = history
     .filter((event) => event.field_name === "legacy_google_sheets_history" && event.new_value && event.changed_at)
@@ -2693,7 +2733,7 @@ function assignmentPeriodsFromLegacyHistory(history = [], fallbackPeriods = []) 
     .filter(({ data }) => legacyAssignmentUser(data))
     .sort((left, right) => new Date(left.event.changed_at).getTime() - new Date(right.event.changed_at).getTime());
 
-  if (legacyEvents.length === 0) return fallbackPeriods;
+  if (legacyEvents.length === 0) return mergeSameUserAssignmentPeriods(fallbackPeriods);
 
   const periods = [];
   legacyEvents.forEach(({ event, data }) => {
@@ -2735,7 +2775,7 @@ function assignmentPeriodsFromLegacyHistory(history = [], fallbackPeriods = []) 
     periods[periods.length - 1].unassigned_by = firstManual.assigned_by || "admin";
   }
 
-  return [...laterManualPeriods, ...periods.slice().reverse()];
+  return mergeSameUserAssignmentPeriods([...laterManualPeriods, ...periods.slice().reverse()]);
 }
 
 function renderAssignmentPeriods(periods = []) {
