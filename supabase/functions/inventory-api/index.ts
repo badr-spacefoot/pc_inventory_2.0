@@ -1037,9 +1037,9 @@ function estimateCpuScore(cpuName: string) {
   return Math.round(Math.max(800, Math.min(score, 50000)));
 }
 
-async function lookupCpuBenchmark(cpuName: string) {
-  const normalized = normalizeCpuName(cpuName);
-  if (!normalized) return { benchmark: null, match: "none" };
+async function lookupCpuBenchmark(cpuName: string) {
+  const normalized = normalizeCpuName(cpuName);
+  if (!normalized) return { benchmark: null, match: "none" };
 
   const { data: imported } = await supabase
     .from("cpu_benchmarks")
@@ -1055,11 +1055,91 @@ async function lookupCpuBenchmark(cpuName: string) {
   if (modelToken) {
     const candidate = (cpuBenchmarkSeed as CpuBenchmark[]).find((item) => normalizeCpuName(item.cpu_name).includes(modelToken));
     if (candidate) return { benchmark: { ...candidate, source: "bundled-cpu-seed" }, match: "seed-model" };
-  }
-  return { benchmark: null, match: "estimated" };
-}
-
-function inferModelReleaseYear(model: string, cpuYear: number | null) {
+  }
+  return { benchmark: null, match: "estimated" };
+}
+
+function cpuVendor(cpuName: string) {
+  const cpu = cpuName.toLowerCase();
+  if (/\b(intel|core|xeon|pentium|celeron)\b/.test(cpu)) return "intel";
+  if (/\b(amd|ryzen|athlon|epyc|threadripper)\b/.test(cpu)) return "amd";
+  if (/\bapple\s+m[1-4]\b/.test(cpu)) return "apple";
+  return "unknown";
+}
+
+function officialCpuSearchUrl(cpuName: string, vendor: string) {
+  const query = encodeURIComponent(cpuName);
+  if (vendor === "intel") return `https://www.intel.com/content/www/us/en/search.html?ws=text&q=${query}`;
+  if (vendor === "amd") return `https://www.amd.com/en/search?keyword=${query}`;
+  return "";
+}
+
+function parseLaunchYearFromOfficialText(text: string) {
+  const normalized = text.replace(/\s+/g, " ");
+  const patterns = [
+    /(?:Launch Date|Date de lancement)\s*(Q[1-4]\s*['’]?\s*(?:20)?\d{2})/i,
+    /(?:Launch Date|Date de lancement)\s*([A-Za-z]+\s+\d{1,2},\s+20\d{2})/i,
+    /(?:Launch Date|Date de lancement)\s*(20\d{2})/i,
+    /\bQ[1-4]\s*['’]\s*(\d{2})\b/i,
+  ];
+  for (const pattern of patterns) {
+    const match = normalized.match(pattern);
+    if (!match) continue;
+    const value = match[1] || match[0];
+    const fullYear = String(value).match(/20\d{2}/)?.[0];
+    if (fullYear) return Number(fullYear);
+    const shortYear = String(value).match(/['’]\s*(\d{2})/)?.[1];
+    if (shortYear) return Number(`20${shortYear}`);
+  }
+  return null;
+}
+
+async function fetchOfficialCpuText(url: string) {
+  if (!url) return "";
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "accept": "text/html,application/xhtml+xml",
+        "accept-language": "en-US,en;q=0.9,fr;q=0.8",
+        "user-agent": "SpacefootInventory/1.0 (+https://badr-spacefoot.github.io/pc_inventory_2.0/)",
+      },
+    });
+    if (!response.ok) return "";
+    return (await response.text()).slice(0, 500_000).replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ");
+  } catch {
+    return "";
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function lookupCpuReleaseDate(cpuName: string) {
+  const cleanCpu = safeString(cpuName, 260);
+  const vendor = cpuVendor(cleanCpu);
+  const searchUrl = officialCpuSearchUrl(cleanCpu, vendor);
+  const officialText = await fetchOfficialCpuText(searchUrl);
+  const officialYear = parseLaunchYearFromOfficialText(officialText);
+  if (officialYear) {
+    return {
+      releaseYear: officialYear,
+      source: vendor === "intel" ? "official-intel-ark-search" : vendor === "amd" ? "official-amd-product-search" : "official-product-search",
+      confidence: "official-search",
+      searchUrl,
+    };
+  }
+  const fallbackYear = inferCpuReleaseYear(cleanCpu);
+  return {
+    releaseYear: fallbackYear,
+    source: fallbackYear ? `${vendor}-family-rule` : "unknown",
+    confidence: fallbackYear ? "family-rule" : "none",
+    searchUrl,
+  };
+}
+
+function inferModelReleaseYear(model: string, cpuYear: number | null) {
   const text = model.toLowerCase();
   const explicitYear = text.match(/\b(20(?:0[8-9]|1[0-9]|2[0-6]))\b/);
   if (explicitYear) return { year: Number(explicitYear[1]), match: "model-year" };
@@ -3198,13 +3278,106 @@ async function handleAdminImportCpuBenchmarks(request: Request) {
   if (rows.length === 0) return badRequest(request, "Aucune ligne CPU valide.");
   const { error } = await supabase.from("cpu_benchmarks").upsert(rows, { onConflict: "normalized_name" });
   if (error) throw error;
-  await audit("cpu_benchmarks_imported", "cpu_benchmark", null, { imported: rows.length, rejected: rejected.length });
-  return json(request, { imported: rows.length, rejected: rejected.length, errors: rejected.slice(0, 20) });
-}
-
-async function handleAdminCpuBenchmarkStats(request: Request) {
-  if (!(await isAdmin(request, "VIEW_DASHBOARD"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
-  const { count, error } = await supabase.from("cpu_benchmarks").select("id", { count: "exact", head: true });
+  await audit("cpu_benchmarks_imported", "cpu_benchmark", null, { imported: rows.length, rejected: rejected.length });
+  return json(request, { imported: rows.length, rejected: rejected.length, errors: rejected.slice(0, 20) });
+}
+
+async function handleAdminRefreshCpuReleaseDates(request: Request) {
+  if (!(await isAdmin(request, "DEVICE_EDIT"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
+  const body = await request.json().catch(() => ({}));
+  const limit = Math.max(1, Math.min(Number(body.limit || 60), 200));
+  const force = Boolean(body.force);
+
+  const { data: devices, error: devicesError } = await supabase
+    .from("device_inventory_view")
+    .select("cpu,enrichment_cpu_name,cpu_score,cpu_benchmark_score,cpu_generation")
+    .limit(1000);
+  if (devicesError) throw devicesError;
+
+  const candidates = new Map<string, Json>();
+  for (const device of devices ?? []) {
+    const cpuName = safeString(device.cpu || device.enrichment_cpu_name, 260);
+    const normalizedName = normalizeCpuName(cpuName);
+    if (!cpuName || !normalizedName || candidates.has(normalizedName)) continue;
+    candidates.set(normalizedName, { ...device, cpuName, normalizedName });
+    if (candidates.size >= limit) break;
+  }
+
+  if (candidates.size === 0) return json(request, { scanned: 0, updated: 0, skipped: 0, rows: [] });
+
+  const { data: existingRows, error: existingError } = await supabase
+    .from("cpu_benchmarks")
+    .select("cpu_name,normalized_name,cpu_mark_score,release_year,generation,category,source")
+    .in("normalized_name", [...candidates.keys()]);
+  if (existingError) throw existingError;
+
+  const existingByName = new Map((existingRows ?? []).map((row) => [safeString(row.normalized_name), row]));
+  const now = new Date().toISOString();
+  const rows = [];
+  const resultRows = [];
+  let skipped = 0;
+
+  for (const [normalizedName, candidate] of candidates.entries()) {
+    const candidateCpuName = safeString(candidate.cpuName, 260);
+    const existing = existingByName.get(normalizedName);
+    const existingSource = safeString(existing?.source, 120);
+    if (!force && existing?.release_year && (existingSource.startsWith("official-") || existingSource === "admin-csv-import")) {
+      skipped += 1;
+      resultRows.push({ cpuName: candidateCpuName, releaseYear: existing.release_year, source: existingSource, status: "kept" });
+      continue;
+    }
+
+    const lookup = await lookupCpuReleaseDate(candidateCpuName);
+    if (!lookup.releaseYear) {
+      skipped += 1;
+      resultRows.push({ cpuName: candidateCpuName, releaseYear: null, source: lookup.source, status: "missing" });
+      continue;
+    }
+
+    const cpuScore = Number(existing?.cpu_mark_score || candidate.cpu_benchmark_score || candidate.cpu_score || estimateCpuScore(candidateCpuName));
+    rows.push({
+      cpu_name: safeString(existing?.cpu_name || candidateCpuName, 260),
+      normalized_name: normalizedName,
+      cpu_mark_score: Math.round(Math.max(800, cpuScore)),
+      release_year: lookup.releaseYear,
+      generation: safeString(existing?.generation || candidate.cpu_generation || inferCpuGeneration(candidateCpuName), 120) || null,
+      category: safeString(existing?.category, 80) || null,
+      source: lookup.source,
+      updated_at: now,
+    });
+    resultRows.push({
+      cpuName: candidateCpuName,
+      releaseYear: lookup.releaseYear,
+      source: lookup.source,
+      confidence: lookup.confidence,
+      status: "updated",
+    });
+  }
+
+  if (rows.length > 0) {
+    const { error } = await supabase.from("cpu_benchmarks").upsert(rows, { onConflict: "normalized_name" });
+    if (error) throw error;
+  }
+
+  await audit("cpu_release_dates_refreshed", "cpu_benchmark", null, {
+    scanned: candidates.size,
+    updated: rows.length,
+    skipped,
+  });
+
+  return json(request, {
+    scanned: candidates.size,
+    updated: rows.length,
+    skipped,
+    official: resultRows.filter((row) => safeString(row.source).startsWith("official-")).length,
+    fallback: resultRows.filter((row) => safeString(row.source).includes("family-rule")).length,
+    rows: resultRows,
+  });
+}
+
+async function handleAdminCpuBenchmarkStats(request: Request) {
+  if (!(await isAdmin(request, "VIEW_DASHBOARD"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
+  const { count, error } = await supabase.from("cpu_benchmarks").select("id", { count: "exact", head: true });
   if (error) throw error;
   return json(request, { importedCount: count ?? 0, bundledCount: (cpuBenchmarkSeed as CpuBenchmark[]).length });
 }
@@ -4026,9 +4199,10 @@ Deno.serve(async (request) => {
     if (request.method === "POST" && path.endsWith("/admin/enrichment-jobs")) return await handleStartEnrichmentJob(request);
     if (request.method === "POST" && path.endsWith("/admin/enrichment-jobs/process")) return await handleProcessEnrichmentJob(request);
     if (request.method === "POST" && path.endsWith("/admin/enrich")) return await handleAdminEnrich(request);
-    if (request.method === "GET" && path.endsWith("/admin/cpu-benchmarks")) return await handleAdminCpuBenchmarkStats(request);
-    if (request.method === "POST" && path.endsWith("/admin/cpu-benchmarks/import")) return await handleAdminImportCpuBenchmarks(request);
-    if (request.method === "GET" && path.endsWith("/admin/access-tokens")) return await handleAdminListAccessTokens(request);
+    if (request.method === "GET" && path.endsWith("/admin/cpu-benchmarks")) return await handleAdminCpuBenchmarkStats(request);
+    if (request.method === "POST" && path.endsWith("/admin/cpu-benchmarks/import")) return await handleAdminImportCpuBenchmarks(request);
+    if (request.method === "POST" && path.endsWith("/admin/cpu-benchmarks/refresh-release-dates")) return await handleAdminRefreshCpuReleaseDates(request);
+    if (request.method === "GET" && path.endsWith("/admin/access-tokens")) return await handleAdminListAccessTokens(request);
     if (request.method === "POST" && path.endsWith("/admin/access-tokens")) return await handleAdminCreateAccessToken(request);
     if (request.method === "GET" && path.endsWith("/admin/collection-invites")) return await handleAdminListCollectionInvites(request);
     if (request.method === "POST" && path.endsWith("/admin/collection-invites")) return await handleAdminCreateCollectionInvite(request);

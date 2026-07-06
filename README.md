@@ -503,6 +503,16 @@ cpu_name,cpu_mark_score,release_year,génération,category
 
 Dans Admin > Valorisation, cliquer sur `Importer benchmarks CPU`, choisir le CSV, puis lancer `Recalculer les valeurs`. Les lignes importees remplacent le jeu integre lorsqu'un nom CPU normalise correspond exactement.
 
+### Actualiser les dates de lancement CPU
+
+Dans Admin > Valorisation, le bouton `Actualiser dates CPU` parcourt les processeurs vus dans le parc et met a jour le cache `cpu_benchmarks.release_year`.
+
+- Intel: recherche officielle via Intel ARK / pages Intel.
+- AMD: recherche officielle via les pages produits AMD.
+- Si la page officielle ne retourne pas de date exploitable, l'API applique une regle de famille processeur et marque la source comme `*-family-rule`.
+
+Apres actualisation, lancer `Recalculer les valeurs` pour propager les nouvelles annees de lancement aux scores d'age, de depreciation et de remplacement.
+
 ### Cache et actions admin
 
 - `Enrichir cette machine`: force le recalcul d'une fiche.
