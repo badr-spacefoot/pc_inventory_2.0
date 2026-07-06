@@ -2320,6 +2320,32 @@ tbody tr.is-selected {
   font-size: 12px;
 }
 
+.history-event-note {
+  color: var(--muted);
+}
+
+.history-admin-note {
+  gap: 6px;
+  margin: 10px 0;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--brand) 42%, var(--line));
+  border-left: 4px solid var(--brand);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--brand) 10%, var(--surface));
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.history-admin-note span {
+  color: var(--brand-strong);
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .history-change {
   grid-template-columns: minmax(0, 1fr);
 }

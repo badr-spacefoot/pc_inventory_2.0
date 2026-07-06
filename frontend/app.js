@@ -580,6 +580,7 @@ const englishTranslations = {
   "Import mis a jour": "Import updated",
   "Facture ajoutee": "Invoice added",
   "Facture supprimee": "Invoice deleted",
+  "Modification groupee": "Grouped update",
   "Sections machine": "Device sections",
   "Scans": "Scans",
   "Prix marché": "Market prices",
@@ -2529,6 +2530,7 @@ function historyLabel(event) {
     IMPORT_UPDATE: "Import mis à jour",
     INVOICE_ADDED: "Facture ajoutee",
     INVOICE_DELETED: "Facture supprimee",
+    GROUPED_UPDATE: "Modification groupee",
   };
   return labels[event.event_type] || event.event_type;
 }
@@ -2617,14 +2619,43 @@ function historyValueDisplay(event, side) {
   return cleanImportedText(value || "-");
 }
 
-function historyGroupKey(event) {
-  const groupedTypes = new Set(["HARDWARE_CHANGED", "OS_CHANGED", "DEVICE_RESET", "IMPORT_UPDATE"]);
-  if (!groupedTypes.has(event.event_type) || event.field_name === "legacy_google_sheets_history") {
-    return `single:${event.id}`;
+function historyTimeBucket(value) {
+  const time = new Date(value || 0).getTime();
+  return Number.isFinite(time) ? Math.floor(time / 60000) : String(value || "");
+}
+
+function historyGroupFamily(event) {
+  if (event.field_name === "legacy_google_sheets_history" || event.event_type === "MANUAL_EDIT") {
+    return `single:${event.id || event.changed_at || ""}`;
   }
+
+  const source = String(event.source || "").toUpperCase();
+  const type = String(event.event_type || "");
+  const field = String(event.field_name || "");
+  const collectionFields = new Set([
+    "hostname", "os_name", "os_version", "manufacturer", "model", "model_number",
+    "service_tag", "serial_number", "cpu", "gpu", "ram_total_gb", "storage_total_gb",
+    "storage_type", "windows_user",
+  ]);
+  const assignmentFields = new Set(["assigned_user_id", "team_id", "establishment_id", "owner_email", "status"]);
+  const collectionTypes = new Set(["DEVICE_CREATED", "DEVICE_UPDATED", "DEVICE_RESET", "COLLECTOR_UPDATE", "IMPORT_UPDATE", "OS_CHANGED", "HARDWARE_CHANGED"]);
+  const assignmentTypes = new Set(["USER_ASSIGNED", "USER_REASSIGNED", "USER_REMOVED", "TEAM_CHANGED", "LOCATION_CHANGED", "STATUS_CHANGED", "DEVICE_RETIRED", "DEVICE_REACTIVATED"]);
+
+  if ((source.includes("COLLECTOR") || source.includes("IMPORT")) && (collectionTypes.has(type) || assignmentTypes.has(type) || collectionFields.has(field) || assignmentFields.has(field))) {
+    return "collection";
+  }
+  if (assignmentTypes.has(type) || assignmentFields.has(field)) return "assignment";
+  if (collectionTypes.has(type) || collectionFields.has(field)) return "hardware-system";
+  if (type === "INVOICE_ADDED" || type === "INVOICE_DELETED" || field === "invoice") return "invoice";
+  return `single:${event.id || `${type}:${field}:${event.changed_at}`}`;
+}
+
+function historyGroupKey(event) {
+  const family = historyGroupFamily(event);
+  if (family.startsWith("single:")) return family;
   return [
-    "collection",
-    event.changed_at,
+    family,
+    historyTimeBucket(event.changed_at),
     event.changed_by || "",
     event.source || "",
   ].join("|");
@@ -2645,10 +2676,35 @@ function groupHistoryEvents(history = []) {
 
 function historyGroupLabel(events) {
   const types = new Set(events.map((event) => event.event_type));
-  if (types.size > 1 && events.some((event) => ["HARDWARE_CHANGED", "OS_CHANGED", "DEVICE_RESET"].includes(event.event_type))) {
+  if (events.some((event) => event.event_type === "MANUAL_EDIT")) return "MANUAL_EDIT";
+  if (events.some((event) => ["DEVICE_RETIRED", "DEVICE_REACTIVATED"].includes(event.event_type))) {
+    return events.find((event) => ["DEVICE_RETIRED", "DEVICE_REACTIVATED"].includes(event.event_type))?.event_type || "STATUS_CHANGED";
+  }
+  if (events.some((event) => ["USER_ASSIGNED", "USER_REASSIGNED", "USER_REMOVED", "TEAM_CHANGED", "LOCATION_CHANGED", "STATUS_CHANGED"].includes(event.event_type))) {
+    return events.some((event) => event.event_type === "USER_REMOVED") ? "USER_REMOVED" : "USER_REASSIGNED";
+  }
+  if (events.some((event) => ["HARDWARE_CHANGED", "OS_CHANGED", "DEVICE_RESET", "IMPORT_UPDATE", "DEVICE_UPDATED", "DEVICE_CREATED"].includes(event.event_type))) {
     return "COLLECTOR_UPDATE";
   }
-  return events[0]?.event_type || "";
+  return types.size > 1 ? "GROUPED_UPDATE" : (events[0]?.event_type || "");
+}
+
+function renderHistoryNotes(events) {
+  const seen = new Set();
+  return events.map((event) => {
+    const note = cleanImportedText(event.notes);
+    if (!note) return "";
+    const key = `${event.event_type || ""}:${note.toLowerCase()}`;
+    if (seen.has(key)) return "";
+    seen.add(key);
+    const isAdminNote = event.event_type === "MANUAL_EDIT" || String(event.source || "").toLowerCase() === "manual-note";
+    return `
+      <p class="${isAdminNote ? "history-admin-note" : "history-event-note"}">
+        ${isAdminNote ? `<span>${escapeHtml(translate("Note administrateur"))}</span>` : ""}
+        ${escapeHtml(note)}
+      </p>
+    `;
+  }).join("");
 }
 
 function renderHistoryChanges(events) {
@@ -2680,8 +2736,9 @@ function renderHistoryTimeline(history) {
   return groupHistoryEvents(history).map((group) => {
     const event = group.events[0];
     const groupLabel = historyGroupLabel(group.events);
-    const fieldSummary = group.events.length > 1
-      ? `${group.events.length} ${state.language === "en" ? "fields updated" : "champs mis à jour"}`
+    const changedFields = new Set(group.events.filter((item) => item.field_name).map((item) => historyFieldLabel(item.field_name)));
+    const fieldSummary = changedFields.size > 1
+      ? `${changedFields.size} ${state.language === "en" ? "fields updated" : "champs mis à jour"}`
       : (event.field_name ? historyFieldLabel(event.field_name) : "");
     return `
     <article class="history-event">
@@ -2691,7 +2748,7 @@ function renderHistoryTimeline(history) {
         <strong>${escapeHtml(translate(historyLabel({ ...event, event_type: groupLabel })))}</strong>
         ${fieldSummary ? `<small>${escapeHtml(fieldSummary)}</small>` : ""}
         ${renderHistoryChanges(group.events)}
-        ${group.events.map((item) => item.notes ? `<p>${escapeHtml(cleanImportedText(item.notes))}</p>` : "").join("")}
+        ${renderHistoryNotes(group.events)}
         <dl class="history-meta">
           <div><dt>${translate("Qui")}</dt><dd>${escapeHtml(event.changed_by || "system")}</dd></div>
           <div><dt>${translate("Comment")}</dt><dd>${escapeHtml(sourceLabel(event.source))}</dd></div>
