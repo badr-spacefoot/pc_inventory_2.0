@@ -1963,6 +1963,58 @@ tbody tr.is-selected {
   font-weight: 500;
 }
 
+.hostname-quality {
+  display: inline-flex;
+  align-items: center;
+  max-width: 190px;
+  gap: 6px;
+}
+
+.hostname-quality .cell-primary {
+  min-width: 0;
+}
+
+.data-quality-signal {
+  --quality-color: var(--muted);
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid color-mix(in srgb, var(--quality-color) 34%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--quality-color) 10%, var(--surface));
+  color: var(--quality-color);
+}
+
+.data-quality-signal svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.data-quality-ok {
+  --quality-color: #64748b;
+  opacity: 0.72;
+}
+
+.data-quality-review {
+  --quality-color: #0f766e;
+}
+
+.data-quality-warning {
+  --quality-color: #b45309;
+}
+
+.data-quality-critical {
+  --quality-color: #b91c1c;
+}
+
 .status {
   display: inline-flex;
   border-radius: 999px;

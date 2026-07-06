@@ -557,6 +557,18 @@ const englishTranslations = {
   "Prix achat reel": "Actual purchase price",
   "Fichier trop volumineux. Maximum 10 Mo.": "File too large. Maximum 10 MB.",
   "Lecture du fichier...": "Reading file...",
+  "Qualite donnees": "Data quality",
+  "Donnees a jour": "Data up to date",
+  "Donnees a verifier": "Data to review",
+  "Donnees obsoletes": "Outdated data",
+  "Donnees critiques": "Critical data issue",
+  "Aucune collecte": "No collection",
+  "Derniere collecte ancienne": "Last collection is old",
+  "Champs critiques manquants": "Missing critical fields",
+  "Donnees materielles incompletes": "Incomplete hardware data",
+  "Profil utilisateur incomplet": "Incomplete user profile",
+  "Email utilisateur a verifier": "User email to review",
+  "Collector ancien": "Outdated collector",
   "De": "From",
   "Vers": "To",
   "Aucun historique.": "No history.",
@@ -1669,6 +1681,112 @@ function deviceRowStatusClass(status) {
   return `device-row-status-${String(status || "active").replace(/[^a-z0-9_-]+/gi, "-").toLowerCase()}`;
 }
 
+function isMissingInventoryValue(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return !normalized || ["-", "unknown", "none", "null", "undefined", "n/a"].includes(normalized);
+}
+
+function versionParts(value) {
+  const match = String(value || "").match(/(\d+)\.(\d+)\.(\d+)/);
+  return match ? match.slice(1).map(Number) : null;
+}
+
+function compareVersions(left, right) {
+  const leftParts = versionParts(left);
+  const rightParts = versionParts(right);
+  if (!leftParts || !rightParts) return 0;
+  for (let index = 0; index < 3; index += 1) {
+    if (leftParts[index] !== rightParts[index]) return leftParts[index] - rightParts[index];
+  }
+  return 0;
+}
+
+function deviceDataQuality(device) {
+  const reasons = [];
+  let level = "ok";
+  const seenDays = daysSince(device.last_seen_at);
+  const latestCollectorVersion = state.collectorReleases?.latestVersion || state.collectorReleases?.assets?.windows?.version || "";
+  const criticalHardwareFields = [
+    device.os_name,
+    device.manufacturer,
+    device.model,
+    device.cpu,
+    device.ram_total_gb,
+    device.storage_total_gb,
+  ];
+  const missingCriticalFields = criticalHardwareFields.filter(isMissingInventoryValue).length;
+  const unassignedStatus = isDetachedInventoryStatus(device.status);
+
+  if (!device.last_seen_at) {
+    level = "critical";
+    reasons.push(translate("Aucune collecte"));
+  } else if (seenDays > Math.max(CONFIG.staleDays * 3, 90)) {
+    level = "critical";
+    reasons.push(`${translate("Derniere collecte ancienne")} (${seenDays}j)`);
+  } else if (seenDays > CONFIG.staleDays) {
+    level = "warning";
+    reasons.push(`${translate("Derniere collecte ancienne")} (${seenDays}j)`);
+  }
+
+  if (missingCriticalFields >= 3) {
+    level = "critical";
+    reasons.push(translate("Champs critiques manquants"));
+  } else if (missingCriticalFields > 0) {
+    if (level === "ok") level = "review";
+    reasons.push(translate("Donnees materielles incompletes"));
+  }
+
+  if (!unassignedStatus && (isMissingInventoryValue(device.first_name) || isMissingInventoryValue(device.last_name) || isMissingInventoryValue(device.email) || isMissingInventoryValue(device.team_name) || isMissingInventoryValue(device.establishment_name))) {
+    if (level === "ok") level = "review";
+    reasons.push(translate("Profil utilisateur incomplet"));
+  }
+
+  if (!unassignedStatus && String(device.email || "").toLowerCase().endsWith(".local")) {
+    if (level === "ok") level = "review";
+    reasons.push(translate("Email utilisateur a verifier"));
+  }
+
+  if (latestCollectorVersion && device.script_version && compareVersions(device.script_version, latestCollectorVersion) < 0) {
+    if (level === "ok") level = "review";
+    reasons.push(translate("Collector ancien"));
+  }
+
+  const labels = {
+    ok: translate("Donnees a jour"),
+    review: translate("Donnees a verifier"),
+    warning: translate("Donnees obsoletes"),
+    critical: translate("Donnees critiques"),
+  };
+  return {
+    level,
+    label: labels[level],
+    reasons: reasons.length ? Array.from(new Set(reasons)) : [labels.ok],
+  };
+}
+
+function dataQualityIcon(level) {
+  if (level === "critical") {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 2 20h20L12 2Z"></path><path d="M12 8v5"></path><path d="M12 17h.01"></path></svg>';
+  }
+  if (level === "warning") {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 3.9 2.5 18a2 2 0 0 0 1.7 3h15.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>';
+  }
+  if (level === "review") {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5"></path><path d="M12 8h.01"></path></svg>';
+  }
+  return '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 8h.01"></path><path d="M11 12h1v5h1"></path></svg>';
+}
+
+function renderDataQualitySignal(device) {
+  const quality = deviceDataQuality(device);
+  const title = `${translate("Qualite donnees")}: ${quality.label} - ${quality.reasons.join(" / ")}`;
+  return `
+    <span class="data-quality-signal data-quality-${quality.level}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}">
+      ${dataQualityIcon(quality.level)}
+    </span>
+  `;
+}
+
 function tokenState(token) {
   if (token.revoked_at) return { key: "revoked", label: translate("Révoqué") };
   if (new Date(token.expires_at).getTime() <= Date.now()) return { key: "expired", label: translate("Expire") };
@@ -2476,7 +2594,13 @@ function renderDevices() {
       const userEmail = unassignedStatus ? (labels[device.status] || translate("Sorti du parc")) : (device.email || "");
       return `
         <tr data-id="${device.id}" class="${deviceRowStatusClass(device.status)} ${device.id === state.selectedDeviceId ? "is-selected" : ""}">
-          <td><strong class="cell-primary">${escapeHtml(device.hostname || "-")}</strong><small class="cell-secondary">${escapeHtml(device.serial_number || device.service_tag || "")}</small></td>
+          <td>
+            <span class="hostname-quality">
+              <strong class="cell-primary">${escapeHtml(device.hostname || "-")}</strong>
+              ${renderDataQualitySignal(device)}
+            </span>
+            <small class="cell-secondary">${escapeHtml(device.serial_number || device.service_tag || "")}</small>
+          </td>
           <td><strong class="cell-primary">${escapeHtml(userName)}</strong><small class="cell-secondary">${escapeHtml(userEmail)}</small></td>
           <td>${unassignedStatus ? "" : renderTeamBadge(device.team_name, device.team_id, device.team_color)}</td>
           <td>${renderLocationBadge(device)}</td>
