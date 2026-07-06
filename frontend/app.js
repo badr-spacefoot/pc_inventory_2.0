@@ -2689,7 +2689,7 @@ function sameLegacyAssignment(left, right) {
 function sameAssignmentPeriodUser(left, right) {
   const leftId = cleanImportedText(left?.user_id).toLowerCase();
   const rightId = cleanImportedText(right?.user_id).toLowerCase();
-  if (leftId && rightId) return leftId === rightId;
+  if (leftId && rightId && leftId === rightId) return true;
   const leftEmail = cleanImportedText(left?.user_email).toLowerCase();
   const rightEmail = cleanImportedText(right?.user_email).toLowerCase();
   if (leftEmail && rightEmail) return leftEmail === rightEmail;
