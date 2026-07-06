@@ -2479,7 +2479,11 @@ function applyFilters() {
     if (model && device.model !== model) return false;
     if (manufacturer && normalizeManufacturer(device.manufacturer, device.model).manufacturerName !== manufacturer) return false;
     if (status && device.status !== status) return false;
-    if (age && ageBucket(device) !== age) return false;
+    if (age) {
+      const isDetached = isDetachedInventoryStatus(device.status);
+      if (isDetached && !status) return false;
+      if (ageBucket(device) !== age) return false;
+    }
     if (cpuScore && cpuScoreBucket(device) !== cpuScore) return false;
     if (value && valueBucket(device) !== value) return false;
     return true;
