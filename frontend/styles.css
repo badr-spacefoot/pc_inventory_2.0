@@ -1908,6 +1908,45 @@ tbody tr.is-selected {
   box-shadow: inset 3px 0 0 var(--brand);
 }
 
+#devices-table tr[class*="device-row-status-"] {
+  --row-accent: var(--brand);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--row-accent) 14%, transparent), transparent 42%),
+    var(--surface);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--row-accent) 76%, transparent);
+}
+
+#devices-table tr[class*="device-row-status-"]:hover,
+#devices-table tr[class*="device-row-status-"].is-selected {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--row-accent) 20%, transparent), transparent 48%),
+    var(--soft-hover);
+}
+
+#devices-table tr[class*="device-row-status-"].is-selected {
+  box-shadow: inset 3px 0 0 var(--row-accent);
+}
+
+#devices-table tr.device-row-status-active {
+  --row-accent: #199b78;
+}
+
+#devices-table tr.device-row-status-replace {
+  --row-accent: #d97706;
+}
+
+#devices-table tr.device-row-status-stock {
+  --row-accent: #c48a18;
+}
+
+#devices-table tr.device-row-status-lost {
+  --row-accent: #b45309;
+}
+
+#devices-table tr.device-row-status-retired {
+  --row-accent: #79827a;
+}
+
 .cell-primary,
 .cell-secondary {
   display: block;
@@ -2063,10 +2102,34 @@ tbody tr.is-selected {
   font-size: 11px;
 }
 
+.status.active {
+  color: #13775f;
+}
+
+.status.stock {
+  color: #9a6500;
+}
+
+.status.retired {
+  color: #667067;
+}
+
 .status.replace,
 .status.lost {
   background: var(--danger-soft);
   color: var(--danger);
+}
+
+:root[data-theme="dark"] .status.active {
+  color: #50d0ad;
+}
+
+:root[data-theme="dark"] .status.stock {
+  color: #f0c35b;
+}
+
+:root[data-theme="dark"] .status.retired {
+  color: #bcc6bd;
 }
 
 .detail-list {

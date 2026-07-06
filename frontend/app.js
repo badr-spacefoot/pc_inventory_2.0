@@ -1639,6 +1639,25 @@ function statusClass(status) {
   return `status ${status || "active"}`;
 }
 
+function deviceStatusRank(status) {
+  const ranks = {
+    active: 0,
+    replace: 1,
+    lost: 2,
+    stock: 3,
+    retired: 4,
+  };
+  return ranks[String(status || "active")] ?? 5;
+}
+
+function compareDeviceStatus(left, right) {
+  return deviceStatusRank(left.status) - deviceStatusRank(right.status);
+}
+
+function deviceRowStatusClass(status) {
+  return `device-row-status-${String(status || "active").replace(/[^a-z0-9_-]+/gi, "-").toLowerCase()}`;
+}
+
 function tokenState(token) {
   if (token.revoked_at) return { key: "revoked", label: translate("Révoqué") };
   if (new Date(token.expires_at).getTime() <= Date.now()) return { key: "expired", label: translate("Expire") };
@@ -2298,12 +2317,15 @@ function applyFilters() {
   });
   const sortBy = $("#sort-devices").value;
   state.filtered.sort((left, right) => {
+    const statusOrder = compareDeviceStatus(left, right);
+    if (statusOrder !== 0) return statusOrder;
     if (sortBy === "manufacturer") {
       return normalizeManufacturer(left.manufacturer, left.model).manufacturerName.localeCompare(
         normalizeManufacturer(right.manufacturer, right.model).manufacturerName,
         state.language,
       );
     }
+    if (sortBy === "status") return statusOrder || new Date(right.last_seen_at || 0).getTime() - new Date(left.last_seen_at || 0).getTime();
     if (sortBy === "hostname") return String(left.hostname || "").localeCompare(String(right.hostname || ""), state.language);
     return new Date(right.last_seen_at || 0).getTime() - new Date(left.last_seen_at || 0).getTime();
   });
@@ -2442,7 +2464,7 @@ function renderDevices() {
         : (`${device.first_name || ""} ${device.last_name || ""}`.trim() || "-");
       const userEmail = unassignedStatus ? (labels[device.status] || translate("Sorti du parc")) : (device.email || "");
       return `
-        <tr data-id="${device.id}" class="${device.id === state.selectedDeviceId ? "is-selected" : ""}">
+        <tr data-id="${device.id}" class="${deviceRowStatusClass(device.status)} ${device.id === state.selectedDeviceId ? "is-selected" : ""}">
           <td><strong class="cell-primary">${escapeHtml(device.hostname || "-")}</strong><small class="cell-secondary">${escapeHtml(device.serial_number || device.service_tag || "")}</small></td>
           <td><strong class="cell-primary">${escapeHtml(userName)}</strong><small class="cell-secondary">${escapeHtml(userEmail)}</small></td>
           <td>${unassignedStatus ? "" : renderTeamBadge(device.team_name, device.team_id, device.team_color)}</td>
