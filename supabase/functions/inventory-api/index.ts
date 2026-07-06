@@ -950,18 +950,19 @@ function dedupePayload(body: Json, userId: string) {
   return { dedupe_key: `user_model_site:${userId}:${model.toLowerCase()}:${establishmentId}` };
 }
 
-function hardwareAgeScore(body: Json) {
-  const ram = Number(body.ramTotalGb || 0);
-  const free = Number(body.storageFreeGb || 0);
-  const os = safeString(body.osVersion).toLowerCase();
-  let score = 20;
-  if (ram > 0 && ram < 8) score += 25;
-  if (ram >= 8 && ram < 16) score += 10;
-  if (free > 0 && free < 20) score += 20;
-  if (os.includes("windows 10")) score += 20;
-  if (os.includes("windows 7") || os.includes("windows 8")) score += 45;
-  return Math.min(score, 100);
-}
+function hardwareAgeScore(body: Json) {
+  const ram = Number(body.ramTotalGb || 0);
+  const free = Number(body.storageFreeGb || 0);
+  const os = safeString(body.osVersion).toLowerCase();
+  let score = 20;
+  if (ram > 0 && ram < 8) score += 35;
+  if (ram >= 8 && ram < 16) score += 20;
+  if (ram >= 16) score -= 8;
+  if (free > 0 && free < 20) score += 20;
+  if (os.includes("windows 10")) score += 20;
+  if (os.includes("windows 7") || os.includes("windows 8")) score += 45;
+  return Math.max(0, Math.min(score, 100));
+}
 
 type CpuBenchmark = {
   cpu_name: string;
@@ -1522,20 +1523,21 @@ function valuationConfidenceLabel(method: string, confidenceScore: number) {
 }
 
 function replacementPriority(device: Json, age: number, cpuScore: number, currentValue: number, category: string) {
-  let score = 0;
-  const reasons: string[] = [];
-  if (age >= 6) { score += 40; reasons.push("6+ years old"); }
-  else if (age >= 5) { score += 34; reasons.push("5 years old"); }
-  else if (age >= 4) { score += 26; reasons.push("4 years old"); }
-  else if (age >= 3) score += 15;
+  let score = 0;
+  const reasons: string[] = [];
+  if (age >= 6) { score += 34; reasons.push("6+ years old"); }
+  else if (age >= 5) { score += 28; reasons.push("5 years old"); }
+  else if (age >= 4) { score += 22; reasons.push("4 years old"); }
+  else if (age >= 3) score += 15;
 
   if (cpuScore < 5000) { score += 30; reasons.push("very low CPU score"); }
   else if (cpuScore < 8000) { score += 20; reasons.push("low CPU score"); }
   else if (cpuScore < 12000) score += 8;
 
-  const ram = safeNumber(device.ram_total_gb) ?? 0;
-  if (ram > 0 && ram < 8) { score += 22; reasons.push("less than 8 GB RAM"); }
-  else if (ram > 0 && ram < 16) score += 8;
+  const ram = safeNumber(device.ram_total_gb) ?? 0;
+  if (ram > 0 && ram < 8) { score += 32; reasons.push("less than 8 GB RAM"); }
+  else if (ram > 0 && ram < 16) { score += 20; reasons.push("8-15 GB RAM"); }
+  else if (ram >= 16 && cpuScore >= 8000) score -= 10;
 
   const storageType = safeString(device.storage_type).toLowerCase();
   if (storageType.includes("hdd") || storageType.includes("hard disk")) { score += 15; reasons.push("HDD storage"); }

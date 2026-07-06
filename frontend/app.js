@@ -57,8 +57,8 @@ let pendingRetirement = null;
 let activeEnrichmentRun = null;
 
 const statusLabels = {
-  fr: { active: "Actif", replace: "A remplacer", stock: "En stock", lost: "Perdu", retired: "Sorti du parc" },
-  en: { active: "Active", replace: "Replace", stock: "In stock", lost: "Lost", retired: "Retired" },
+  fr: { active: "Actif", replace: "Remplacement planifie", stock: "En stock", lost: "Perdu", retired: "Sorti du parc" },
+  en: { active: "Active", replace: "Planned replacement", stock: "In stock", lost: "Lost", retired: "Retired" },
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -362,11 +362,14 @@ const englishTranslations = {
   "Ouvrir dans Google Maps": "Open in Google Maps",
   "Recherche": "Search",
   "Anciennete": "Age",
+  "Signal parc": "Fleet signal",
   "Toutes": "All",
   "Tous": "All",
   "Recent": "Recent",
   "A surveiller": "Monitor",
   "A remplacer": "Replace",
+  "Remplacement planifie": "Planned replacement",
+  "Signal remplacement": "Replacement signal",
   "Modèle": "Model",
   "Statut": "Status",
   "Actif": "Active",
@@ -483,6 +486,7 @@ const englishTranslations = {
   "Non mises a jour": "Not recently updated",
   "A jour": "Up to date",
   "Anciennete du parc": "Fleet age",
+  "Signal du parc": "Fleet signal",
   "Modeles presents": "Most common models",
   "RAM moyenne par équipe": "Average RAM by team",
   "Valeur actuelle estimée": "Estimated current value",
@@ -1636,9 +1640,19 @@ function ageBucket(device) {
 function ageSignalScore(device) {
   let score = Number(device.hardware_age_score || 0);
   const age = deviceAge(device);
+  const ram = Number(device.ram_total_gb || 0);
+  const cpuScore = Number(device.cpu_benchmark_score || device.cpu_score || 0);
   if (age !== null) {
-    if (age >= 6) score = Math.max(score, 75);
-    else if (age >= 4) score = Math.max(score, 45);
+    if (age >= 6) {
+      if (ram > 0 && ram < 8) score = Math.max(score, 85);
+      else if (ram > 0 && ram < 16) score = Math.max(score, 75);
+      else if (cpuScore > 0 && cpuScore < 8000) score = Math.max(score, 75);
+      else score = Math.max(score, 55);
+    } else if (age >= 4) {
+      if (ram > 0 && ram < 8) score = Math.max(score, 65);
+      else if (ram > 0 && ram < 16) score = Math.max(score, 55);
+      else score = Math.max(score, 35);
+    }
   }
   return score;
 }
@@ -2559,7 +2573,7 @@ function renderMetrics() {
     [`Sans scan +${CONFIG.staleDays}j`, stale],
     ["CPU faible", lowCpu],
     ["Stockage faible", lowStorage],
-    ["A remplacer", replace],
+    ["Signal remplacement", replace],
   ]
     .map(([label, value]) => `<article class="metric"><span>${label}</span><strong>${value}</strong></article>`)
     .join("");
@@ -3576,7 +3590,7 @@ function renderCharts() {
     [`+${CONFIG.staleDays} jours`]: state.filtered.filter((d) => daysSince(d.last_seen_at) > CONFIG.staleDays).length,
     "A jour": state.filtered.filter((d) => daysSince(d.last_seen_at) <= CONFIG.staleDays).length,
   });
-  renderBarChart('[data-chart="age"]', "Anciennete du parc", countBy(state.filtered, ageBucket));
+  renderBarChart('[data-chart="age"]', "Signal du parc", countBy(state.filtered, ageBucket));
   renderBarChart('[data-chart="models"]', "Modeles presents", countBy(state.filtered, (d) => d.model));
   renderBarChart('[data-chart="ram"]', "RAM moyenne par équipe", averageBy(state.filtered, activeTeamName, (d) => d.ram_total_gb), " Go");
   renderBarChart('[data-chart="storage"]', "Stockage faible", {
