@@ -569,6 +569,9 @@ const englishTranslations = {
   "Profil utilisateur incomplet": "Incomplete user profile",
   "Email utilisateur a verifier": "User email to review",
   "Collector ancien": "Outdated collector",
+  "utilisables": "usable",
+  "libres": "free",
+  "total": "total",
   "De": "From",
   "Vers": "To",
   "Aucun historique.": "No history.",
@@ -1161,6 +1164,43 @@ function formatCapacityGb(value, suffix = "Go") {
     return `${rounded} ${suffix} (${numeric.toLocaleString(state.language === "fr" ? "fr-FR" : "en-US", { maximumFractionDigits: 2 })} ${suffix})`;
   }
   return `${numeric.toLocaleString(state.language === "fr" ? "fr-FR" : "en-US", { maximumFractionDigits: 2 })} ${suffix}`;
+}
+
+function formatStorageUsableGb(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return "";
+  return `${numeric.toLocaleString(state.language === "fr" ? "fr-FR" : "en-US", { maximumFractionDigits: numeric >= 100 ? 0 : 1 })} Go`;
+}
+
+function storageMarketingCapacityGb(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+  const common = [64, 128, 256, 512, 1024, 1536, 2048, 4096, 8192];
+  return common.find((candidate) => numeric >= candidate * 0.88 && numeric <= candidate * 1.02) || roundedCapacityGb(numeric);
+}
+
+function formatStorageMarketingCapacity(value) {
+  const capacity = storageMarketingCapacityGb(value);
+  if (!capacity) return "";
+  if (capacity >= 1024) {
+    const tb = capacity / 1024;
+    return `${tb.toLocaleString(state.language === "fr" ? "fr-FR" : "en-US", { maximumFractionDigits: 1 })} To`;
+  }
+  return `${capacity} Go`;
+}
+
+function formatStorageTotalGb(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return "";
+  const marketing = formatStorageMarketingCapacity(numeric);
+  const usable = formatStorageUsableGb(numeric);
+  return marketing && marketing !== usable ? `${marketing} (${usable} ${translate("utilisables")})` : usable;
+}
+
+function formatStorageSummary(totalGb, freeGb) {
+  const total = formatStorageTotalGb(totalGb) || "-";
+  const free = formatStorageUsableGb(freeGb) || "-";
+  return `${total} ${translate("total")} / ${free} ${translate("libres")}`;
 }
 
 function latestScanPayload(scans = []) {
@@ -3212,7 +3252,7 @@ function renderDetail(device, scans, history = []) {
         ["CPU", device.cpu], ["GPU", device.gpu],
         ["RAM", device.ram_total_gb ? formatCapacityGb(device.ram_total_gb) : ""],
         ["Mémoire", memoryDetails],
-        ["Stockage", `${formatCapacityGb(device.storage_total_gb) || "-"} total / ${formatCapacityGb(device.storage_free_gb) || "-"} libres`],
+        ["Stockage", formatStorageSummary(device.storage_total_gb, device.storage_free_gb)],
         ["Type stockage", device.storage_type], ["Score CPU", device.cpu_benchmark_score || device.cpu_score],
         ["Génération CPU", device.cpu_generation], ["Annee modèle", device.release_year || device.model_release_year],
         ["Prix achat reel", actualPurchasePrice],
