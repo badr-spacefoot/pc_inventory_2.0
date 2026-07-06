@@ -2692,7 +2692,7 @@ function sameAssignmentPeriodUser(left, right) {
   if (leftId && rightId && leftId === rightId) return true;
   const leftEmail = cleanImportedText(left?.user_email).toLowerCase();
   const rightEmail = cleanImportedText(right?.user_email).toLowerCase();
-  if (leftEmail && rightEmail) return leftEmail === rightEmail;
+  if (leftEmail && rightEmail && leftEmail === rightEmail) return true;
   const leftName = cleanImportedText(left?.user_name).toLowerCase();
   const rightName = cleanImportedText(right?.user_name).toLowerCase();
   return Boolean(leftName && rightName && leftName === rightName);
