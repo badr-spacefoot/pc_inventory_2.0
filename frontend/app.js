@@ -50,6 +50,8 @@ const state = {
   collectorInstallState: JSON.parse(localStorage.getItem(COLLECTOR_INSTALL_STATE_KEY) || "null"),
   collectorDownloadState: JSON.parse(localStorage.getItem(COLLECTOR_DOWNLOAD_STATE_KEY) || "null"),
   mapProvider: "openstreetmap",
+  currentView: "collect",
+  currentAdminView: "fleet",
 };
 let pendingRetirement = null;
 let activeEnrichmentRun = null;
@@ -840,6 +842,9 @@ function applyPermissions() {
     sessionLabel.title = state.currentAdmin
       ? `${state.currentAdmin.displayName || state.currentAdmin.username} - ${formatRoleLabel(state.currentAdmin.role)}`
       : "";
+  }
+  if (state.currentView === "admin" && validAdminView(state.currentAdminView) !== state.currentAdminView) {
+    setAdminView("fleet");
   }
 }
 
@@ -2123,6 +2128,7 @@ async function openNotificationTarget(id) {
   }
   const entityType = String(notification.related_entity_type || notification.relatedEntityType || "").toLowerCase();
   const entityId = notification.related_entity_id || notification.relatedEntityId || "";
+  setMainView("admin", { updateUrl: false });
   if (entityType === "device" && entityId) {
     setAdminView("fleet");
     if (!state.devices.some((device) => device.id === entityId)) await loadAdminData();
@@ -3686,11 +3692,53 @@ function countryNameFromCode(code) {
   return countries[String(code || "").toLowerCase()] || "";
 }
 
-function setAdminView(view) {
-  $$(".admin-nav-button").forEach((button) => button.classList.toggle("is-active", button.dataset.adminView === view));
+function validAdminView(view) {
+  const requested = String(view || "");
+  const button = $(`.admin-nav-button[data-admin-view="${CSS.escape(requested)}"]`);
+  return button && !button.classList.contains("is-hidden") ? requested : "fleet";
+}
+
+function updateRoute({ replace = false } = {}) {
+  const url = new URL(window.location.href);
+  if (state.currentView === "admin") {
+    url.searchParams.set("view", "admin");
+    url.searchParams.set("admin", state.currentAdminView || "fleet");
+  } else {
+    url.searchParams.delete("view");
+    url.searchParams.delete("admin");
+  }
+  if (url.href === window.location.href) return;
+  const method = replace ? "replaceState" : "pushState";
+  window.history[method]({}, "", url);
+}
+
+function setMainView(view, { updateUrl = true, replace = false } = {}) {
+  const nextView = view === "admin" ? "admin" : "collect";
+  state.currentView = nextView;
+  $$(".tab").forEach((item) => item.classList.toggle("is-active", item.dataset.view === nextView));
+  $$(".view").forEach((section) => section.classList.toggle("is-active", section.id === nextView));
+  if (nextView === "admin") setAdminView(state.currentAdminView || "fleet", { updateUrl: false });
+  if (updateUrl) updateRoute({ replace });
+}
+
+function restoreRoute({ updateUrl = true, replace = true } = {}) {
+  const params = new URLSearchParams(window.location.search);
+  const routeView = params.get("view") === "admin" || params.has("admin") ? "admin" : "collect";
+  const routeAdminView = validAdminView(params.get("admin") || state.currentAdminView || "fleet");
+  state.currentAdminView = routeAdminView;
+  setMainView(routeView, { updateUrl: false });
+  setAdminView(routeAdminView, { updateUrl: false });
+  if (updateUrl) updateRoute({ replace });
+}
+
+function setAdminView(view, { updateUrl = true } = {}) {
+  const nextView = validAdminView(view);
+  state.currentAdminView = nextView;
+  $$(".admin-nav-button").forEach((button) => button.classList.toggle("is-active", button.dataset.adminView === nextView));
   $$(".admin-section-view").forEach((section) => {
-    section.classList.toggle("is-hidden", !section.classList.contains(`section-${view}`));
+    section.classList.toggle("is-hidden", !section.classList.contains(`section-${nextView}`));
   });
+  if (updateUrl && state.currentView === "admin") updateRoute();
 }
 
 function updateOrganizationDatalists() {
@@ -4282,6 +4330,8 @@ async function importCpuBenchmarkFile(file) {
 }
 
 function bindEvents() {
+  window.addEventListener("popstate", () => restoreRoute({ updateUrl: false }));
+
   $("#download-script").href = CONFIG.scriptUrl;
   loadCollectorReleases().catch(() => updateCollectorDownloadUi());
   setTheme(state.themePreference, false);
@@ -4319,8 +4369,7 @@ function bindEvents() {
 
   $$(".tab").forEach((tab) => {
     tab.addEventListener("click", () => {
-      $$(".tab").forEach((item) => item.classList.toggle("is-active", item === tab));
-      $$(".view").forEach((view) => view.classList.toggle("is-active", view.id === tab.dataset.view));
+      setMainView(tab.dataset.view);
     });
   });
 
@@ -4800,6 +4849,7 @@ function bindEvents() {
     }
   });
   $("#notifications-bell").addEventListener("click", () => {
+    setMainView("admin", { updateUrl: false });
     setAdminView("notifications");
     loadNotifications().catch((error) => toast(error.message, "error"));
   });
@@ -4841,6 +4891,7 @@ function bindEvents() {
 }
 
 bindEvents();
+restoreRoute();
 applyLanguage(state.language, false);
 languageObserver.observe(document.body, { childList: true, subtree: true });
 updateTimeFormatButton();
