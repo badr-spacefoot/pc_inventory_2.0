@@ -1069,9 +1069,21 @@ function cpuVendor(cpuName: string) {
 
 function officialCpuSearchUrl(cpuName: string, vendor: string) {
   const query = encodeURIComponent(cpuName);
-  if (vendor === "intel") return `https://www.intel.com/content/www/us/en/search.html?ws=text&q=${query}`;
+  if (vendor === "intel") return `https://www.intel.fr/content/www/fr/fr/search.html#q=${query}&cf-tabfilter=Products`;
   if (vendor === "amd") return `https://www.amd.com/en/search?keyword=${query}`;
   return "";
+}
+
+function knownOfficialCpuReleaseDate(cpuName: string) {
+  const cpu = cpuName.toLowerCase().replace(/[®™]/g, "").replace(/\s+/g, " ");
+  if (/\bcore\s+ultra\s+[579]\s+2\d{2}v\b/.test(cpu)) {
+    return {
+      releaseYear: 2024,
+      source: "official-intel-core-ultra-200v",
+      confidence: "official-family",
+    };
+  }
+  return null;
 }
 
 function parseLaunchYearFromOfficialText(text: string) {
@@ -1120,6 +1132,8 @@ async function lookupCpuReleaseDate(cpuName: string) {
   const cleanCpu = safeString(cpuName, 260);
   const vendor = cpuVendor(cleanCpu);
   const searchUrl = officialCpuSearchUrl(cleanCpu, vendor);
+  const knownOfficial = knownOfficialCpuReleaseDate(cleanCpu);
+  if (knownOfficial) return { ...knownOfficial, searchUrl };
   const officialText = await fetchOfficialCpuText(searchUrl);
   const officialYear = parseLaunchYearFromOfficialText(officialText);
   if (officialYear) {
