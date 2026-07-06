@@ -1623,6 +1623,7 @@ function valueBucket(device) {
 }
 
 function setOptions(select, values, label, preserveOrder = false) {
+  const previousValue = select.value;
   select.innerHTML = `<option value="">${label}</option>`;
   const options = values.filter(Boolean);
   if (!preserveOrder) options.sort((a, b) => String(a).localeCompare(String(b), "fr"));
@@ -1633,6 +1634,15 @@ function setOptions(select, values, label, preserveOrder = false) {
       option.textContent = value;
       select.appendChild(option);
     });
+  if (!previousValue) return;
+  const hasPreviousValue = [...select.options].some((option) => option.value === previousValue);
+  if (!hasPreviousValue) {
+    const option = document.createElement("option");
+    option.value = previousValue;
+    option.textContent = previousValue;
+    select.appendChild(option);
+  }
+  select.value = previousValue;
 }
 
 function statusClass(status) {
