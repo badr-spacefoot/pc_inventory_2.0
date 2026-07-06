@@ -510,6 +510,7 @@ Dans Admin > Valorisation, le bouton `Actualiser dates CPU` parcourt les process
 - Intel: recherche officielle via Intel ARK / pages Intel.
 - AMD: recherche officielle via les pages produits AMD.
 - Intel Core Ultra 200V: si la recherche Intel est rendue cote navigateur, l'API applique la famille officielle Lunar Lake / Core Ultra 200V, par exemple `Intel Core Ultra 7 256V` => 2024.
+- Familles modernes couvertes par regles officielles de famille: Intel Core Ultra 100H/U/P, Intel Core Series 1, AMD Ryzen AI 300/400 et Qualcomm Snapdragon X / X Plus.
 - Si la page officielle ne retourne pas de date exploitable, l'API applique une regle de famille processeur et marque la source comme `*-family-rule`.
 
 Apres actualisation, lancer `Recalculer les valeurs` pour propager les nouvelles annees de lancement aux scores d'age, de depreciation et de remplacement.

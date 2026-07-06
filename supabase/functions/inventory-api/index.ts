@@ -972,65 +972,96 @@ type CpuBenchmark = {
   source?: string;
 };
 
-function normalizeCpuName(cpuName: unknown) {
-  return safeString(cpuName, 260)
-    .toLowerCase()
-    .replace(/\(r\)|\(tm\)|\u00ae|\u2122/g, " ")
-    .replace(/\b(cpu|processor|with radeon graphics|@.*|series)\b/g, " ")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .replace(/\s+/g, " ");
-}
+function normalizeCpuName(cpuName: unknown) {
+  return safeString(cpuName, 260)
+    .toLowerCase()
+    .replace(/\(r\)|\(tm\)|\u00ae|\u2122/g, " ")
+    .replace(/\b\d{1,2}(?:st|nd|rd|th)\s+gen\b/g, " ")
+    .replace(/\bw\/\s*radeon\s+\d+m\b/g, " ")
+    .replace(/\b(qualcomm|oryon|cpu|processor|with radeon graphics|@.*|series)\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
 
-function inferCpuGeneration(cpuName: string) {
-  const cpu = cpuName.toLowerCase();
-  const intel = cpu.match(/i[3579]-?(\d{4,5})/i);
-  if (intel) {
-    const digits = intel[1];
-    const generation = digits.length === 5 ? Number(digits.slice(0, 2)) : Number(digits.slice(0, 1));
-    return `${generation}th Gen Intel`;
-  }
-  const amd = cpu.match(/ryzen\s+[3579]\s+(\d{4})/i);
-  if (amd) return `Ryzen ${amd[1][0]}000`;
-  const apple = cpu.match(/\bapple\s+(m[1-4](?:\s+(?:pro|max|ultra))?)/i);
-  if (apple) return `Apple ${apple[1].toUpperCase()}`;
-  if (cpu.includes("core ultra")) return "Intel Core Ultra";
-  if (cpu.includes("xeon")) return "Intel Xeon";
-  return "";
-}
-
-function inferCpuReleaseYear(cpuName: string) {
-  const cpu = cpuName.toLowerCase();
-  const intel = cpu.match(/i[3579]-?(\d{4,5})/i);
-  if (intel) {
-    const digits = intel[1];
-    const generation = digits.length === 5 ? Number(digits.slice(0, 2)) : Number(digits.slice(0, 1));
-    const byGeneration: Record<number, number> = {
-      2: 2011, 3: 2012, 4: 2013, 5: 2015, 6: 2015, 7: 2016, 8: 2017,
+function inferCpuGeneration(cpuName: string) {
+  const cpu = cpuName.toLowerCase().replace(/\(r\)|\(tm\)|[®™]/g, " ");
+  const intel = cpu.match(/i[3579]-?(\d{4,5})/i);
+  if (intel) {
+    const digits = intel[1];
+    const generation = digits.length === 5 || /^1[0-5]/.test(digits) ? Number(digits.slice(0, 2)) : Number(digits.slice(0, 1));
+    return `${generation}th Gen Intel`;
+  }
+  const intelCoreUltra = cpu.match(/\bcore\s+ultra\s+[579]\s+(\d{3})([a-z])\b/i);
+  if (intelCoreUltra) {
+    const model = Number(intelCoreUltra[1]);
+    const suffix = intelCoreUltra[2].toUpperCase();
+    if (model >= 200 && suffix === "V") return "Intel Core Ultra 200V";
+    if (model >= 100 && model < 200) return "Intel Core Ultra Series 1";
+    return "Intel Core Ultra";
+  }
+  const intelCore = cpu.match(/\bcore\s+[357]\s+(\d{3})([a-z])?\b/i);
+  if (intelCore) return `Intel Core Series ${intelCore[1][0]}`;
+  const amd = cpu.match(/ryzen\s+[3579]\s+(\d{4})/i);
+  if (amd) return `Ryzen ${amd[1][0]}000`;
+  const amdAi = cpu.match(/\bryzen\s+ai\s+[3579]\s+(\d{3})\b/i);
+  if (amdAi) return `AMD Ryzen AI ${amdAi[1][0]}00`;
+  const apple = cpu.match(/\bapple\s+(m[1-4](?:\s+(?:pro|max|ultra))?)/i);
+  if (apple) return `Apple ${apple[1].toUpperCase()}`;
+  if (/\b(snapdragon|qualcomm)\b/.test(cpu)) return "Qualcomm Snapdragon X";
+  if (cpu.includes("core ultra")) return "Intel Core Ultra";
+  if (cpu.includes("xeon")) return "Intel Xeon";
+  return "";
+}
+
+function inferCpuReleaseYear(cpuName: string) {
+  const cpu = cpuName.toLowerCase().replace(/\(r\)|\(tm\)|[®™]/g, " ");
+  const intel = cpu.match(/i[3579]-?(\d{4,5})/i);
+  if (intel) {
+    const digits = intel[1];
+    const generation = digits.length === 5 || /^1[0-5]/.test(digits) ? Number(digits.slice(0, 2)) : Number(digits.slice(0, 1));
+    const mobileSuffix = cpu.match(/i[3579]-?\d{4,5}([a-z]+)/i)?.[1]?.[0] || "";
+    if (/[uph]/i.test(mobileSuffix)) {
+      const mobileGenerationYears: Record<number, number> = { 12: 2022, 13: 2023, 14: 2024, 15: 2024 };
+      if (mobileGenerationYears[generation]) return mobileGenerationYears[generation];
+    }
+    const byGeneration: Record<number, number> = {
+      2: 2011, 3: 2012, 4: 2013, 5: 2015, 6: 2015, 7: 2016, 8: 2017,
       9: 2018, 10: 2019, 11: 2020, 12: 2021, 13: 2022, 14: 2023, 15: 2024,
-    };
-    return byGeneration[generation] ?? null;
-  }
-  const amd = cpu.match(/ryzen\s+[3579]\s+(\d{4})/i);
-  if (amd) {
-    const family = Number(amd[1][0]);
-    return ({ 1: 2017, 2: 2018, 3: 2019, 4: 2020, 5: 2021, 6: 2022, 7: 2023, 8: 2024 } as Record<number, number>)[family] ?? null;
-  }
+    };
+    return byGeneration[generation] ?? null;
+  }
+  if (/\bcore\s+ultra\s+[579]\s+2\d{2}v\b/.test(cpu)) return 2024;
+  if (/\bcore\s+ultra\s+[579]\s+1\d{2}[hup]\b/.test(cpu)) return 2023;
+  if (/\bcore\s+[357]\s+1\d{2}[hup]?\b/.test(cpu)) return 2023;
+  const amd = cpu.match(/ryzen\s+[3579]\s+(\d{4})/i);
+  if (amd) {
+    const family = Number(amd[1][0]);
+    return ({ 1: 2017, 2: 2018, 3: 2019, 4: 2020, 5: 2021, 6: 2022, 7: 2023, 8: 2024 } as Record<number, number>)[family] ?? null;
+  }
+  const amdAi = cpu.match(/\bryzen\s+ai\s+[3579]\s+(\d{3})\b/i);
+  if (amdAi) {
+    const model = Number(amdAi[1]);
+    if (model >= 360 && model < 400) return 2024;
+    if (model >= 300 && model < 500) return 2025;
+  }
   const apple = cpu.match(/\bapple\s+m([1-4])/i);
   if (apple) return ({ 1: 2020, 2: 2022, 3: 2023, 4: 2024 } as Record<number, number>)[Number(apple[1])] ?? null;
-  if (/\bcore\s+ultra\s+\d\s+2\d{2}v\b/.test(cpu)) return 2024;
+  if (/\bsnapdragon(?:\s+x\s+plus)?.*\bx1p/i.test(cpu)) return 2024;
+  if (/\bsnapdragon\s+x\b|\bx1-?\d{5}\b/i.test(cpu)) return 2025;
   if (cpu.includes("core ultra")) return 2023;
   return null;
 }
 
-function estimateCpuScore(cpuName: string) {
-  const cpu = cpuName.toLowerCase();
+function estimateCpuScore(cpuName: string) {
+  const cpu = cpuName.toLowerCase().replace(/\(r\)|\(tm\)|[®™]/g, " ");
   const year = inferCpuReleaseYear(cpuName) ?? 2017;
   let score = 2800 + Math.max(0, year - 2015) * 1450;
   if (cpu.includes("celeron") || cpu.includes("pentium") || cpu.includes("athlon")) score *= 0.42;
   if (cpu.includes("i3") || cpu.includes("ryzen 3")) score *= 0.68;
-  if (cpu.includes("i7") || cpu.includes("ryzen 7")) score *= 1.25;
-  if (cpu.includes("i9") || cpu.includes("ryzen 9") || cpu.includes("xeon")) score *= 1.55;
+  if (cpu.includes("i7") || cpu.includes("ryzen 7") || /\bcore\s+(?:ultra\s+)?7\b/.test(cpu) || /\bryzen\s+ai\s+7\b/.test(cpu) || cpu.includes("snapdragon x plus")) score *= 1.25;
+  if (cpu.includes("i9") || cpu.includes("ryzen 9") || /\bcore\s+ultra\s+9\b/.test(cpu) || cpu.includes("xeon")) score *= 1.55;
+  if (/\bcore\s+(?:ultra\s+)?5\b/.test(cpu) || /\bryzen\s+ai\s+5\b/.test(cpu) || /\bsnapdragon\s+x\b/.test(cpu)) score *= 1.08;
   if (/\b\d{4,5}u\b/.test(cpu)) score *= 0.82;
   if (/\b\d{4,5}h[x]?\b/.test(cpu)) score *= 1.15;
   if (cpu.includes("ultra")) score *= 1.28;
@@ -1051,7 +1082,7 @@ async function lookupCpuBenchmark(cpuName: string) {
   const seed = (cpuBenchmarkSeed as CpuBenchmark[]).find((item) => normalizeCpuName(item.cpu_name) === normalized);
   if (seed) return { benchmark: { ...seed, source: "bundled-cpu-seed" }, match: "seed-exact" };
 
-  const modelToken = normalized.match(/(?:i[3579]\s*\d{4,5}[a-z]*|ryzen\s*[3579]\s*\d{4}[a-z]*|apple\s*m[1-4](?:\s*(?:pro|max|ultra))?)/)?.[0];
+  const modelToken = normalized.match(/(?:i[3579]\s*\d{4,5}[a-z]*|core\s*ultra\s*[579]\s*\d{3}[a-z]*|core\s*[357]\s*\d{3}[a-z]*|ryzen\s*ai\s*[3579]\s*\d{3}|ryzen\s*[3579]\s*\d{4}[a-z]*|snapdragon\s*x(?:\s*plus)?\s*x1[pem]?\s*\d{5}|x1[pem]?\s*\d{5}|apple\s*m[1-4](?:\s*(?:pro|max|ultra))?)/)?.[0];
   if (modelToken) {
     const candidate = (cpuBenchmarkSeed as CpuBenchmark[]).find((item) => normalizeCpuName(item.cpu_name).includes(modelToken));
     if (candidate) return { benchmark: { ...candidate, source: "bundled-cpu-seed" }, match: "seed-model" };
@@ -1063,6 +1094,7 @@ function cpuVendor(cpuName: string) {
   const cpu = cpuName.toLowerCase();
   if (/\b(intel|core|xeon|pentium|celeron)\b/.test(cpu)) return "intel";
   if (/\b(amd|ryzen|athlon|epyc|threadripper)\b/.test(cpu)) return "amd";
+  if (/\b(snapdragon|qualcomm|oryon)\b/.test(cpu)) return "qualcomm";
   if (/\bapple\s+m[1-4]\b/.test(cpu)) return "apple";
   return "unknown";
 }
@@ -1071,15 +1103,58 @@ function officialCpuSearchUrl(cpuName: string, vendor: string) {
   const query = encodeURIComponent(cpuName);
   if (vendor === "intel") return `https://www.intel.fr/content/www/fr/fr/search.html#q=${query}&cf-tabfilter=Products`;
   if (vendor === "amd") return `https://www.amd.com/en/search?keyword=${query}`;
+  if (vendor === "qualcomm") return `https://www.qualcomm.com/search?query=${query}`;
   return "";
 }
 
 function knownOfficialCpuReleaseDate(cpuName: string) {
-  const cpu = cpuName.toLowerCase().replace(/[®™]/g, "").replace(/\s+/g, " ");
+  const cpu = cpuName.toLowerCase().replace(/\(r\)|\(tm\)|[®™]/g, " ").replace(/\s+/g, " ");
   if (/\bcore\s+ultra\s+[579]\s+2\d{2}v\b/.test(cpu)) {
     return {
       releaseYear: 2024,
       source: "official-intel-core-ultra-200v",
+      confidence: "official-family",
+    };
+  }
+  if (/\bcore\s+ultra\s+[579]\s+1\d{2}[hup]\b/.test(cpu)) {
+    return {
+      releaseYear: 2023,
+      source: "official-intel-core-ultra-series-1",
+      confidence: "official-family",
+    };
+  }
+  if (/\bcore\s+[357]\s+1\d{2}[hup]?\b/.test(cpu)) {
+    return {
+      releaseYear: 2023,
+      source: "official-intel-core-series-1",
+      confidence: "official-family",
+    };
+  }
+  if (/\bryzen\s+ai\s+[3579]\s+(3[0-5]\d|4\d{2})\b/.test(cpu)) {
+    return {
+      releaseYear: 2025,
+      source: "official-amd-ryzen-ai-family",
+      confidence: "official-family",
+    };
+  }
+  if (/\bryzen\s+ai\s+[3579]\s+3[6-9]\d\b/.test(cpu)) {
+    return {
+      releaseYear: 2024,
+      source: "official-amd-ryzen-ai-300-family",
+      confidence: "official-family",
+    };
+  }
+  if (/\bsnapdragon(?:\s+x\s+plus)?.*\bx1p/i.test(cpu)) {
+    return {
+      releaseYear: 2024,
+      source: "official-qualcomm-snapdragon-x-plus",
+      confidence: "official-family",
+    };
+  }
+  if (/\bsnapdragon\s+x\b|\bx1-?\d{5}\b/i.test(cpu)) {
+    return {
+      releaseYear: 2025,
+      source: "official-qualcomm-snapdragon-x",
       confidence: "official-family",
     };
   }
@@ -1178,14 +1253,14 @@ function detectDeviceCategory(device: Json, cpuCategory = "") {
   return "business-laptop";
 }
 
-function cpuTier(cpuName: string) {
-  const cpu = cpuName.toLowerCase();
-  if (/\b(i9|ryzen 9|xeon)\b/.test(cpu)) return "workstation";
-  if (/\b(i7|ryzen 7|apple m[2-4] (?:pro|max|ultra))\b/.test(cpu)) return "high";
-  if (/\b(i5|ryzen 5|apple m[1-4])\b/.test(cpu)) return "mid";
-  if (/\b(i3|ryzen 3)\b/.test(cpu)) return "entry";
-  return "unknown";
-}
+function cpuTier(cpuName: string) {
+  const cpu = cpuName.toLowerCase().replace(/\(r\)|\(tm\)|[®™]/g, " ");
+  if (/\b(i9|ryzen 9|xeon|core\s+ultra\s+9)\b/.test(cpu)) return "workstation";
+  if (/\b(i7|ryzen 7|ryzen\s+ai\s+7|core\s+ultra\s+7|core\s+7|snapdragon\s+x\s+plus|apple m[2-4] (?:pro|max|ultra))\b/.test(cpu)) return "high";
+  if (/\b(i5|ryzen 5|ryzen\s+ai\s+5|core\s+ultra\s+5|core\s+5|snapdragon\s+x|apple m[1-4])\b/.test(cpu)) return "mid";
+  if (/\b(i3|ryzen 3|ryzen\s+ai\s+3|core\s+3)\b/.test(cpu)) return "entry";
+  return "unknown";
+}
 
 function hasDedicatedGpu(gpuName: string) {
   const gpu = gpuName.toLowerCase();
