@@ -1624,10 +1624,19 @@ function daysSince(value) {
 }
 
 function ageBucket(device) {
-  const score = Number(device.hardware_age_score || 0);
+  if (device.status === "replace") return "old";
+  const score = lifecycleScore(device);
   if (score >= 75) return "old";
   if (score >= 45) return "aging";
   return "recent";
+}
+
+function lifecycleScore(device) {
+  return Math.max(
+    Number(device.hardware_age_score || 0),
+    Number(device.replacement_priority || 0),
+    Number(device.obsolescence_index || 0),
+  );
 }
 
 function money(value) {
@@ -2533,7 +2542,7 @@ function renderMetrics() {
   const total = state.filtered.length;
   const stale = state.filtered.filter((d) => daysSince(d.last_seen_at) > CONFIG.staleDays).length;
   const lowStorage = state.filtered.filter((d) => Number(d.storage_free_gb || 0) < 30).length;
-  const replace = state.filtered.filter((d) => d.status === "replace" || Number(d.hardware_age_score || 0) >= 75).length;
+  const replace = state.filtered.filter((d) => d.status === "replace" || lifecycleScore(d) >= 75).length;
   const fleetValue = state.filtered.reduce((sum, device) => sum + estimatedValue(device), 0);
   const lowCpu = state.filtered.filter((d) => Number(d.cpu_score || 0) > 0 && Number(d.cpu_score || 0) < 7000).length;
 
