@@ -12,6 +12,9 @@ type DeviceHistoryRow = {
   source: string;
   notes?: string;
   changed_at: string;
+  related_user_id?: string | null;
+  related_team_id?: string | null;
+  related_establishment_id?: string | null;
 };
 type Role = "ADMIN" | "MANAGER" | "VIEWER" | "READ_ONLY" | "COLLECTOR_USER";
 type Action =
@@ -1757,7 +1760,9 @@ async function persistScan(request: Request, user: { id: string; team_id: string
   if (previousAssignmentError) throw previousAssignmentError;
   const eventSource = safeString(rawBody.importedFrom) ? "IMPORT" : "COLLECTOR";
   const updateAssignmentFromScan = eventSource === "COLLECTOR";
-  const clearsAssignment = ["stock", "retired"].includes(safeString(previousDevice?.status));
+  const previousStatus = safeString(previousDevice?.status);
+  const reactivatesStock = updateAssignmentFromScan && previousStatus === "stock";
+  const clearsAssignment = previousStatus === "retired";
   const deviceValues = {
     assigned_user_id: clearsAssignment
       ? null
@@ -1785,10 +1790,11 @@ async function persistScan(request: Request, user: { id: string; team_id: string
     local_ip: safeString(body.localIp, 80),
     windows_user: safeString(body.windowsUser, 160),
     script_version: safeString(body.scriptVersion, 40),
-    last_seen_at: collectedAt,
-    hardware_age_score: hardwareAgeScore(body),
-    ...dedupe,
-  };
+    last_seen_at: collectedAt,
+    hardware_age_score: hardwareAgeScore(body),
+    ...(reactivatesStock ? { status: "active" } : {}),
+    ...dedupe,
+  };
 
   const { data: device, error: deviceError } = await supabase
     .from("devices")
@@ -1838,7 +1844,23 @@ async function persistScan(request: Request, user: { id: string; team_id: string
   });
   if (scanError) throw scanError;
   const historyRows = changedDeviceHistory(device.id, previousDevice, deviceValues, eventSource, collectedAt);
-  await appendDeviceHistory(historyRows);
+  if (reactivatesStock) {
+    historyRows.push({
+      device_id: device.id,
+      event_type: "STATUS_CHANGED",
+      field_name: "status",
+      old_value: "stock",
+      new_value: "active",
+      changed_by: "collector",
+      source: "COLLECTOR",
+      notes: "Stock device reactivated by collector scan with a user profile.",
+      changed_at: collectedAt,
+      related_user_id: deviceValues.assigned_user_id,
+      related_team_id: deviceValues.team_id,
+      related_establishment_id: deviceValues.establishment_id,
+    });
+  }
+  await appendDeviceHistory(historyRows);
   if (!previousDevice) {
     await notify("COLLECTOR_SUBMISSION_RECEIVED", "Nouvelle machine collectee", `${deviceValues.hostname} a ete ajoutee au parc.`, {
       severity: "SUCCESS",
