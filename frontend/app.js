@@ -2726,6 +2726,27 @@ function mergeSameUserAssignmentPeriods(periods = []) {
   return merged.sort((left, right) => new Date(right.started_at || 0).getTime() - new Date(left.started_at || 0).getTime());
 }
 
+function detachedStatusChangeEvent(history = [], afterTime = 0) {
+  const event = history
+    .filter((item) => {
+      if (item.field_name !== "status" || !item.changed_at) return false;
+      const changedAt = new Date(item.changed_at).getTime();
+      return changedAt > afterTime && isDetachedInventoryStatus(cleanImportedText(item.new_value));
+    })
+    .sort((left, right) => new Date(left.changed_at).getTime() - new Date(right.changed_at).getTime())[0];
+  return event || null;
+}
+
+function closedFallbackPeriodEndDate(fallbackPeriods = [], afterTime = 0) {
+  const period = fallbackPeriods
+    .filter((item) => {
+      const endedAt = item?.ended_at ? new Date(item.ended_at).getTime() : 0;
+      return endedAt > afterTime;
+    })
+    .sort((left, right) => new Date(left.ended_at).getTime() - new Date(right.ended_at).getTime())[0];
+  return period?.ended_at || null;
+}
+
 function assignmentPeriodsFromLegacyHistory(history = [], fallbackPeriods = []) {
   const legacyEvents = history
     .filter((event) => event.field_name === "legacy_google_sheets_history" && event.new_value && event.changed_at)
@@ -2773,6 +2794,13 @@ function assignmentPeriodsFromLegacyHistory(history = [], fallbackPeriods = []) 
       .sort((left, right) => new Date(left.started_at).getTime() - new Date(right.started_at).getTime())[0];
     periods[periods.length - 1].ended_at = firstManual.started_at;
     periods[periods.length - 1].unassigned_by = firstManual.assigned_by || "admin";
+  } else {
+    const detachEvent = detachedStatusChangeEvent(history, lastLegacyDate);
+    const detachDate = detachEvent?.changed_at || closedFallbackPeriodEndDate(fallbackPeriods, lastLegacyDate);
+    if (detachDate) {
+      periods[periods.length - 1].ended_at = detachDate;
+      periods[periods.length - 1].unassigned_by = detachEvent?.changed_by || "admin";
+    }
   }
 
   return mergeSameUserAssignmentPeriods([...laterManualPeriods, ...periods.slice().reverse()]);
