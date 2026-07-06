@@ -1016,11 +1016,12 @@ function inferCpuReleaseYear(cpuName: string) {
     const family = Number(amd[1][0]);
     return ({ 1: 2017, 2: 2018, 3: 2019, 4: 2020, 5: 2021, 6: 2022, 7: 2023, 8: 2024 } as Record<number, number>)[family] ?? null;
   }
-  const apple = cpu.match(/\bapple\s+m([1-4])/i);
-  if (apple) return ({ 1: 2020, 2: 2022, 3: 2023, 4: 2024 } as Record<number, number>)[Number(apple[1])] ?? null;
-  if (cpu.includes("core ultra")) return 2023;
-  return null;
-}
+  const apple = cpu.match(/\bapple\s+m([1-4])/i);
+  if (apple) return ({ 1: 2020, 2: 2022, 3: 2023, 4: 2024 } as Record<number, number>)[Number(apple[1])] ?? null;
+  if (/\bcore\s+ultra\s+\d\s+2\d{2}v\b/.test(cpu)) return 2024;
+  if (cpu.includes("core ultra")) return 2023;
+  return null;
+}
 
 function estimateCpuScore(cpuName: string) {
   const cpu = cpuName.toLowerCase();
@@ -1573,7 +1574,7 @@ async function enrichOneDevice(device: Json, options: { force: boolean; useExter
   const stats = priceStats(prices);
   const newStats = priceStats(newPrices);
   const currentYear = new Date().getFullYear();
-  const age = modelReleaseYear ? Math.max(0, currentYear - modelReleaseYear) : 4;
+  const age = modelReleaseYear ? Math.max(0, currentYear - modelReleaseYear) : 0;
   const depreciationValue = roundCurrency(launchPrice * depreciationFactor(age));
   const marketObservationCount = stats.count;
 
