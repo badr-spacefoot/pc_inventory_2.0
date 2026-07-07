@@ -377,6 +377,8 @@ const englishTranslations = {
   "Perdu": "Lost",
   "Sorti du parc": "Retired",
   "Score CPU": "CPU score",
+  "Source score CPU": "CPU score source",
+  "Voir la source": "View source",
   "Faible": "Low",
   "Moyen": "Medium",
   "Bon": "Good",
@@ -3222,6 +3224,10 @@ function renderDetail(device, scans, history = []) {
     && purchasePriceNumber > 0
     && Math.round(launchPriceNumber * 100) === Math.round(purchasePriceNumber * 100);
   const launchPriceDisplay = launchLooksLikeInvoice ? "" : money(device.estimated_launch_price);
+  const cpuBenchmarkSourceUrl = /^https?:\/\//i.test(String(device.cpu_benchmark_source_url || "")) ? String(device.cpu_benchmark_source_url) : "";
+  const cpuBenchmarkSourceLink = cpuBenchmarkSourceUrl
+    ? { html: `<a href="${escapeHtml(cpuBenchmarkSourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(translate("Voir la source"))}</a>` }
+    : "";
   const effectiveTeamId = unassignedStatus ? "" : device.team_id;
   const effectiveUserId = unassignedStatus ? "" : device.assigned_user_id;
   const teamOptions = state.teams.map((team) =>
@@ -3232,7 +3238,11 @@ function renderDetail(device, scans, history = []) {
     const name = `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.email;
     return `<option value="${user.id}" ${effectiveUserId === user.id ? "selected" : ""}>${escapeHtml(name)} (${escapeHtml(user.email)})</option>`;
   }).join("");
-  const detailRows = (rows) => `<dl class="detail-list">${rows.map(([key, value]) => `<div><dt>${escapeHtml(translate(key))}</dt><dd>${escapeHtml(value === 0 ? 0 : (value || "-"))}</dd></div>`).join("")}</dl>`;
+  const detailValueHtml = (value) => {
+    if (value && typeof value === "object" && Object.hasOwn(value, "html")) return value.html;
+    return escapeHtml(value === 0 ? 0 : (value || "-"));
+  };
+  const detailRows = (rows) => `<dl class="detail-list">${rows.map(([key, value]) => `<div><dt>${escapeHtml(translate(key))}</dt><dd>${detailValueHtml(value)}</dd></div>`).join("")}</dl>`;
   const priceRows = (device.priceHistory || [])
     .slice(0, 8)
     .map((row) => `<li>${formatDate(row.collected_at)} - ${row.source} - ${money(row.price)} - ${row.condition || "-"}</li>`)
@@ -3290,6 +3300,7 @@ function renderDetail(device, scans, history = []) {
         ["Mémoire", memoryDetails],
         ["Stockage", formatStorageSummary(device.storage_total_gb, device.storage_free_gb)],
         ["Type stockage", device.storage_type], ["Score CPU", device.cpu_benchmark_score || device.cpu_score],
+        ...(cpuBenchmarkSourceLink ? [["Source score CPU", cpuBenchmarkSourceLink]] : []),
         ["Génération CPU", device.cpu_generation], ["Annee modèle", device.release_year || device.model_release_year],
         ["Prix achat reel", actualPurchasePrice],
         ["Prix lancement", launchPriceDisplay],
@@ -3694,6 +3705,7 @@ function exportCsv(enrichedExport = false) {
     "hardware_age_score",
     "cpu_score",
     "cpu_benchmark_score",
+    "cpu_benchmark_source_url",
     "cpu_generation",
     "cpu_release_year",
     "model_release_year",

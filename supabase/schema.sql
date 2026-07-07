@@ -286,6 +286,7 @@ create table if not exists public.hardware_enrichment (
   device_id uuid primary key references public.devices(id) on delete cascade,
   cpu_name text,
   cpu_score integer,
+  cpu_benchmark_source_url text,
   cpu_generation text,
   cpu_release_year integer,
   model_release_year integer,
@@ -318,6 +319,7 @@ alter table public.hardware_enrichment add column if not exists release_year int
 alter table public.hardware_enrichment add column if not exists estimated_current_value numeric;
 alter table public.hardware_enrichment add column if not exists price_confidence_score integer not null default 0;
 alter table public.hardware_enrichment add column if not exists cpu_benchmark_score integer;
+alter table public.hardware_enrichment add column if not exists cpu_benchmark_source_url text;
 alter table public.hardware_enrichment add column if not exists enrichment_status text not null default 'pending';
 alter table public.hardware_enrichment add column if not exists enrichment_source text;
 alter table public.hardware_enrichment add column if not exists replacement_priority integer not null default 0;
@@ -351,8 +353,10 @@ create table if not exists public.cpu_benchmarks (
   generation text,
   category text,
   source text not null default 'manual-import',
+  source_url text,
   updated_at timestamptz not null default now()
 );
+alter table public.cpu_benchmarks add column if not exists source_url text;
 
 create table if not exists public.market_price_history (
   id uuid primary key default gen_random_uuid(),
@@ -533,6 +537,7 @@ select
   he.estimated_current_value,
   he.price_confidence_score,
   he.cpu_benchmark_score,
+  he.cpu_benchmark_source_url,
   he.enrichment_status,
   he.enrichment_source,
   he.replacement_priority,

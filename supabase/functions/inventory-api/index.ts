@@ -128,7 +128,27 @@ function safeNumber(value: unknown) {
   return Number.isFinite(number) ? number : null;
 }
 
-function firstPresent(body: Json, ...keys: string[]) {
+function safeExternalUrl(value: unknown, max = 1000) {
+
+  const url = safeString(value, max);
+
+  if (!/^https?:\/\//i.test(url)) return "";
+
+  try {
+
+    return new URL(url).toString();
+
+  } catch {
+
+    return "";
+
+  }
+
+}
+
+
+
+function firstPresent(body: Json, ...keys: string[]) {
   for (const key of keys) {
     const value = safeString(body[key]);
     if (value) return value;
@@ -975,7 +995,9 @@ type CpuBenchmark = {
   release_year: number | null;
   generation: string;
   category: string;
-  source?: string;
+  source?: string;
+
+  source_url?: string | null;
 };
 
 type CpuReleaseReference = {
@@ -1120,7 +1142,7 @@ async function lookupCpuBenchmark(cpuName: string) {
 
   const { data: imported } = await supabase
     .from("cpu_benchmarks")
-    .select("cpu_name,cpu_mark_score,release_year,generation,category,source")
+    .select("cpu_name,cpu_mark_score,release_year,generation,category,source,source_url")
     .eq("normalized_name", normalized)
     .maybeSingle();
   if (imported) {
@@ -2004,7 +2026,9 @@ async function enrichOneDevice(device: Json, options: { force: boolean; useExter
     device_id: safeString(device.id),
     cpu_name: cpuName,
     cpu_score: cpuScore,
-    cpu_benchmark_score: cpuScore,
+    cpu_benchmark_score: cpuScore,
+
+    cpu_benchmark_source_url: benchmark?.source_url || null,
     cpu_generation: benchmark?.generation || inferCpuGeneration(cpuName),
     cpu_release_year: cpuReleaseYear,
     model_release_year: modelReleaseYear,
@@ -3530,6 +3554,7 @@ type CpuBenchmarkSyncRow = {
   generation: string | null;
   category: string | null;
   source: string;
+  source_url: string | null;
   updated_at: string;
 };
 
@@ -3551,7 +3576,7 @@ function decodeHtmlEntities(value: string) {
 }
 
 function benchmarkHeaderKey(header: string) {
-  const key = header.toLowerCase().replace(/^\uFEFF/, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+  const key = header.toLowerCase().replace(/^\uFEFF/, "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
   const aliases: Record<string, string> = {
     cpu: "cpu_name",
     cpu_name: "cpu_name",
@@ -3572,6 +3597,10 @@ function benchmarkHeaderKey(header: string) {
     cpu_generation: "generation",
     category: "category",
     type: "category",
+    source_url: "source_url",
+    source_page: "source_url",
+    benchmark_url: "source_url",
+    url: "source_url",
   };
   return aliases[key] || key;
 }
@@ -3585,7 +3614,16 @@ function cpuBenchmarkSourceName(url: string) {
   }
 }
 
-function cpuBenchmarkRowFromValues(values: Json, source: string, now: string): CpuBenchmarkSyncRow | null {
+function absoluteCpuBenchmarkUrl(href: string, baseUrl: string) {
+  const value = decodeHtmlEntities(href);
+  try {
+    return new URL(value, baseUrl).toString();
+  } catch {
+    return safeExternalUrl(baseUrl) || null;
+  }
+}
+
+function cpuBenchmarkRowFromValues(values: Json, source: string, now: string, fallbackSourceUrl = ""): CpuBenchmarkSyncRow | null {
   const cpuName = safeString(values.cpu_name, 260);
   const score = parseBenchmarkScore(values.cpu_mark_score);
   const normalizedName = normalizeCpuName(cpuName);
@@ -3599,11 +3637,12 @@ function cpuBenchmarkRowFromValues(values: Json, source: string, now: string): C
     generation: safeString(values.generation, 120) || inferCpuGeneration(cpuName) || null,
     category: safeString(values.category, 80) || null,
     source,
+    source_url: safeExternalUrl(values.source_url) || safeExternalUrl(fallbackSourceUrl) || null,
     updated_at: now,
   };
 }
 
-function parseCpuBenchmarkCsv(csv: string, source: string, now: string) {
+function parseCpuBenchmarkCsv(csv: string, source: string, now: string, sourceUrl = "") {
   const lines = csv.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
   if (lines.length < 2) return [];
   const headers = parseCsvLine(lines[0]).map(benchmarkHeaderKey);
@@ -3611,23 +3650,24 @@ function parseCpuBenchmarkCsv(csv: string, source: string, now: string) {
   const rows: CpuBenchmarkSyncRow[] = [];
   for (let index = 1; index < lines.length; index += 1) {
     const values = parseCsvLine(lines[index]);
-    const row = cpuBenchmarkRowFromValues(Object.fromEntries(headers.map((header, column) => [header, values[column] ?? ""])), source, now);
+    const row = cpuBenchmarkRowFromValues(Object.fromEntries(headers.map((header, column) => [header, values[column] ?? ""])), source, now, sourceUrl);
     if (row) rows.push(row);
   }
   return rows;
 }
 
-function parsePassMarkCpuHtml(html: string, source: string, now: string) {
+function parsePassMarkCpuHtml(html: string, source: string, now: string, sourceUrl: string) {
   const rows: CpuBenchmarkSyncRow[] = [];
   const seen = new Set<string>();
   const patterns = [
-    /<a[^>]+href=["'][^"']*cpu\.php\?cpu=[^"']+["'][^>]*>(.*?)<\/a>\s*<\/td>\s*<td[^>]*>\s*([\d,]+)/gis,
-    /<a[^>]+href=["'][^"']*cpu\.php\?cpu=[^"']+["'][^>]*>(.*?)<\/a>[\s\S]{0,120}?<td[^>]*class=["'][^"']*cpu(?:mark|_mark)?[^"']*["'][^>]*>\s*([\d,]+)/gis,
+    /<a[^>]+href=["']([^"']*cpu\.php\?cpu=[^"']+)["'][^>]*>(.*?)<\/a>\s*<\/td>\s*<td[^>]*>\s*([\d,]+)/gis,
+    /<a[^>]+href=["']([^"']*cpu\.php\?cpu=[^"']+)["'][^>]*>(.*?)<\/a>[\s\S]{0,120}?<td[^>]*class=["'][^"']*cpu(?:mark|_mark)?[^"']*["'][^>]*>\s*([\d,]+)/gis,
   ];
   for (const pattern of patterns) {
     for (const match of html.matchAll(pattern)) {
-      const cpuName = decodeHtmlEntities(match[1] || "");
-      const row = cpuBenchmarkRowFromValues({ cpu_name: cpuName, cpu_mark_score: match[2] }, source, now);
+      const cpuName = decodeHtmlEntities(match[2] || "");
+      const cpuSourceUrl = absoluteCpuBenchmarkUrl(match[1] || "", sourceUrl);
+      const row = cpuBenchmarkRowFromValues({ cpu_name: cpuName, cpu_mark_score: match[3], source_url: cpuSourceUrl }, source, now, sourceUrl);
       if (!row || seen.has(row.normalized_name)) continue;
       seen.add(row.normalized_name);
       rows.push(row);
@@ -3646,9 +3686,9 @@ async function fetchCpuBenchmarkRowsFromSource(url: string, now: string) {
   });
   if (!response.ok) throw new Error(`${source} HTTP ${response.status}`);
   const text = await response.text();
-  const htmlRows = /cpu\.php\?cpu=|CPU Mark/i.test(text) ? parsePassMarkCpuHtml(text, source, now) : [];
+  const htmlRows = /cpu\.php\?cpu=|CPU Mark/i.test(text) ? parsePassMarkCpuHtml(text, source, now, url) : [];
   if (htmlRows.length > 0) return htmlRows;
-  return parseCpuBenchmarkCsv(text, source, now);
+  return parseCpuBenchmarkCsv(text, source, now, url);
 }
 
 function isCpuBenchmarkSyncRequest(request: Request) {
@@ -3669,7 +3709,7 @@ async function handleAdminImportCpuBenchmarks(request: Request) {
   if (!csv.trim()) return badRequest(request, "Fichier CSV requis.");
   const lines = csv.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line: string) => line.trim());
   if (lines.length < 2) return badRequest(request, "Le CSV ne contient aucune donnee.");
-  const headers = parseCsvLine(lines[0]).map((header) => header.toLowerCase().replace(/\s+/g, "_"));
+  const headers = parseCsvLine(lines[0]).map(benchmarkHeaderKey);
   const required = ["cpu_name", "cpu_mark_score"];
   if (required.some((header) => !headers.includes(header))) {
     return badRequest(request, "Colonnes requises: cpu_name,cpu_mark_score.");
@@ -3693,7 +3733,9 @@ async function handleAdminImportCpuBenchmarks(request: Request) {
       release_year: safeNumber(row.release_year),
       generation: safeString(row.generation || row.cpu_generation || row["g\u00e9n\u00e9ration"], 120) || inferCpuGeneration(cpuName) || null,
       category: safeString(row.category, 80) || null,
-      source: "admin-csv-import",
+      source: "admin-csv-import",
+
+      source_url: safeExternalUrl(row.source_url) || null,
       updated_at: new Date().toISOString(),
     });
   }
@@ -3740,7 +3782,7 @@ async function handleAdminSyncCpuBenchmarks(request: Request) {
 
   const { data: existingRows, error: existingError } = await supabase
     .from("cpu_benchmarks")
-    .select("cpu_name,normalized_name,cpu_mark_score,release_year,generation,category,source")
+    .select("cpu_name,normalized_name,cpu_mark_score,release_year,generation,category,source,source_url")
     .in("normalized_name", [...candidates.keys()]);
   if (existingError) throw existingError;
 
@@ -3783,7 +3825,7 @@ async function handleAdminSyncCpuBenchmarks(request: Request) {
     const sameScore = Number(existing?.cpu_mark_score || 0) === incoming.cpu_mark_score;
     if (!force && hasTrustedExisting && sameScore && existing?.release_year) {
       skipped += 1;
-      resultRows.push({ cpuName: candidateCpuName, score: incoming.cpu_mark_score, source: existing.source, status: "kept" });
+      resultRows.push({ cpuName: candidateCpuName, score: incoming.cpu_mark_score, source: existing.source, sourceUrl: existing.source_url, status: "kept" });
       continue;
     }
 
@@ -3793,9 +3835,10 @@ async function handleAdminSyncCpuBenchmarks(request: Request) {
       release_year: incoming.release_year ?? safeNumber(existing?.release_year) ?? inferCpuReleaseYear(candidateCpuName),
       generation: incoming.generation || safeString(existing?.generation, 120) || inferCpuGeneration(candidateCpuName) || null,
       category: incoming.category || safeString(existing?.category, 80) || null,
+      source_url: incoming.source_url || safeExternalUrl(existing?.source_url) || null,
       updated_at: now,
     });
-    resultRows.push({ cpuName: candidateCpuName, score: incoming.cpu_mark_score, source: incoming.source, status: existing ? "updated" : "imported" });
+    resultRows.push({ cpuName: candidateCpuName, score: incoming.cpu_mark_score, source: incoming.source, sourceUrl: incoming.source_url, status: existing ? "updated" : "imported" });
   }
 
   if (rows.length > 0) {
