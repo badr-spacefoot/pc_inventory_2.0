@@ -3623,6 +3623,24 @@ function absoluteCpuBenchmarkUrl(href: string, baseUrl: string) {
   }
 }
 
+function cpuBenchmarkLookupQueries(cpuName: unknown) {
+  const raw = safeString(cpuName, 260);
+  if (!raw) return [];
+  const cleaned = raw
+    .replace(/\(r\)|\(tm\)|\u00ae|\u2122/gi, " ")
+    .replace(/\b\d{1,2}(?:st|nd|rd|th)\s+gen\s+/gi, "")
+    .replace(/\s+(?:with|w\/)\s+radeon(?:\s+vega)?(?:\s+\d+m)?(?:\s+mobile)?(?:\s+gfx|\s+graphics)?\b.*$/i, "")
+    .replace(/\s*@\s*[\d.]+\s*ghz\b.*$/i, "")
+    .replace(/\s+\b(cpu|processor)\b\s*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return Array.from(new Set([cleaned, raw].filter(Boolean)));
+}
+
+function passMarkLookupUrl(cpuName: string) {
+  return `https://www.cpubenchmark.net/cpu_lookup.php?cpu=${encodeURIComponent(cpuName).replace(/%20/g, "+")}`;
+}
+
 function cpuBenchmarkRowFromValues(values: Json, source: string, now: string, fallbackSourceUrl = ""): CpuBenchmarkSyncRow | null {
   const cpuName = safeString(values.cpu_name, 260);
   const score = parseBenchmarkScore(values.cpu_mark_score);
@@ -3660,16 +3678,22 @@ function parseCpuBenchmarkCsv(csv: string, source: string, now: string, sourceUr
 function parsePassMarkCpuHtml(html: string, source: string, now: string, sourceUrl: string, wantedNames?: Set<string>) {
   const rows: CpuBenchmarkSyncRow[] = [];
   const seen = new Set<string>();
-  const rowFragments = html.split(/<tr\b/i);
+  const rowFragments = [
+    ...html.split(/<tr\b/i),
+    ...html.split(/<li\b/i),
+  ];
   for (const fragment of rowFragments) {
     if (!/cpu(?:_lookup)?\.php\?cpu=/i.test(fragment)) continue;
     const linkMatch = fragment.match(/<a[^>]+href=["']([^"']*cpu(?:_lookup)?\.php\?cpu=[^"']+)["'][^>]*>([\s\S]*?)<\/a>/i);
     if (!linkMatch) continue;
-    const cpuName = decodeHtmlEntities(linkMatch[2] || "");
+    const productName = fragment.match(/<span[^>]+class=["'][^"']*prdname[^"']*["'][^>]*>([\s\S]*?)<\/span>/i);
+    const cpuName = decodeHtmlEntities(productName?.[1] || linkMatch[2] || "");
     const normalizedName = normalizeCpuName(cpuName);
     if (!normalizedName || seen.has(normalizedName) || (wantedNames && !wantedNames.has(normalizedName))) continue;
     const afterLink = fragment.slice((linkMatch.index ?? 0) + linkMatch[0].length);
-    const scoreMatch = afterLink.match(/<td[^>]*>\s*([\d,]+)\s*<\/td>/i) || fragment.match(/cpu(?:mark|_mark)[^>]*>\s*([\d,]+)\s*</i);
+    const scoreMatch = fragment.match(/class=["'][^"']*mark-neww[^"']*["'][^>]*>\s*([\d,]+)\s*</i) ||
+      afterLink.match(/<td[^>]*>\s*([\d,]+)\s*<\/td>/i) ||
+      fragment.match(/cpu(?:mark|_mark)[^>]*>\s*([\d,]+)\s*</i);
     const cpuSourceUrl = absoluteCpuBenchmarkUrl(linkMatch[1] || "", sourceUrl);
     const row = cpuBenchmarkRowFromValues({ cpu_name: cpuName, cpu_mark_score: scoreMatch?.[1], source_url: cpuSourceUrl }, source, now, sourceUrl);
     if (!row) continue;
@@ -3692,6 +3716,17 @@ async function fetchCpuBenchmarkRowsFromSource(url: string, now: string, wantedN
   const htmlRows = /cpu(?:_lookup)?\.php\?cpu=|CPU Mark/i.test(text) ? parsePassMarkCpuHtml(text, source, now, url, wantedNames) : [];
   if (htmlRows.length > 0) return htmlRows;
   return parseCpuBenchmarkCsv(text, source, now, url, wantedNames);
+}
+
+async function fetchPassMarkLookupRow(cpuName: string, normalizedName: string, now: string) {
+  const wanted = new Set([normalizedName]);
+  for (const query of cpuBenchmarkLookupQueries(cpuName)) {
+    const url = passMarkLookupUrl(query);
+    const rows = await fetchCpuBenchmarkRowsFromSource(url, now, wanted);
+    const row = rows.find((item) => item.normalized_name === normalizedName);
+    if (row) return { row, url, fetched: rows.length };
+  }
+  return null;
 }
 
 function isCpuBenchmarkSyncRequest(request: Request) {
@@ -3808,6 +3843,34 @@ async function handleAdminSyncCpuBenchmarks(request: Request) {
     } catch (error) {
       sourceResults.push({ url, status: "failed", error: safeString(error instanceof Error ? error.message : String(error), 300) });
     }
+  }
+
+  let lookupFetched = 0;
+  let lookupMatched = 0;
+  let lookupFailed = 0;
+  const missingAfterSources = [...candidates.entries()]
+    .filter(([normalizedName]) => !sourceRows.has(normalizedName))
+    .slice(0, 8);
+  for (const [normalizedName, candidate] of missingAfterSources) {
+    try {
+      const found = await fetchPassMarkLookupRow(safeString(candidate.cpuName, 260), normalizedName, now);
+      if (!found) continue;
+      lookupFetched += found.fetched;
+      lookupMatched += 1;
+      sourceRows.set(normalizedName, found.row);
+    } catch {
+      lookupFailed += 1;
+    }
+  }
+  if (missingAfterSources.length > 0) {
+    sourceResults.push({
+      url: "https://www.cpubenchmark.net/cpu_lookup.php",
+      status: lookupFailed === missingAfterSources.length ? "failed" : "ok",
+      lookups: missingAfterSources.length,
+      fetched: lookupFetched,
+      matched: lookupMatched,
+      failed: lookupFailed,
+    });
   }
 
   const rows: CpuBenchmarkSyncRow[] = [];
