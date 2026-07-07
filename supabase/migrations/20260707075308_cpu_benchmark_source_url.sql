@@ -66,7 +66,6 @@ select
   he.estimated_current_value,
   he.price_confidence_score,
   he.cpu_benchmark_score,
-  he.cpu_benchmark_source_url,
   he.enrichment_status,
   he.enrichment_source,
   he.replacement_priority,
@@ -78,7 +77,8 @@ select
   he.valuation_method,
   he.valuation_confidence_label,
   he.valuation_reasons,
-  he.market_observation_count
+  he.market_observation_count,
+  he.cpu_benchmark_source_url
 from public.devices d
 left join public.users u on u.id = d.assigned_user_id
 left join public.teams t on t.id = d.team_id
