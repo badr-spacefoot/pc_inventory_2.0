@@ -377,6 +377,7 @@ const englishTranslations = {
   "Perdu": "Lost",
   "Sorti du parc": "Retired",
   "Score CPU": "CPU score",
+  "Plateforme CPU": "CPU platform",
   "Source score CPU": "CPU score source",
   "Voir la source": "View source",
   "Faible": "Low",
@@ -717,6 +718,22 @@ function localizedEnrichmentValue(value) {
     },
   };
   return labels[state.language]?.[value] || value;
+}
+
+function cpuPlatformLabel(cpuName) {
+  const cpu = String(cpuName || "").toLowerCase();
+  const labels = {
+    intel: "Intel x86",
+    amd: "AMD x86",
+    apple: "Apple Silicon (ARM)",
+    qualcomm: "Qualcomm Snapdragon (ARM)",
+    unknown: state.language === "en" ? "Unknown" : "Inconnue",
+  };
+  if (/\b(intel|core|xeon|pentium|celeron)\b/.test(cpu)) return labels.intel;
+  if (/\b(amd|ryzen|athlon|epyc|threadripper)\b/.test(cpu)) return labels.amd;
+  if (/\bapple\s+m[1-4]\b/.test(cpu)) return labels.apple;
+  if (/\b(snapdragon|qualcomm|oryon)\b/.test(cpu)) return labels.qualcomm;
+  return labels.unknown;
 }
 
 function valuationReasonsDisplay(device) {
@@ -3295,7 +3312,7 @@ function renderDetail(device, scans, history = []) {
     <section class="detail-tab-panel" data-detail-panel="hardware">
       ${detailRows([
         ["Serial", device.serial_number], ["Etiquette service", device.service_tag], ["Numéro modèle / SKU", device.model_number],
-        ["CPU", device.cpu], ["GPU", device.gpu],
+        ["CPU", device.cpu], ["Plateforme CPU", cpuPlatformLabel(device.cpu)], ["GPU", device.gpu],
         ["RAM", device.ram_total_gb ? formatCapacityGb(device.ram_total_gb) : ""],
         ["Mémoire", memoryDetails],
         ["Stockage", formatStorageSummary(device.storage_total_gb, device.storage_free_gb)],

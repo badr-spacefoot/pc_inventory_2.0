@@ -3659,9 +3659,10 @@ function parseCpuBenchmarkCsv(csv: string, source: string, now: string, sourceUr
 function parsePassMarkCpuHtml(html: string, source: string, now: string, sourceUrl: string) {
   const rows: CpuBenchmarkSyncRow[] = [];
   const seen = new Set<string>();
+  const cpuDetailHref = String.raw`[^"']*cpu(?:_lookup)?\.php\?cpu=[^"']+`;
   const patterns = [
-    /<a[^>]+href=["']([^"']*cpu\.php\?cpu=[^"']+)["'][^>]*>(.*?)<\/a>\s*<\/td>\s*<td[^>]*>\s*([\d,]+)/gis,
-    /<a[^>]+href=["']([^"']*cpu\.php\?cpu=[^"']+)["'][^>]*>(.*?)<\/a>[\s\S]{0,120}?<td[^>]*class=["'][^"']*cpu(?:mark|_mark)?[^"']*["'][^>]*>\s*([\d,]+)/gis,
+    new RegExp(`<a[^>]+href=["'](${cpuDetailHref})["'][^>]*>(.*?)<\\/a>\\s*<\\/td>\\s*<td[^>]*>\\s*([\\d,]+)`, "gis"),
+    new RegExp(`<a[^>]+href=["'](${cpuDetailHref})["'][^>]*>(.*?)<\\/a>[\\s\\S]{0,180}?<td[^>]*class=["'][^"']*cpu(?:mark|_mark)?[^"']*["'][^>]*>\\s*([\\d,]+)`, "gis"),
   ];
   for (const pattern of patterns) {
     for (const match of html.matchAll(pattern)) {
@@ -3686,7 +3687,7 @@ async function fetchCpuBenchmarkRowsFromSource(url: string, now: string) {
   });
   if (!response.ok) throw new Error(`${source} HTTP ${response.status}`);
   const text = await response.text();
-  const htmlRows = /cpu\.php\?cpu=|CPU Mark/i.test(text) ? parsePassMarkCpuHtml(text, source, now, url) : [];
+  const htmlRows = /cpu(?:_lookup)?\.php\?cpu=|CPU Mark/i.test(text) ? parsePassMarkCpuHtml(text, source, now, url) : [];
   if (htmlRows.length > 0) return htmlRows;
   return parseCpuBenchmarkCsv(text, source, now, url);
 }
@@ -3823,7 +3824,9 @@ async function handleAdminSyncCpuBenchmarks(request: Request) {
     const existingSource = safeString(existing?.source, 120);
     const hasTrustedExisting = ["admin-csv-import", "passmark-cpu-mark"].includes(existingSource) || existingSource.startsWith("cpu-benchmark-source:");
     const sameScore = Number(existing?.cpu_mark_score || 0) === incoming.cpu_mark_score;
-    if (!force && hasTrustedExisting && sameScore && existing?.release_year) {
+    const existingSourceUrl = safeExternalUrl(existing?.source_url);
+    const incomingSourceUrl = safeExternalUrl(incoming.source_url);
+    if (!force && hasTrustedExisting && sameScore && existing?.release_year && (!incomingSourceUrl || existingSourceUrl)) {
       skipped += 1;
       resultRows.push({ cpuName: candidateCpuName, score: incoming.cpu_mark_score, source: existing.source, sourceUrl: existing.source_url, status: "kept" });
       continue;
@@ -3835,7 +3838,7 @@ async function handleAdminSyncCpuBenchmarks(request: Request) {
       release_year: incoming.release_year ?? safeNumber(existing?.release_year) ?? inferCpuReleaseYear(candidateCpuName),
       generation: incoming.generation || safeString(existing?.generation, 120) || inferCpuGeneration(candidateCpuName) || null,
       category: incoming.category || safeString(existing?.category, 80) || null,
-      source_url: incoming.source_url || safeExternalUrl(existing?.source_url) || null,
+      source_url: incomingSourceUrl || existingSourceUrl || null,
       updated_at: now,
     });
     resultRows.push({ cpuName: candidateCpuName, score: incoming.cpu_mark_score, source: incoming.source, sourceUrl: incoming.source_url, status: existing ? "updated" : "imported" });
