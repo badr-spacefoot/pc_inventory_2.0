@@ -1020,8 +1020,9 @@ function normalizeCpuName(cpuName: unknown) {
     .toLowerCase()
     .replace(/\(r\)|\(tm\)|\u00ae|\u2122/g, " ")
     .replace(/\b\d{1,2}(?:st|nd|rd|th)\s+gen\b/g, " ")
-    .replace(/\bw\/\s*radeon\s+\d+m\b/g, " ")
-    .replace(/\b(qualcomm|oryon|cpu|processor|with radeon graphics|@.*|series)\b/g, " ")
+    .replace(/\b(?:with|w\/)\s+radeon(?:\s+vega)?(?:\s+\d+m)?(?:\s+mobile)?(?:\s+gfx|\s+graphics)?\b/g, " ")
+    .replace(/\bradeon\s+vega\s+mobile\s+gfx\b/g, " ")
+    .replace(/\b(qualcomm|oryon|cpu|processor|graphics|gfx|@.*|series)\b/g, " ")
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
     .replace(/\s+/g, " ");
