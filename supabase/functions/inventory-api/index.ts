@@ -67,7 +67,12 @@ const ebayMarketplaceId = Deno.env.get("EBAY_MARKETPLACE_ID") ?? "EBAY_FR";
 let ebayGeneratedToken = "";
 let ebayGeneratedTokenExpiresAt = 0;
 const googleMapsApiKey = Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
-const enrichmentCacheDays = Number(Deno.env.get("ENRICHMENT_CACHE_DAYS") ?? 90);
+const enrichmentCacheDays = Number(Deno.env.get("ENRICHMENT_CACHE_DAYS") ?? 90);
+const defaultCpuBenchmarkSourceUrls = (Deno.env.get("CPU_BENCHMARK_SOURCE_URLS") || "https://www.cpubenchmark.net/cpu-list/,https://raw.githubusercontent.com/badr-spacefoot/pc_inventory_2.0/main/data/cpu_benchmarks.csv")
+  .split(",")
+  .map((url) => url.trim())
+  .filter(Boolean);
+const cpuBenchmarkSyncToken = Deno.env.get("CPU_BENCHMARK_SYNC_TOKEN") ?? "";
 const organizationPalette = [
   "#3b6ea8", "#21867a", "#4f8a52", "#b88325", "#b86632", "#b45c75",
   "#7b61a8", "#4e68b0", "#2f8898", "#7a963f", "#64748b", "#b15f9a",
@@ -82,7 +87,7 @@ function corsHeaders(request: Request) {
   const allowOrigin = allowedOrigins.includes("*") || allowedOrigins.includes(origin) ? origin || "*" : allowedOrigins[0];
   return {
     "Access-Control-Allow-Origin": allowOrigin,
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-collection-access-token",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-collection-access-token, x-cpu-benchmark-sync-token",
     "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
     "Vary": "Origin",
   };
@@ -3493,7 +3498,7 @@ async function handleAdminDeviceHistoryNote(request: Request, id: string) {
   return json(request, { ok: true });
 }
 
-function parseCsvLine(line: string) {
+function parseCsvLine(line: string) {
   const values: string[] = [];
   let value = "";
   let quoted = false;
@@ -3514,10 +3519,150 @@ function parseCsvLine(line: string) {
     }
   }
   values.push(value.trim());
-  return values;
-}
-
-async function handleAdminImportCpuBenchmarks(request: Request) {
+  return values;
+}
+
+type CpuBenchmarkSyncRow = {
+  cpu_name: string;
+  normalized_name: string;
+  cpu_mark_score: number;
+  release_year: number | null;
+  generation: string | null;
+  category: string | null;
+  source: string;
+  updated_at: string;
+};
+
+function parseBenchmarkScore(value: unknown) {
+  const raw = safeString(value, 80).replace(/[^\d.]/g, "");
+  const score = Number(raw);
+  return Number.isFinite(score) && score > 0 ? Math.round(score) : 0;
+}
+
+function decodeHtmlEntities(value: string) {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function benchmarkHeaderKey(header: string) {
+  const key = header.toLowerCase().replace(/^\uFEFF/, "").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+  const aliases: Record<string, string> = {
+    cpu: "cpu_name",
+    cpu_name: "cpu_name",
+    name: "cpu_name",
+    processor: "cpu_name",
+    processor_name: "cpu_name",
+    model: "cpu_name",
+    cpu_mark: "cpu_mark_score",
+    cpumark: "cpu_mark_score",
+    cpu_mark_score: "cpu_mark_score",
+    passmark: "cpu_mark_score",
+    passmark_score: "cpu_mark_score",
+    score: "cpu_mark_score",
+    benchmark: "cpu_mark_score",
+    release_year: "release_year",
+    year: "release_year",
+    generation: "generation",
+    cpu_generation: "generation",
+    category: "category",
+    type: "category",
+  };
+  return aliases[key] || key;
+}
+
+function cpuBenchmarkSourceName(url: string) {
+  if (/cpubenchmark\.net|passmark/i.test(url)) return "passmark-cpu-mark";
+  try {
+    return `cpu-benchmark-source:${new URL(url).hostname}`;
+  } catch {
+    return "cpu-benchmark-source";
+  }
+}
+
+function cpuBenchmarkRowFromValues(values: Json, source: string, now: string): CpuBenchmarkSyncRow | null {
+  const cpuName = safeString(values.cpu_name, 260);
+  const score = parseBenchmarkScore(values.cpu_mark_score);
+  const normalizedName = normalizeCpuName(cpuName);
+  if (!cpuName || !normalizedName || !score) return null;
+  const releaseYear = safeNumber(values.release_year) ?? inferCpuReleaseYear(cpuName);
+  return {
+    cpu_name: cpuName,
+    normalized_name: normalizedName,
+    cpu_mark_score: score,
+    release_year: releaseYear,
+    generation: safeString(values.generation, 120) || inferCpuGeneration(cpuName) || null,
+    category: safeString(values.category, 80) || null,
+    source,
+    updated_at: now,
+  };
+}
+
+function parseCpuBenchmarkCsv(csv: string, source: string, now: string) {
+  const lines = csv.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
+  if (lines.length < 2) return [];
+  const headers = parseCsvLine(lines[0]).map(benchmarkHeaderKey);
+  if (!headers.includes("cpu_name") || !headers.includes("cpu_mark_score")) return [];
+  const rows: CpuBenchmarkSyncRow[] = [];
+  for (let index = 1; index < lines.length; index += 1) {
+    const values = parseCsvLine(lines[index]);
+    const row = cpuBenchmarkRowFromValues(Object.fromEntries(headers.map((header, column) => [header, values[column] ?? ""])), source, now);
+    if (row) rows.push(row);
+  }
+  return rows;
+}
+
+function parsePassMarkCpuHtml(html: string, source: string, now: string) {
+  const rows: CpuBenchmarkSyncRow[] = [];
+  const seen = new Set<string>();
+  const patterns = [
+    /<a[^>]+href=["'][^"']*cpu\.php\?cpu=[^"']+["'][^>]*>(.*?)<\/a>\s*<\/td>\s*<td[^>]*>\s*([\d,]+)/gis,
+    /<a[^>]+href=["'][^"']*cpu\.php\?cpu=[^"']+["'][^>]*>(.*?)<\/a>[\s\S]{0,120}?<td[^>]*class=["'][^"']*cpu(?:mark|_mark)?[^"']*["'][^>]*>\s*([\d,]+)/gis,
+  ];
+  for (const pattern of patterns) {
+    for (const match of html.matchAll(pattern)) {
+      const cpuName = decodeHtmlEntities(match[1] || "");
+      const row = cpuBenchmarkRowFromValues({ cpu_name: cpuName, cpu_mark_score: match[2] }, source, now);
+      if (!row || seen.has(row.normalized_name)) continue;
+      seen.add(row.normalized_name);
+      rows.push(row);
+    }
+  }
+  return rows;
+}
+
+async function fetchCpuBenchmarkRowsFromSource(url: string, now: string) {
+  const source = cpuBenchmarkSourceName(url);
+  const response = await fetch(url, {
+    headers: {
+      "Accept": "text/csv,text/plain,text/html;q=0.9,*/*;q=0.8",
+      "User-Agent": "Spacefoot IT Inventory CPU benchmark sync",
+    },
+  });
+  if (!response.ok) throw new Error(`${source} HTTP ${response.status}`);
+  const text = await response.text();
+  const htmlRows = /cpu\.php\?cpu=|CPU Mark/i.test(text) ? parsePassMarkCpuHtml(text, source, now) : [];
+  if (htmlRows.length > 0) return htmlRows;
+  return parseCpuBenchmarkCsv(text, source, now);
+}
+
+function isCpuBenchmarkSyncRequest(request: Request) {
+  const provided = safeString(request.headers.get("x-cpu-benchmark-sync-token"), 512);
+  return Boolean(cpuBenchmarkSyncToken && provided && provided === cpuBenchmarkSyncToken);
+}
+
+async function authorizeCpuBenchmarkSync(request: Request) {
+  if (isCpuBenchmarkSyncRequest(request)) return null;
+  if (!(await isAdmin(request, "DEVICE_EDIT"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
+  return null;
+}
+
+async function handleAdminImportCpuBenchmarks(request: Request) {
   if (!(await isAdmin(request, "DEVICE_EDIT"))) return badRequest(request, "Action non autorisee pour ce role.", 403);
   const body = await request.json().catch(() => ({}));
   const csv = typeof body.csv === "string" ? body.csv.slice(0, 2_000_000) : "";
@@ -3557,6 +3702,138 @@ async function handleAdminImportCpuBenchmarks(request: Request) {
   if (error) throw error;
   await audit("cpu_benchmarks_imported", "cpu_benchmark", null, { imported: rows.length, rejected: rejected.length });
   return json(request, { imported: rows.length, rejected: rejected.length, errors: rejected.slice(0, 20) });
+}
+
+async function handleAdminSyncCpuBenchmarks(request: Request) {
+  const authorizationError = await authorizeCpuBenchmarkSync(request);
+  if (authorizationError) return authorizationError;
+
+  const body = await request.json().catch(() => ({}));
+  const limit = Math.max(1, Math.min(Number(body.limit || 250), 1000));
+  const recalculate = body.recalculate !== false;
+  const recalculateLimit = Math.max(1, Math.min(Number(body.recalculateLimit || 100), 500));
+  const force = Boolean(body.force);
+  const sourceUrls = (Array.isArray(body.urls) ? body.urls : defaultCpuBenchmarkSourceUrls)
+    .map((url: unknown) => safeString(url, 500))
+    .filter((url: string) => /^https?:\/\//i.test(url));
+
+  if (sourceUrls.length === 0) {
+    return badRequest(request, "Aucune source CPU benchmark configuree.");
+  }
+
+  const { data: devices, error: devicesError } = await supabase
+    .from("device_inventory_view")
+    .select("id,cpu,enrichment_cpu_name,cpu_score,cpu_benchmark_score,cpu_generation,last_enriched_at")
+    .limit(2500);
+  if (devicesError) throw devicesError;
+
+  const candidates = new Map<string, Json>();
+  for (const device of devices ?? []) {
+    const cpuName = safeString(device.cpu || device.enrichment_cpu_name, 260);
+    const normalizedName = normalizeCpuName(cpuName);
+    if (!cpuName || !normalizedName || candidates.has(normalizedName)) continue;
+    candidates.set(normalizedName, { ...device, cpuName, normalizedName });
+    if (candidates.size >= limit) break;
+  }
+
+  if (candidates.size === 0) return json(request, { scanned: 0, matched: 0, imported: 0, updated: 0, skipped: 0, recalculated: 0, sources: [] });
+
+  const { data: existingRows, error: existingError } = await supabase
+    .from("cpu_benchmarks")
+    .select("cpu_name,normalized_name,cpu_mark_score,release_year,generation,category,source")
+    .in("normalized_name", [...candidates.keys()]);
+  if (existingError) throw existingError;
+
+  const existingByName = new Map((existingRows ?? []).map((row) => [safeString(row.normalized_name), row]));
+  const sourceRows = new Map<string, CpuBenchmarkSyncRow>();
+  const sourceResults: Json[] = [];
+  const now = new Date().toISOString();
+
+  for (const url of sourceUrls) {
+    try {
+      const fetchedRows = await fetchCpuBenchmarkRowsFromSource(url, now);
+      let matched = 0;
+      for (const row of fetchedRows) {
+        if (!candidates.has(row.normalized_name)) continue;
+        matched += 1;
+        if (!sourceRows.has(row.normalized_name)) sourceRows.set(row.normalized_name, row);
+      }
+      sourceResults.push({ url, status: "ok", fetched: fetchedRows.length, matched });
+    } catch (error) {
+      sourceResults.push({ url, status: "failed", error: safeString(error instanceof Error ? error.message : String(error), 300) });
+    }
+  }
+
+  const rows: CpuBenchmarkSyncRow[] = [];
+  const resultRows: Json[] = [];
+  let skipped = 0;
+
+  for (const [normalizedName, candidate] of candidates.entries()) {
+    const incoming = sourceRows.get(normalizedName);
+    const existing = existingByName.get(normalizedName);
+    const candidateCpuName = safeString(candidate.cpuName, 260);
+    if (!incoming) {
+      skipped += 1;
+      resultRows.push({ cpuName: candidateCpuName, status: "missing" });
+      continue;
+    }
+
+    const existingSource = safeString(existing?.source, 120);
+    const hasTrustedExisting = ["admin-csv-import", "passmark-cpu-mark"].includes(existingSource) || existingSource.startsWith("cpu-benchmark-source:");
+    const sameScore = Number(existing?.cpu_mark_score || 0) === incoming.cpu_mark_score;
+    if (!force && hasTrustedExisting && sameScore && existing?.release_year) {
+      skipped += 1;
+      resultRows.push({ cpuName: candidateCpuName, score: incoming.cpu_mark_score, source: existing.source, status: "kept" });
+      continue;
+    }
+
+    rows.push({
+      ...incoming,
+      cpu_name: safeString(incoming.cpu_name || existing?.cpu_name || candidateCpuName, 260),
+      release_year: incoming.release_year ?? safeNumber(existing?.release_year) ?? inferCpuReleaseYear(candidateCpuName),
+      generation: incoming.generation || safeString(existing?.generation, 120) || inferCpuGeneration(candidateCpuName) || null,
+      category: incoming.category || safeString(existing?.category, 80) || null,
+      updated_at: now,
+    });
+    resultRows.push({ cpuName: candidateCpuName, score: incoming.cpu_mark_score, source: incoming.source, status: existing ? "updated" : "imported" });
+  }
+
+  if (rows.length > 0) {
+    const { error } = await supabase.from("cpu_benchmarks").upsert(rows, { onConflict: "normalized_name" });
+    if (error) throw error;
+  }
+
+  let recalculated = 0;
+  if (recalculate && rows.length > 0) {
+    const updatedNames = new Set(rows.map((row) => row.normalized_name));
+    const devicesToRecalculate = (devices ?? []).filter((device) => {
+      const cpuName = safeString(device.cpu || device.enrichment_cpu_name, 260);
+      return updatedNames.has(normalizeCpuName(cpuName));
+    }).slice(0, recalculateLimit);
+    const recalculation = await enrichDeviceRows(devicesToRecalculate, { force: true, useExternal: false });
+    recalculated = recalculation.enriched;
+  }
+
+  await audit("cpu_benchmarks_synced", "cpu_benchmark", null, {
+    scanned: candidates.size,
+    imported: resultRows.filter((row) => row.status === "imported").length,
+    updated: resultRows.filter((row) => row.status === "updated").length,
+    skipped,
+    recalculated,
+    sources: sourceResults,
+  });
+
+  return json(request, {
+    ok: sourceResults.some((source) => source.status === "ok"),
+    scanned: candidates.size,
+    matched: sourceRows.size,
+    imported: resultRows.filter((row) => row.status === "imported").length,
+    updated: resultRows.filter((row) => row.status === "updated").length,
+    skipped,
+    recalculated,
+    sources: sourceResults,
+    rows: resultRows.slice(0, 80),
+  });
 }
 
 async function handleAdminRefreshCpuReleaseDates(request: Request) {
@@ -4484,6 +4761,7 @@ Deno.serve(async (request) => {
     if (request.method === "POST" && path.endsWith("/admin/enrichment-jobs/process")) return await handleProcessEnrichmentJob(request);
     if (request.method === "POST" && path.endsWith("/admin/enrich")) return await handleAdminEnrich(request);
     if (request.method === "GET" && path.endsWith("/admin/cpu-benchmarks")) return await handleAdminCpuBenchmarkStats(request);
+    if (request.method === "POST" && path.endsWith("/admin/cpu-benchmarks/sync")) return await handleAdminSyncCpuBenchmarks(request);
     if (request.method === "POST" && path.endsWith("/admin/cpu-benchmarks/import")) return await handleAdminImportCpuBenchmarks(request);
     if (request.method === "POST" && path.endsWith("/admin/cpu-benchmarks/refresh-release-dates")) return await handleAdminRefreshCpuReleaseDates(request);
     if (request.method === "GET" && path.endsWith("/admin/access-tokens")) return await handleAdminListAccessTokens(request);

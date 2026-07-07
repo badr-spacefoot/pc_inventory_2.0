@@ -400,6 +400,7 @@ const englishTranslations = {
   "Enrichir toutes les machines": "Enrich all devices",
   "Recalculer les valeurs": "Recalculate values",
   "Actualiser dates CPU": "Refresh CPU launch dates",
+  "Synchroniser scores CPU": "Sync CPU scores",
   "Importer benchmarks CPU": "Import CPU benchmarks",
   "Exporter inventaire enrichi": "Export enriched inventory",
   "Les valeurs sont des estimations basees sur le modèle, le CPU, la RAM, le GPU, la categorie et une depreciation par age.": "Values are estimates based on model, CPU, RAM, GPU, category, and age depreciation.",
@@ -426,6 +427,7 @@ const englishTranslations = {
   "GPU": "GPU",
   "Type stockage": "Storage type",
   "Fichier CPU importe.": "CPU file imported.",
+  "Scores CPU synchronises.": "CPU scores synced.",
   "Enrichissement terminé.": "Enrichment completed.",
   "Recalcul terminé.": "Recalculation completed.",
   "Actualisation...": "Refreshing...",
@@ -853,7 +855,7 @@ function applyPermissions() {
     }
   });
   const editable = canPerformAction("DEVICE_EDIT");
-  ["#enrich-admin", "#valuation-enrich-all", "#valuation-recalculate", "#refresh-cpu-release-dates", "#import-cpu-benchmarks"].forEach((selector) => {
+  ["#enrich-admin", "#valuation-enrich-all", "#valuation-recalculate", "#refresh-cpu-release-dates", "#sync-cpu-benchmarks", "#import-cpu-benchmarks"].forEach((selector) => {
     const node = $(selector);
     if (node) node.classList.toggle("is-hidden", !editable);
   });
@@ -4704,6 +4706,27 @@ async function refreshCpuReleaseDates(button) {
   }
 }
 
+async function syncCpuBenchmarks(button) {
+  const previousLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = translate("Actualisation...");
+  try {
+    const result = await api("/admin/cpu-benchmarks/sync", {
+      method: "POST",
+      body: JSON.stringify({ limit: 250, recalculate: true, recalculateLimit: 120 }),
+    });
+    const message = state.language === "en"
+      ? `${result.matched || 0} CPU score(s) matched, ${result.imported || 0} imported, ${result.updated || 0} updated, ${result.recalculated || 0} device(s) recalculated.`
+      : `${result.matched || 0} score(s) CPU trouve(s), ${result.imported || 0} importe(s), ${result.updated || 0} mis a jour, ${result.recalculated || 0} machine(s) recalculee(s).`;
+    toast(message);
+    await loadAdminData();
+    await loadCpuBenchmarkStats();
+  } finally {
+    button.disabled = false;
+    button.textContent = previousLabel;
+  }
+}
+
 function bindEvents() {
   window.addEventListener("popstate", () => restoreRoute({ updateUrl: false }));
 
@@ -5248,6 +5271,8 @@ function bindEvents() {
     runEnrichment({ mode: "recalculate", button: $("#valuation-recalculate") }).catch((error) => toast(error.message)));
   $("#refresh-cpu-release-dates").addEventListener("click", () =>
     refreshCpuReleaseDates($("#refresh-cpu-release-dates")).catch((error) => toast(error.message, "error")));
+  $("#sync-cpu-benchmarks").addEventListener("click", () =>
+    syncCpuBenchmarks($("#sync-cpu-benchmarks")).catch((error) => toast(error.message, "error")));
   $("#import-cpu-benchmarks").addEventListener("click", () => $("#cpu-benchmark-file").click());
   $("#cpu-benchmark-file").addEventListener("change", async (event) => {
     const input = event.currentTarget;

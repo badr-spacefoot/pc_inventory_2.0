@@ -87,6 +87,9 @@ Dans GitHub, configurer:
 - Secret Actions `ADMIN_SESSION_SECRET`
 - Secret Actions `COLLECTION_ACCESS_TOKEN`
 - Secret optionnel `EBAY_BROWSE_API_TOKEN`
+- Secret optionnel `CPU_BENCHMARK_SYNC_TOKEN` pour le job planifie de scores CPU
+- Variable optionnelle `CPU_BENCHMARK_SOURCE_URLS`, par defaut CPU Benchmark + CSV versionne du repo
+- Variable optionnelle `IT_INVENTORY_API_URL` pour le workflow `cpu-benchmark-sync`
 
 La machine locale n'heberge rien. GitHub Actions transmet le code a Supabase, puis l'Edge Function s'execute dans le cloud Supabase.
 
@@ -323,6 +326,8 @@ Secrets backend:
 - `ALLOWED_EMAIL_DOMAINS` optionnel, vide par défaut pour accepter tout domaine email valide
 - `EBAY_BROWSE_API_TOKEN` optionnel
 - `GOOGLE_MAPS_API_KEY` optionnel, pour la recherche et l'autocompletion des adresses
+- `CPU_BENCHMARK_SOURCE_URLS` optionnel, liste d'URLs CSV/HTML separees par virgules
+- `CPU_BENCHMARK_SYNC_TOKEN` optionnel, requis pour declencher le job CPU sans session admin
 - `ENRICHMENT_CACHE_DAYS` optionnel
 
 Ne jamais mettre `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_PASSWORD` ou `ADMIN_SESSION_SECRET` dans le front GitHub Pages.
@@ -474,9 +479,9 @@ Pour chaque machine, le service calcule:
 
 ### Sources gratuites et ordre de repli
 
-1. Table CPU importee manuellement dans Supabase.
+1. Table CPU importee ou synchronisee dans Supabase.
 2. Jeu CPU intégré dans `data/cpu_benchmarks.csv`.
-3. Detection de generation CPU et estimation locale.
+3. Detection de generation CPU et estimation locale uniquement si aucune source fiable ne correspond.
 4. Regles de prix par categorie: portable professionnel, workstation, mini PC, desktop ou all-in-one.
 5. Depreciation: 70% a un an, 55% a deux ans, 40% a trois ans, 30% a quatre ans, 20% a cinq ans, puis 10 a 15%.
 6. eBay Browse API peut etre activee en option. Keepa n'est pas requis.
@@ -502,6 +507,18 @@ cpu_name,cpu_mark_score,release_year,génération,category
 ```
 
 Dans Admin > Valorisation, cliquer sur `Importer benchmarks CPU`, choisir le CSV, puis lancer `Recalculer les valeurs`. Les lignes importees remplacent le jeu integre lorsqu'un nom CPU normalise correspond exactement.
+
+### Synchroniser les scores CPU
+
+Dans Admin > Valorisation, le bouton `Synchroniser scores CPU` parcourt les processeurs vus dans le parc, interroge les sources configurees et met a jour `cpu_benchmarks.cpu_mark_score`.
+
+Le workflow GitHub Actions `.github/workflows/cpu-benchmark-sync.yml` lance la meme synchronisation chaque lundi a 03:17 UTC. Il faut configurer:
+
+- Variable Actions `IT_INVENTORY_API_URL`, par exemple `https://YOUR_PROJECT.supabase.co/functions/v1/inventory-api`
+- Secret Actions `CPU_BENCHMARK_SYNC_TOKEN`
+- Optionnel: variable Actions `CPU_BENCHMARK_SOURCE_URLS` pour remplacer la source par defaut.
+
+La source par defaut lit la table publique CPU Mark de PassMark/CPU Benchmark puis le CSV versionne du repo. Si elle ne fournit pas un processeur donne, le CPU reste marque comme manquant et l'enrichissement conserve le fallback existant.
 
 ### Actualiser les dates de lancement CPU
 
@@ -531,6 +548,8 @@ supabase secrets set EBAY_MARKETPLACE_ID="EBAY_FR"
 # Optionnel pour test manuel seulement. Preferer EBAY_CLIENT_ID + EBAY_CLIENT_SECRET en production.
 supabase secrets set EBAY_BROWSE_API_TOKEN="..."
 supabase secrets set GOOGLE_MAPS_API_KEY="..."
+supabase secrets set CPU_BENCHMARK_SOURCE_URLS="https://www.cpubenchmark.net/cpu-list/,https://raw.githubusercontent.com/badr-spacefoot/pc_inventory_2.0/main/data/cpu_benchmarks.csv"
+supabase secrets set CPU_BENCHMARK_SYNC_TOKEN="..."
 supabase secrets set ENRICHMENT_CACHE_DAYS="90"
 ```
 
