@@ -2646,28 +2646,6 @@ function clearFleetFilters() {
 
 function renderMetrics() {
   renderFleetDashboard();
-  return;
-
-  const total = state.filtered.length;
-  const stale = state.filtered.filter((d) => daysSince(d.last_seen_at) > CONFIG.staleDays).length;
-  const lowStorage = state.filtered.filter((d) => Number(d.storage_free_gb || 0) < 30).length;
-  const replace = state.filtered.filter((d) => {
-    const priority = Number(d.replacement_priority || d.obsolescence_index || 0);
-    return d.status === "replace" || ageSignalScore(d) >= 75 || priority >= 70;
-  }).length;
-  const fleetValue = state.filtered.reduce((sum, device) => sum + estimatedValue(device), 0);
-  const lowCpu = state.filtered.filter((d) => Number(d.cpu_score || 0) > 0 && Number(d.cpu_score || 0) < 7000).length;
-
-  $("#metrics").innerHTML = [
-    ["Machines", total],
-    ["Valeur estimée", money(fleetValue)],
-    [`Sans scan +${CONFIG.staleDays}j`, stale],
-    ["CPU faible", lowCpu],
-    ["Stockage faible", lowStorage],
-    ["Signal remplacement", replace],
-  ]
-    .map(([label, value]) => `<article class="metric"><span>${label}</span><strong>${value}</strong></article>`)
-    .join("");
 }
 
 function renderOemMetrics() {
