@@ -3642,6 +3642,25 @@ function passMarkLookupUrl(cpuName: string) {
   return `https://www.cpubenchmark.net/cpu_lookup.php?cpu=${encodeURIComponent(cpuName).replace(/%20/g, "+")}`;
 }
 
+function cpuBenchmarkNormalizedMatches(candidateName: string, wantedName: string) {
+  if (!candidateName || !wantedName) return false;
+  if (candidateName === wantedName) return true;
+  if (!wantedName.startsWith("apple m")) return false;
+  if (!candidateName.startsWith(`${wantedName} `)) return false;
+  for (const tier of ["pro", "max", "ultra"]) {
+    if (!wantedName.includes(` ${tier}`) && new RegExp(`\\b${tier}\\b`).test(candidateName)) return false;
+  }
+  return /\b(?:\d+\s+core|core\s+\d+|\d+\s+mhz|\d+\s+ghz)\b/.test(candidateName.slice(wantedName.length));
+}
+
+function matchingCpuBenchmarkWantedName(candidateName: string, wantedNames?: Set<string>) {
+  if (!wantedNames) return candidateName;
+  for (const wantedName of wantedNames) {
+    if (cpuBenchmarkNormalizedMatches(candidateName, wantedName)) return wantedName;
+  }
+  return "";
+}
+
 function cpuBenchmarkRowFromValues(values: Json, source: string, now: string, fallbackSourceUrl = ""): CpuBenchmarkSyncRow | null {
   const cpuName = safeString(values.cpu_name, 260);
   const score = parseBenchmarkScore(values.cpu_mark_score);
@@ -3690,14 +3709,17 @@ function parsePassMarkCpuHtml(html: string, source: string, now: string, sourceU
     const productName = fragment.match(/<span[^>]+class=["'][^"']*prdname[^"']*["'][^>]*>([\s\S]*?)<\/span>/i);
     const cpuName = decodeHtmlEntities(productName?.[1] || linkMatch[2] || "");
     const normalizedName = normalizeCpuName(cpuName);
-    if (!normalizedName || seen.has(normalizedName) || (wantedNames && !wantedNames.has(normalizedName))) continue;
+    const matchedWantedName = matchingCpuBenchmarkWantedName(normalizedName, wantedNames);
+    if (!normalizedName || !matchedWantedName || seen.has(matchedWantedName)) continue;
     const afterLink = fragment.slice((linkMatch.index ?? 0) + linkMatch[0].length);
     const scoreMatch = fragment.match(/class=["'][^"']*mark-neww[^"']*["'][^>]*>\s*([\d,]+)\s*</i) ||
+      fragment.match(/class=["'][^"']*count[^"']*["'][^>]*>\s*([\d,]+)\s*</i) ||
       afterLink.match(/<td[^>]*>\s*([\d,]+)\s*<\/td>/i) ||
       fragment.match(/cpu(?:mark|_mark)[^>]*>\s*([\d,]+)\s*</i);
     const cpuSourceUrl = absoluteCpuBenchmarkUrl(linkMatch[1] || "", sourceUrl);
     const row = cpuBenchmarkRowFromValues({ cpu_name: cpuName, cpu_mark_score: scoreMatch?.[1], source_url: cpuSourceUrl }, source, now, sourceUrl);
     if (!row) continue;
+    row.normalized_name = matchedWantedName;
     seen.add(row.normalized_name);
     rows.push(row);
   }
