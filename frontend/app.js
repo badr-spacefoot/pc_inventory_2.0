@@ -26,6 +26,7 @@ const state = {
   selectedDetail: null,
   selectedScans: [],
   selectedHistory: [],
+  activeDetailTab: "overview",
   accessTokens: [],
   collectionInvites: [],
   currentInviteCode: "",
@@ -2398,8 +2399,11 @@ async function openNotificationTarget(id) {
 }
 
 function activateDetailTab(tabName) {
-  $$(".detail-tab").forEach((tab) => tab.classList.toggle("is-active", tab.dataset.detailTab === tabName));
-  $$(".detail-tab-panel").forEach((panel) => panel.classList.toggle("is-active", panel.dataset.detailPanel === tabName));
+  const availableTabs = $$(".detail-tab").map((tab) => tab.dataset.detailTab);
+  const activeTab = availableTabs.includes(tabName) ? tabName : "overview";
+  state.activeDetailTab = activeTab;
+  $$(".detail-tab").forEach((tab) => tab.classList.toggle("is-active", tab.dataset.detailTab === activeTab));
+  $$(".detail-tab-panel").forEach((panel) => panel.classList.toggle("is-active", panel.dataset.detailPanel === activeTab));
 }
 
 async function loadNotifications() {
@@ -3396,6 +3400,7 @@ function renderDetail(device, scans, history = []) {
       activateDetailTab(button.dataset.detailTab);
     });
   });
+  activateDetailTab(state.activeDetailTab);
 
   if ($("#assignment-form")) $("#assignment-form").addEventListener("submit", async (event) => {
     event.preventDefault();
