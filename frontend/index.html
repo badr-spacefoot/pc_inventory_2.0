@@ -311,9 +311,6 @@
             </button>
           </nav>
 
-          <section class="metric-grid admin-section-view section-fleet" id="metrics"></section>
-          <section class="metric-grid oem-metrics admin-section-view section-fleet" id="oem-metrics"></section>
-
           <section class="admin-section-view section-valuation is-hidden">
             <section class="panel valuation-toolbar">
               <div class="panel-head inline">
@@ -832,6 +829,17 @@
             </div>
           </section>
 
+          <section class="fleet-dashboard admin-section-view section-fleet" id="fleet-dashboard" aria-label="Dashboard parc informatique">
+            <section class="fleet-kpi-grid" id="fleet-kpis" aria-label="Indicateurs principaux du parc"></section>
+            <section class="panel fleet-priority-panel" id="fleet-priority"></section>
+            <section class="fleet-section-grid">
+              <section class="panel fleet-section-card" id="fleet-distribution"></section>
+              <section class="panel fleet-section-card" id="fleet-health"></section>
+              <section class="panel fleet-section-card" id="fleet-valuation"></section>
+              <section class="panel fleet-section-card fleet-age-cpu-card" id="fleet-age-cpu"></section>
+            </section>
+          </section>
+
           <section class="dashboard-grid admin-section-view section-fleet">
             <section class="panel table-panel">
               <div class="panel-head inline">
@@ -866,23 +874,6 @@
             </aside>
           </section>
 
-          <section class="charts-grid admin-section-view section-fleet">
-            <div class="panel chart" data-chart="establishments"></div>
-            <div class="panel chart" data-chart="teams"></div>
-            <div class="panel chart" data-chart="os"></div>
-            <div class="panel chart" data-chart="stale"></div>
-            <div class="panel chart" data-chart="age"></div>
-            <div class="panel chart" data-chart="models"></div>
-            <div class="panel chart" data-chart="ram"></div>
-            <div class="panel chart" data-chart="storage"></div>
-            <div class="panel chart" data-chart="fleet-value"></div>
-            <div class="panel chart" data-chart="value-by-site"></div>
-            <div class="panel chart" data-chart="replace-top"></div>
-            <div class="panel chart" data-chart="age-performance"></div>
-            <div class="panel chart" data-chart="manufacturers"></div>
-            <div class="panel chart" data-chart="manufacturer-os"></div>
-            <div class="panel chart" data-chart="manufacturer-age"></div>
-          </section>
         </section>
       </section>
     </main>

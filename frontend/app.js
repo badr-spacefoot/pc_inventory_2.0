@@ -392,6 +392,71 @@ const englishTranslations = {
   "Effacer les filtres": "Clear filters",
   "Réinitialiser les filtres": "Reset filters",
   "Machines": "Computers",
+  "Total machines": "Total computers",
+  "Machines actives": "Active computers",
+  "Machines a remplacer": "Computers to replace",
+  "Machines sans remontee": "Computers not reporting",
+  "Machines Windows 10": "Windows 10 computers",
+  "Valeur du parc": "Fleet value",
+  "Age moyen du parc": "Average fleet age",
+  "Dashboard parc informatique": "IT fleet dashboard",
+  "Indicateurs principaux du parc": "Main fleet indicators",
+  "A traiter en priorite": "Priority actions",
+  "Actions IT triees par score de risque": "IT actions sorted by risk score",
+  "Aucune action prioritaire": "No priority action",
+  "Le parc filtre ne remonte pas de risque majeur.": "The filtered fleet does not show major risk.",
+  "Risque": "Risk",
+  "Raison": "Reason",
+  "Priorite": "Priority",
+  "Repartition du parc": "Fleet distribution",
+  "Sante du parc": "Fleet health",
+  "Valorisation": "Valuation",
+  "Bon etat": "Healthy",
+  "Critique": "Critical",
+  "Score global": "Overall score",
+  "Principales raisons": "Main reasons",
+  "Postes a remplacer en priorite": "Computers to replace first",
+  "Derniere remontee": "Last report",
+  "Derniere remontee +30 jours": "Last report over 30 days",
+  "Stockage faible": "Low storage",
+  "OS obsolete": "Obsolete OS",
+  "Score CPU faible": "Low CPU score",
+  "Materiel vieillissant": "Aging hardware",
+  "Statut remplacement": "Planned replacement status",
+  "CPU inconnu": "Unknown CPU",
+  "OS obsolète": "Obsolete OS",
+  "Moins de 30 Go libres": "Less than 30 GB free",
+  "Estimation basee sur modele, CPU, RAM, GPU et age materiel": "Estimate based on model, CPU, RAM, GPU and hardware age",
+  "Valeur moyenne par machine": "Average value per computer",
+  "Valeur des remplacements": "Replacement candidates value",
+  "Signal recent": "Recent signal",
+  "Signal a surveiller": "Monitor signal",
+  "Signal ancien": "Old signal",
+  "Age materiel": "Hardware age",
+  "Score CPU": "CPU score",
+  "Age materiel vs CPU": "Hardware age vs CPU",
+  "Recent / correct": "Recent / healthy",
+  "Vieillissant": "Aging",
+  "A remplacer": "Replace",
+  "Points par machine avec couleur de criticite": "Points per computer colored by criticality",
+  "Machines avec donnees CPU et age disponibles": "Computers with CPU and age data available",
+  "Enrichissement requis pour afficher le nuage age CPU.": "Enrichment is required to show the age CPU chart.",
+  "Dossiers actifs uniquement": "Active records only",
+  "Statut actif dans le parc": "Active status in fleet",
+  "Statut, âge, CPU ou priorité élevée": "Status, age, CPU or high priority",
+  "machines avec données d'âge": "computers with age data",
+  "Aucun risque majeur": "No major risk",
+  "Sites, equipes et OS": "Locations, teams and OS",
+  "Etablissements": "Locations",
+  "Etablissement": "Location",
+  "Equipes": "Teams",
+  "Equipe": "Team",
+  "Par etablissement": "By location",
+  "Par equipe": "By team",
+  "Par systeme": "By system",
+  "Modeles frequents": "Common models",
+  "Recent / a surveiller / ancien": "Recent / monitor / old",
+  "Top etablissements": "Top locations",
   "Utilisateur": "User",
   "Dernière remontée": "Last report",
   "Detail": "Details",
@@ -781,7 +846,6 @@ function applyLanguage(language, persist = true) {
   renderDevices();
   renderMetrics();
   renderOemMetrics();
-  renderCharts();
   renderValuation();
   renderOrganization();
   renderAccessTokens();
@@ -2558,7 +2622,6 @@ function applyFilters() {
   renderDevices();
   renderMetrics();
   renderOemMetrics();
-  renderCharts();
   renderValuation();
 }
 
@@ -2582,6 +2645,9 @@ function clearFleetFilters() {
 }
 
 function renderMetrics() {
+  renderFleetDashboard();
+  return;
+
   const total = state.filtered.length;
   const stale = state.filtered.filter((d) => daysSince(d.last_seen_at) > CONFIG.staleDays).length;
   const lowStorage = state.filtered.filter((d) => Number(d.storage_free_gb || 0) < 30).length;
@@ -2605,6 +2671,9 @@ function renderMetrics() {
 }
 
 function renderOemMetrics() {
+  const target = $("#oem-metrics");
+  if (!target) return;
+
   const counts = countBy(state.filtered, (device) => normalizeManufacturer(device.manufacturer, device.model).manufacturerName);
   const primary = ["Dell", "HP", "Lenovo", "Apple"];
   const other = Object.entries(counts)
@@ -2620,7 +2689,513 @@ function deviceAge(device) {
   return releaseYear ? Math.max(0, new Date().getFullYear() - releaseYear) : null;
 }
 
+function fleetLocale() {
+  return state.language === "en" ? "en-US" : "fr-FR";
+}
+
+function formatFleetNumber(value, maximumFractionDigits = 0) {
+  const number = Number(value || 0);
+  return new Intl.NumberFormat(fleetLocale(), { maximumFractionDigits }).format(number);
+}
+
+function formatFleetPercent(value) {
+  return `${formatFleetNumber(value, 0)}%`;
+}
+
+function fallbackText(value, fallback = "Non renseigné") {
+  const text = String(value ?? "").trim();
+  return text || translate(fallback);
+}
+
+function isActionableDevice(device) {
+  return !["retired", "stock", "lost"].includes(device.status);
+}
+
+function deviceCpuScore(device) {
+  return Number(device.cpu_benchmark_score || device.cpu_score || 0);
+}
+
+function isLowStorageDevice(device) {
+  const free = Number(device.storage_free_gb || 0);
+  return free > 0 && free < 30;
+}
+
+function isStaleDevice(device) {
+  return isActionableDevice(device) && daysSince(device.last_seen_at) > CONFIG.staleDays;
+}
+
+function isWindows10Device(device) {
+  return normalizedDeviceOsFamily(device) === "Windows 10";
+}
+
+function isReplacementSignal(device) {
+  const priority = Number(device.replacement_priority || device.obsolescence_index || 0);
+  return isActionableDevice(device) && (device.status === "replace" || ageSignalScore(device) >= 75 || priority >= 70);
+}
+
+function activeFleetDevices(items = state.filtered) {
+  return items.filter(isActionableDevice);
+}
+
+function computeFleetKpis(items = state.filtered) {
+  const activeItems = activeFleetDevices(items);
+  const ages = activeItems.map(deviceAge).filter((age) => age !== null);
+  const fleetValue = activeItems.reduce((sum, device) => sum + estimatedValue(device), 0);
+  const averageAge = ages.length ? ages.reduce((sum, age) => sum + age, 0) / ages.length : 0;
+  const stale = activeItems.filter(isStaleDevice).length;
+  const lowStorage = activeItems.filter(isLowStorageDevice).length;
+  const replace = activeItems.filter(isReplacementSignal).length;
+  const windows10 = activeItems.filter(isWindows10Device).length;
+  return [
+    {
+      id: "total",
+      label: "Total machines",
+      value: formatFleetNumber(items.length),
+      helper: `${formatFleetNumber(activeItems.length)} ${translate("Dossiers actifs uniquement")}`,
+      level: "info",
+    },
+    {
+      id: "active",
+      label: "Machines actives",
+      value: formatFleetNumber(activeItems.filter((device) => device.status === "active" || !device.status).length),
+      helper: translate("Statut actif dans le parc"),
+      level: "ok",
+    },
+    {
+      id: "replace",
+      label: "Machines a remplacer",
+      value: formatFleetNumber(replace),
+      helper: translate("Statut, âge, CPU ou priorité élevée"),
+      level: replace ? "critical" : "ok",
+    },
+    {
+      id: "stale",
+      label: "Machines sans remontee",
+      value: formatFleetNumber(stale),
+      helper: `+${CONFIG.staleDays} ${state.language === "en" ? "days without report" : "jours sans remontée"}`,
+      level: stale ? "warning" : "ok",
+    },
+    {
+      id: "storage",
+      label: "Stockage faible",
+      value: formatFleetNumber(lowStorage),
+      helper: translate("Moins de 30 Go libres"),
+      level: lowStorage ? "warning" : "ok",
+    },
+    {
+      id: "windows10",
+      label: "Machines Windows 10",
+      value: formatFleetNumber(windows10),
+      helper: translate("OS obsolete"),
+      level: windows10 ? "warning" : "ok",
+    },
+    {
+      id: "value",
+      label: "Valeur du parc",
+      value: money(fleetValue),
+      helper: translate("Estimation basee sur modele, CPU, RAM, GPU et age materiel"),
+      level: "info",
+    },
+    {
+      id: "age",
+      label: "Age moyen du parc",
+      value: ages.length ? `${formatFleetNumber(averageAge, 1)} ${state.language === "en" ? "yrs" : "ans"}` : "-",
+      helper: ages.length ? `${formatFleetNumber(ages.length)} ${translate("machines avec données d'âge")}` : translate("Non renseigné"),
+      level: averageAge >= 5 ? "warning" : "ok",
+    },
+  ];
+}
+
+function riskScoreForDevice(device) {
+  let score = 0;
+  if (device.status === "replace") score += 40;
+  if (isStaleDevice(device)) score += Math.min(30, Math.round(daysSince(device.last_seen_at) / 2));
+  if (isLowStorageDevice(device)) score += 18;
+  if (isWindows10Device(device)) score += 14;
+  const cpuScore = deviceCpuScore(device);
+  if (cpuScore > 0 && cpuScore < 7000) score += 24;
+  else if (cpuScore > 0 && cpuScore < 10000) score += 10;
+  const age = deviceAge(device);
+  if (age !== null && age >= 6) score += 20;
+  else if (age !== null && age >= 4) score += 10;
+  score = Math.max(score, Math.round(Number(device.replacement_priority || device.obsolescence_index || 0)));
+  return Math.min(100, score);
+}
+
+function riskReasonsForDevice(device) {
+  const reasons = [];
+  if (device.status === "replace") reasons.push(translate("Statut remplacement"));
+  if (isStaleDevice(device)) reasons.push(`${daysSince(device.last_seen_at)} ${state.language === "en" ? "days without report" : "jours sans remontée"}`);
+  if (isLowStorageDevice(device)) reasons.push(translate("Stockage faible"));
+  if (isWindows10Device(device)) reasons.push(translate("OS obsolete"));
+  const cpuScore = deviceCpuScore(device);
+  if (cpuScore > 0 && cpuScore < 7000) reasons.push(translate("Score CPU faible"));
+  const age = deviceAge(device);
+  if (age !== null && age >= 5) reasons.push(translate("Materiel vieillissant"));
+  return reasons;
+}
+
+function computeReplacementCandidates(items = state.filtered, limit = 8) {
+  return activeFleetDevices(items)
+    .map((device) => ({
+      device,
+      score: riskScoreForDevice(device),
+      reasons: riskReasonsForDevice(device),
+    }))
+    .filter((item) => item.score >= 35 || item.reasons.length)
+    .sort((left, right) => right.score - left.score || daysSince(right.device.last_seen_at) - daysSince(left.device.last_seen_at))
+    .slice(0, limit);
+}
+
+function countStats(items, getter, limit = 6) {
+  const total = Math.max(1, items.length);
+  return Object.entries(countBy(items, (item) => fallbackText(getter(item))))
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([label, value]) => ({ label, value, percent: (value / total) * 100 }));
+}
+
+function averageStats(items, groupGetter, valueGetter, limit = 6) {
+  const groups = {};
+  items.forEach((item) => {
+    const value = Number(valueGetter(item) || 0);
+    if (!value) return;
+    const group = fallbackText(groupGetter(item));
+    groups[group] = groups[group] || { total: 0, count: 0 };
+    groups[group].total += value;
+    groups[group].count += 1;
+  });
+  return Object.entries(groups)
+    .map(([label, value]) => ({ label, value: Math.round((value.total / value.count) * 10) / 10, percent: 0 }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, limit);
+}
+
+function sumStats(items, groupGetter, valueGetter, limit = 6) {
+  const total = Math.max(1, items.reduce((sum, item) => sum + Number(valueGetter(item) || 0), 0));
+  const values = sumBy(items, (item) => fallbackText(groupGetter(item)), valueGetter);
+  return Object.entries(values)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([label, value]) => ({ label, value, percent: (value / total) * 100 }));
+}
+
+function computeLocationStats(items = state.filtered) {
+  return countStats(items, (device) => device.establishment_name);
+}
+
+function computeTeamStats(items = state.filtered) {
+  return countStats(activeFleetDevices(items), activeTeamName);
+}
+
+function computeOsStats(items = state.filtered) {
+  return countStats(items, normalizedDeviceOsFamily);
+}
+
+function computeValuationStats(items = state.filtered) {
+  const activeItems = activeFleetDevices(items);
+  const total = activeItems.reduce((sum, device) => sum + estimatedValue(device), 0);
+  const replaceItems = activeItems.filter(isReplacementSignal);
+  const replaceValue = replaceItems.reduce((sum, device) => sum + estimatedValue(device), 0);
+  return {
+    total,
+    average: activeItems.length ? total / activeItems.length : 0,
+    replaceValue,
+    byLocation: sumStats(activeItems, (device) => device.establishment_name, estimatedValue, 5),
+  };
+}
+
+function computeFleetHealth(items = state.filtered) {
+  const activeItems = activeFleetDevices(items);
+  const total = Math.max(1, activeItems.length);
+  const stale = activeItems.filter(isStaleDevice).length;
+  const lowStorage = activeItems.filter(isLowStorageDevice).length;
+  const windows10 = activeItems.filter(isWindows10Device).length;
+  const lowCpu = activeItems.filter((device) => {
+    const score = deviceCpuScore(device);
+    return score > 0 && score < 7000;
+  }).length;
+  const replace = activeItems.filter(isReplacementSignal).length;
+  const ageBuckets = countBy(activeItems, ageBucket);
+  const penalty =
+    (stale / total) * 22 +
+    (lowStorage / total) * 16 +
+    (windows10 / total) * 16 +
+    (lowCpu / total) * 20 +
+    (replace / total) * 26;
+  const score = Math.max(0, Math.round(100 - penalty));
+  const reasons = [
+    stale ? `${stale} ${translate("Derniere remontee +30 jours")}` : "",
+    lowStorage ? `${lowStorage} ${translate("Stockage faible")}` : "",
+    windows10 ? `${windows10} ${translate("Machines Windows 10")}` : "",
+    lowCpu ? `${lowCpu} ${translate("Score CPU faible")}` : "",
+    replace ? `${replace} ${translate("Postes a remplacer en priorite")}` : "",
+  ].filter(Boolean);
+  return {
+    score,
+    status: score >= 78 ? "Bon etat" : score >= 55 ? "A surveiller" : "Critique",
+    level: score >= 78 ? "ok" : score >= 55 ? "warning" : "critical",
+    reasons,
+    stale,
+    lowStorage,
+    windows10,
+    lowCpu,
+    replace,
+    signal: {
+      recent: ageBuckets.recent || 0,
+      aging: ageBuckets.aging || 0,
+      old: ageBuckets.old || 0,
+    },
+  };
+}
+
+function renderFleetKpiCards(kpis) {
+  const target = $("#fleet-kpis");
+  if (!target) return;
+  target.innerHTML = kpis.map((kpi) => `
+    <article class="fleet-kpi-card fleet-level-${kpi.level}" title="${escapeHtml(kpi.helper)}">
+      <span class="fleet-kpi-state">${translate(kpi.level === "ok" ? "Bon" : kpi.level === "critical" ? "Critique" : "A surveiller")}</span>
+      <span class="fleet-kpi-label">${translate(kpi.label)}</span>
+      <strong>${escapeHtml(kpi.value)}</strong>
+      <small>${escapeHtml(kpi.helper)}</small>
+    </article>
+  `).join("");
+}
+
+function renderFleetStatList(title, subtitle, rows, valueFormatter = (value) => formatFleetNumber(value)) {
+  const max = Math.max(1, ...rows.map((row) => Number(row.value || 0)));
+  return `
+    <div class="fleet-card-head">
+      <div>
+        <p class="eyebrow">${translate(title)}</p>
+        <h3>${translate(subtitle)}</h3>
+      </div>
+    </div>
+    <div class="fleet-stat-list">
+      ${rows.map((row) => `
+        <div class="fleet-stat-row" title="${escapeHtml(row.label)}">
+          <div class="fleet-stat-label"><span>${escapeHtml(row.label)}</span><strong>${escapeHtml(valueFormatter(row.value))}</strong></div>
+          <div class="fleet-stat-track" aria-hidden="true"><span style="width:${Math.max(4, (Number(row.value || 0) / max) * 100)}%"></span></div>
+          ${row.percent ? `<small>${formatFleetPercent(row.percent)}</small>` : ""}
+        </div>
+      `).join("") || `<p class="helper">${translate("Aucune donnee.")}</p>`}
+    </div>
+  `;
+}
+
+function renderFleetPriority(items) {
+  const target = $("#fleet-priority");
+  if (!target) return;
+  target.innerHTML = `
+    <div class="fleet-card-head">
+      <div>
+        <p class="eyebrow">${translate("A traiter en priorite")}</p>
+        <h3>${translate("Postes a remplacer en priorite")}</h3>
+      </div>
+      <span class="fleet-card-note">${translate("Actions IT triees par score de risque")}</span>
+    </div>
+    ${items.length ? `
+      <div class="fleet-priority-table-wrap">
+        <table class="fleet-priority-table">
+          <thead>
+            <tr>
+              <th>Hostname</th>
+              <th>${translate("Utilisateur")}</th>
+              <th>${translate("Equipe")}</th>
+              <th>${translate("Etablissement")}</th>
+              <th>${translate("Modèle")}</th>
+              <th>OS</th>
+              <th>${translate("Derniere remontee")}</th>
+              <th>${translate("Raison")}</th>
+              <th>${translate("Priorite")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${items.map(({ device, score, reasons }) => {
+              const user = `${device.first_name || ""} ${device.last_name || ""}`.trim() || translate("Aucun utilisateur actuel");
+              const reason = reasons.join(" / ") || translate("A surveiller");
+              return `
+                <tr data-id="${escapeHtml(device.id)}">
+                  <td><strong>${escapeHtml(device.hostname || "-")}</strong><small>${escapeHtml(device.serial_number || device.service_tag || "")}</small></td>
+                  <td><strong>${escapeHtml(user)}</strong><small>${escapeHtml(device.email || "")}</small></td>
+                  <td>${renderTeamBadge(activeTeamName(device), device.team_id, device.team_color)}</td>
+                  <td>${renderLocationBadge(device)}</td>
+                  <td title="${escapeHtml(fullDeviceModel(device))}">${escapeHtml(shortDeviceModel(device))}</td>
+                  <td>${renderOsBadge(device)}</td>
+                  <td>${formatDate(device.last_seen_at)}</td>
+                  <td>${escapeHtml(reason)}</td>
+                  <td><span class="risk-pill ${score >= 75 ? "risk-critical" : score >= 50 ? "risk-warning" : "risk-info"}">${score}</span></td>
+                </tr>
+              `;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+    ` : `
+      <div class="fleet-empty-state">
+        <strong>${translate("Aucune action prioritaire")}</strong>
+        <span>${translate("Le parc filtre ne remonte pas de risque majeur.")}</span>
+      </div>
+    `}
+  `;
+  $$("#fleet-priority tr[data-id]").forEach((row) => {
+    row.addEventListener("click", () => selectDevice(row.dataset.id));
+  });
+}
+
+function renderFleetDistribution(items) {
+  const target = $("#fleet-distribution");
+  if (!target) return;
+  const models = countStats(items, fullDeviceModel, 5);
+  target.innerHTML = `
+    <div class="fleet-card-head">
+      <div>
+        <p class="eyebrow">${translate("Repartition du parc")}</p>
+        <h3>${translate("Sites, equipes et OS")}</h3>
+      </div>
+    </div>
+    <div class="fleet-mini-grid">
+      <section>${renderFleetStatList("Etablissements", "Par etablissement", computeLocationStats(items), formatFleetNumber)}</section>
+      <section>${renderFleetStatList("Equipes", "Par equipe", computeTeamStats(items), formatFleetNumber)}</section>
+      <section>${renderFleetStatList("OS", "Par systeme", computeOsStats(items), formatFleetNumber)}</section>
+      <section>${renderFleetStatList("Modeles presents", "Modeles frequents", models, formatFleetNumber)}</section>
+    </div>
+  `;
+}
+
+function renderFleetHealth(health, items) {
+  const target = $("#fleet-health");
+  if (!target) return;
+  const activeItems = activeFleetDevices(items);
+  const ramRows = averageStats(activeItems, activeTeamName, (device) => device.ram_total_gb, 5);
+  const signalRows = [
+    { label: translate("Signal recent"), value: health.signal.recent, percent: activeItems.length ? (health.signal.recent / activeItems.length) * 100 : 0 },
+    { label: translate("Signal a surveiller"), value: health.signal.aging, percent: activeItems.length ? (health.signal.aging / activeItems.length) * 100 : 0 },
+    { label: translate("Signal ancien"), value: health.signal.old, percent: activeItems.length ? (health.signal.old / activeItems.length) * 100 : 0 },
+  ];
+  target.innerHTML = `
+    <div class="fleet-card-head">
+      <div>
+        <p class="eyebrow">${translate("Sante du parc")}</p>
+        <h3>${translate(health.status)}</h3>
+      </div>
+      <div class="health-score fleet-level-${health.level}" aria-label="${translate("Score global")}: ${health.score}/100">
+        <strong>${health.score}</strong>
+        <span>/100</span>
+      </div>
+    </div>
+    <div class="fleet-health-layout">
+      <div>
+        <p class="fleet-section-label">${translate("Principales raisons")}</p>
+        <ul class="health-reasons">
+          ${(health.reasons.length ? health.reasons : [translate("Aucun risque majeur")]).map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}
+        </ul>
+      </div>
+      <div>${renderFleetStatList("Signal du parc", "Recent / a surveiller / ancien", signalRows, formatFleetNumber)}</div>
+      <div>${renderFleetStatList("RAM moyenne par équipe", "Par equipe", ramRows, (value) => `${formatFleetNumber(value, 1)} Go`)}</div>
+    </div>
+  `;
+}
+
+function renderFleetValuation(stats) {
+  const target = $("#fleet-valuation");
+  if (!target) return;
+  target.innerHTML = `
+    <div class="fleet-card-head">
+      <div>
+        <p class="eyebrow">${translate("Valorisation")}</p>
+        <h3>${translate("Valeur actuelle estimée")}</h3>
+      </div>
+    </div>
+    <div class="fleet-value-grid">
+      <article><span>${translate("Valeur du parc")}</span><strong>${money(stats.total)}</strong></article>
+      <article><span>${translate("Valeur moyenne par machine")}</span><strong>${money(stats.average)}</strong></article>
+      <article><span>${translate("Valeur des remplacements")}</span><strong>${money(stats.replaceValue)}</strong></article>
+    </div>
+    ${renderFleetStatList("Valeur par établissement", "Top etablissements", stats.byLocation, money)}
+  `;
+}
+
+function renderFleetAgeCpu(items) {
+  const target = $("#fleet-age-cpu");
+  if (!target) return;
+  const points = activeFleetDevices(items)
+    .map((device) => ({ device, age: deviceAge(device), cpu: deviceCpuScore(device), score: riskScoreForDevice(device) }))
+    .filter((point) => point.age !== null && point.cpu > 0)
+    .slice(0, 160);
+  if (!points.length) {
+    target.innerHTML = `
+      <div class="fleet-card-head">
+        <div><p class="eyebrow">${translate("Age materiel vs CPU")}</p><h3>${translate("Score CPU")}</h3></div>
+      </div>
+      <p class="helper">${translate("Enrichissement requis pour afficher le nuage age CPU.")}</p>
+    `;
+    return;
+  }
+  const width = 720;
+  const height = 340;
+  const pad = { left: 54, right: 22, top: 28, bottom: 48 };
+  const maxAge = Math.max(6, ...points.map((point) => point.age));
+  const maxCpu = Math.max(18000, ...points.map((point) => point.cpu));
+  const plotWidth = width - pad.left - pad.right;
+  const plotHeight = height - pad.top - pad.bottom;
+  const x = (age) => pad.left + (Math.min(age, maxAge) / maxAge) * plotWidth;
+  const y = (cpu) => pad.top + plotHeight - (Math.min(cpu, maxCpu) / maxCpu) * plotHeight;
+  const axisAges = [0, Math.round(maxAge / 2), maxAge];
+  const axisScores = [0, Math.round(maxCpu / 2), maxCpu];
+  target.innerHTML = `
+    <div class="fleet-card-head">
+      <div>
+        <p class="eyebrow">${translate("Age materiel vs CPU")}</p>
+        <h3>${translate("Machines avec donnees CPU et age disponibles")}</h3>
+      </div>
+      <span class="fleet-card-note">${translate("Points par machine avec couleur de criticite")}</span>
+    </div>
+    <div class="age-cpu-chart" role="img" aria-label="${translate("Age materiel vs CPU")}">
+      <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+        <rect class="zone zone-good" x="${pad.left}" y="${pad.top}" width="${plotWidth * 0.45}" height="${plotHeight * 0.46}"></rect>
+        <rect class="zone zone-watch" x="${pad.left + plotWidth * 0.45}" y="${pad.top}" width="${plotWidth * 0.3}" height="${plotHeight}"></rect>
+        <rect class="zone zone-replace" x="${pad.left + plotWidth * 0.75}" y="${pad.top}" width="${plotWidth * 0.25}" height="${plotHeight}"></rect>
+        ${axisAges.map((age) => `<line class="grid-line" x1="${x(age)}" x2="${x(age)}" y1="${pad.top}" y2="${pad.top + plotHeight}"></line><text class="axis-label" x="${x(age)}" y="${height - 16}">${age}a</text>`).join("")}
+        ${axisScores.map((score) => `<line class="grid-line" x1="${pad.left}" x2="${pad.left + plotWidth}" y1="${y(score)}" y2="${y(score)}"></line><text class="axis-label axis-y" x="10" y="${y(score) + 4}">${formatFleetNumber(score)}</text>`).join("")}
+        <line class="axis-line" x1="${pad.left}" x2="${pad.left + plotWidth}" y1="${pad.top + plotHeight}" y2="${pad.top + plotHeight}"></line>
+        <line class="axis-line" x1="${pad.left}" x2="${pad.left}" y1="${pad.top}" y2="${pad.top + plotHeight}"></line>
+        <text class="zone-label" x="${pad.left + 12}" y="${pad.top + 20}">${translate("Recent / correct")}</text>
+        <text class="zone-label" x="${pad.left + plotWidth * 0.48}" y="${pad.top + 20}">${translate("Vieillissant")}</text>
+        <text class="zone-label" x="${pad.left + plotWidth * 0.78}" y="${pad.top + 20}">${translate("A remplacer")}</text>
+        ${points.map((point) => {
+          const className = point.score >= 75 ? "replace" : point.score >= 50 ? "watch" : "ok";
+          const title = `${point.device.hostname || point.device.model || "Machine"} - ${point.age} ${state.language === "en" ? "yrs" : "ans"} - CPU ${point.cpu}`;
+          return `<circle class="age-point ${className}" cx="${x(point.age)}" cy="${y(point.cpu)}" r="5"><title>${escapeHtml(title)}</title></circle>`;
+        }).join("")}
+      </svg>
+      <div class="age-cpu-legend">
+        <span><i class="legend-ok"></i>${translate("Recent / correct")}</span>
+        <span><i class="legend-watch"></i>${translate("A surveiller")}</span>
+        <span><i class="legend-replace"></i>${translate("A remplacer")}</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderFleetDashboard() {
+  if (!$("#fleet-dashboard")) return;
+  const items = state.filtered;
+  const kpis = computeFleetKpis(items);
+  const health = computeFleetHealth(items);
+  const candidates = computeReplacementCandidates(items);
+  const valuation = computeValuationStats(items);
+  renderFleetKpiCards(kpis);
+  renderFleetPriority(candidates);
+  renderFleetDistribution(items);
+  renderFleetHealth(health, items);
+  renderFleetValuation(valuation);
+  renderFleetAgeCpu(items);
+}
+
 function renderValuation() {
+  const metricsTarget = $("#valuation-metrics");
+  if (!metricsTarget) return;
   const devices = state.filtered;
   const launchValue = devices.reduce((sum, device) => sum + Number(device.estimated_launch_price || 0), 0);
   const currentValue = devices.reduce((sum, device) => sum + estimatedValue(device), 0);
@@ -2633,7 +3208,7 @@ function renderValuation() {
   const marketObserved = devices.filter((device) => Number(device.market_observation_count || 0) > 0).length;
   const highConfidence = devices.filter((device) => ["A", "B"].includes(String(device.valuation_confidence_label || ""))).length;
 
-  $("#valuation-metrics").innerHTML = [
+  metricsTarget.innerHTML = [
     ["Valeur de lancement totale", money(launchValue)],
     ["Valeur actuelle totale", money(currentValue)],
     ["Depreciation moyenne", `${depreciation}%`],
@@ -3595,11 +4170,13 @@ function averageBy(items, groupGetter, valueGetter) {
 }
 
 function renderBarChart(selector, title, data, suffix = "") {
+  const target = document.querySelector(selector);
+  if (!target) return;
   const entries = Object.entries(data)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 8);
   const max = Math.max(1, ...entries.map(([, value]) => value));
-  document.querySelector(selector).innerHTML = `
+  target.innerHTML = `
     <h3>${title}</h3>
     ${
       entries
@@ -3682,6 +4259,8 @@ function topReplaceCandidates(items) {
 }
 
 function renderScatter(selector, title, items) {
+  const target = document.querySelector(selector);
+  if (!target) return;
   const points = items
     .filter((item) => item.model_release_year && item.cpu_score)
     .slice(0, 80)
@@ -3691,7 +4270,7 @@ function renderScatter(selector, title, items) {
       return `<span class="point ${item.recommendation || ""}" title="${item.hostname || item.model}: ${age} ans / CPU ${item.cpu_score}" style="left:${Math.min(age * 12, 96)}%;bottom:${Math.min(cpu, 96)}%"></span>`;
     })
     .join("");
-  document.querySelector(selector).innerHTML = `
+  target.innerHTML = `
     <h3>${title}</h3>
     <div class="scatter">${points || "<p class='helper'>Enrichissement requis.</p>"}</div>
   `;
