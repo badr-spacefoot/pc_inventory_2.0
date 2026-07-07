@@ -3642,7 +3642,7 @@ function cpuBenchmarkRowFromValues(values: Json, source: string, now: string, fa
   };
 }
 
-function parseCpuBenchmarkCsv(csv: string, source: string, now: string, sourceUrl = "") {
+function parseCpuBenchmarkCsv(csv: string, source: string, now: string, sourceUrl = "", wantedNames?: Set<string>) {
   const lines = csv.replace(/^\uFEFF/, "").split(/\r?\n/).filter((line) => line.trim());
   if (lines.length < 2) return [];
   const headers = parseCsvLine(lines[0]).map(benchmarkHeaderKey);
@@ -3651,12 +3651,13 @@ function parseCpuBenchmarkCsv(csv: string, source: string, now: string, sourceUr
   for (let index = 1; index < lines.length; index += 1) {
     const values = parseCsvLine(lines[index]);
     const row = cpuBenchmarkRowFromValues(Object.fromEntries(headers.map((header, column) => [header, values[column] ?? ""])), source, now, sourceUrl);
+    if (row && wantedNames && !wantedNames.has(row.normalized_name)) continue;
     if (row) rows.push(row);
   }
   return rows;
 }
 
-function parsePassMarkCpuHtml(html: string, source: string, now: string, sourceUrl: string) {
+function parsePassMarkCpuHtml(html: string, source: string, now: string, sourceUrl: string, wantedNames?: Set<string>) {
   const rows: CpuBenchmarkSyncRow[] = [];
   const seen = new Set<string>();
   const cpuDetailHref = String.raw`[^"']*cpu(?:_lookup)?\.php\?cpu=[^"']+`;
@@ -3667,6 +3668,8 @@ function parsePassMarkCpuHtml(html: string, source: string, now: string, sourceU
   for (const pattern of patterns) {
     for (const match of html.matchAll(pattern)) {
       const cpuName = decodeHtmlEntities(match[2] || "");
+      const normalizedName = normalizeCpuName(cpuName);
+      if (wantedNames && !wantedNames.has(normalizedName)) continue;
       const cpuSourceUrl = absoluteCpuBenchmarkUrl(match[1] || "", sourceUrl);
       const row = cpuBenchmarkRowFromValues({ cpu_name: cpuName, cpu_mark_score: match[3], source_url: cpuSourceUrl }, source, now, sourceUrl);
       if (!row || seen.has(row.normalized_name)) continue;
@@ -3677,7 +3680,7 @@ function parsePassMarkCpuHtml(html: string, source: string, now: string, sourceU
   return rows;
 }
 
-async function fetchCpuBenchmarkRowsFromSource(url: string, now: string) {
+async function fetchCpuBenchmarkRowsFromSource(url: string, now: string, wantedNames?: Set<string>) {
   const source = cpuBenchmarkSourceName(url);
   const response = await fetch(url, {
     headers: {
@@ -3687,9 +3690,9 @@ async function fetchCpuBenchmarkRowsFromSource(url: string, now: string) {
   });
   if (!response.ok) throw new Error(`${source} HTTP ${response.status}`);
   const text = await response.text();
-  const htmlRows = /cpu(?:_lookup)?\.php\?cpu=|CPU Mark/i.test(text) ? parsePassMarkCpuHtml(text, source, now, url) : [];
+  const htmlRows = /cpu(?:_lookup)?\.php\?cpu=|CPU Mark/i.test(text) ? parsePassMarkCpuHtml(text, source, now, url, wantedNames) : [];
   if (htmlRows.length > 0) return htmlRows;
-  return parseCpuBenchmarkCsv(text, source, now, url);
+  return parseCpuBenchmarkCsv(text, source, now, url, wantedNames);
 }
 
 function isCpuBenchmarkSyncRequest(request: Request) {
@@ -3791,10 +3794,11 @@ async function handleAdminSyncCpuBenchmarks(request: Request) {
   const sourceRows = new Map<string, CpuBenchmarkSyncRow>();
   const sourceResults: Json[] = [];
   const now = new Date().toISOString();
+  const wantedNames = new Set(candidates.keys());
 
   for (const url of sourceUrls) {
     try {
-      const fetchedRows = await fetchCpuBenchmarkRowsFromSource(url, now);
+      const fetchedRows = await fetchCpuBenchmarkRowsFromSource(url, now, wantedNames);
       let matched = 0;
       for (const row of fetchedRows) {
         if (!candidates.has(row.normalized_name)) continue;
@@ -3808,6 +3812,7 @@ async function handleAdminSyncCpuBenchmarks(request: Request) {
   }
 
   const rows: CpuBenchmarkSyncRow[] = [];
+  const rowsToRecalculate = new Set<string>();
   const resultRows: Json[] = [];
   let skipped = 0;
 
@@ -3832,15 +3837,25 @@ async function handleAdminSyncCpuBenchmarks(request: Request) {
       continue;
     }
 
+    const nextReleaseYear = incoming.release_year ?? safeNumber(existing?.release_year) ?? inferCpuReleaseYear(candidateCpuName);
+    const nextGeneration = incoming.generation || safeString(existing?.generation, 120) || inferCpuGeneration(candidateCpuName) || null;
+    const nextCategory = incoming.category || safeString(existing?.category, 80) || null;
+    const materiallyChanged = !existing ||
+      Number(existing?.cpu_mark_score || 0) !== incoming.cpu_mark_score ||
+      Number(existing?.release_year || 0) !== Number(nextReleaseYear || 0) ||
+      safeString(existing?.generation, 120) !== safeString(nextGeneration, 120) ||
+      safeString(existing?.category, 80) !== safeString(nextCategory, 80);
+
     rows.push({
       ...incoming,
       cpu_name: safeString(incoming.cpu_name || existing?.cpu_name || candidateCpuName, 260),
-      release_year: incoming.release_year ?? safeNumber(existing?.release_year) ?? inferCpuReleaseYear(candidateCpuName),
-      generation: incoming.generation || safeString(existing?.generation, 120) || inferCpuGeneration(candidateCpuName) || null,
-      category: incoming.category || safeString(existing?.category, 80) || null,
+      release_year: nextReleaseYear,
+      generation: nextGeneration,
+      category: nextCategory,
       source_url: incomingSourceUrl || existingSourceUrl || null,
       updated_at: now,
     });
+    if (materiallyChanged) rowsToRecalculate.add(normalizedName);
     resultRows.push({ cpuName: candidateCpuName, score: incoming.cpu_mark_score, source: incoming.source, sourceUrl: incoming.source_url, status: existing ? "updated" : "imported" });
   }
 
@@ -3850,11 +3865,10 @@ async function handleAdminSyncCpuBenchmarks(request: Request) {
   }
 
   let recalculated = 0;
-  if (recalculate && rows.length > 0) {
-    const updatedNames = new Set(rows.map((row) => row.normalized_name));
+  if (recalculate && rowsToRecalculate.size > 0) {
     const devicesToRecalculate = (devices ?? []).filter((device) => {
       const cpuName = safeString(device.cpu || device.enrichment_cpu_name, 260);
-      return updatedNames.has(normalizeCpuName(cpuName));
+      return rowsToRecalculate.has(normalizeCpuName(cpuName));
     }).slice(0, recalculateLimit);
     const recalculation = await enrichDeviceRows(devicesToRecalculate, { force: true, useExternal: false });
     recalculated = recalculation.enriched;
