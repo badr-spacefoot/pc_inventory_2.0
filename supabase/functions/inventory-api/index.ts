@@ -3849,10 +3849,14 @@ async function handleAdminSyncCpuBenchmarks(request: Request) {
   let lookupFetched = 0;
   let lookupMatched = 0;
   let lookupFailed = 0;
-  const missingAfterSources = [...candidates.entries()]
-    .filter(([normalizedName]) => !sourceRows.has(normalizedName))
-    .slice(0, 8);
-  for (const [normalizedName, candidate] of missingAfterSources) {
+  const lookupLimit = Math.max(1, Math.min(Number(body.lookupLimit || 12), 20));
+  const lookupCandidates = [...candidates.entries()]
+    .filter(([normalizedName]) => {
+      const current = sourceRows.get(normalizedName);
+      return !current || current.source !== "passmark-cpu-mark";
+    })
+    .slice(0, lookupLimit);
+  for (const [normalizedName, candidate] of lookupCandidates) {
     try {
       const found = await fetchPassMarkLookupRow(safeString(candidate.cpuName, 260), normalizedName, now);
       if (!found) continue;
@@ -3863,11 +3867,11 @@ async function handleAdminSyncCpuBenchmarks(request: Request) {
       lookupFailed += 1;
     }
   }
-  if (missingAfterSources.length > 0) {
+  if (lookupCandidates.length > 0) {
     sourceResults.push({
       url: "https://www.cpubenchmark.net/cpu_lookup.php",
-      status: lookupFailed === missingAfterSources.length ? "failed" : "ok",
-      lookups: missingAfterSources.length,
+      status: lookupFailed === lookupCandidates.length ? "failed" : "ok",
+      lookups: lookupCandidates.length,
       fetched: lookupFetched,
       matched: lookupMatched,
       failed: lookupFailed,
@@ -3890,11 +3894,14 @@ async function handleAdminSyncCpuBenchmarks(request: Request) {
     }
 
     const existingSource = safeString(existing?.source, 120);
+    const incomingSource = safeString(incoming.source, 120);
     const hasTrustedExisting = ["admin-csv-import", "passmark-cpu-mark"].includes(existingSource) || existingSource.startsWith("cpu-benchmark-source:");
     const sameScore = Number(existing?.cpu_mark_score || 0) === incoming.cpu_mark_score;
     const existingSourceUrl = safeExternalUrl(existing?.source_url);
     const incomingSourceUrl = safeExternalUrl(incoming.source_url);
-    if (!force && hasTrustedExisting && sameScore && existing?.release_year && (!incomingSourceUrl || existingSourceUrl)) {
+    const upgradesSource = incomingSource === "passmark-cpu-mark" && existingSource !== "passmark-cpu-mark";
+    const changesSourceUrl = Boolean(incomingSourceUrl && incomingSourceUrl !== existingSourceUrl);
+    if (!force && hasTrustedExisting && sameScore && existing?.release_year && (!incomingSourceUrl || existingSourceUrl) && !upgradesSource && !changesSourceUrl) {
       skipped += 1;
       resultRows.push({ cpuName: candidateCpuName, score: incoming.cpu_mark_score, source: existing.source, sourceUrl: existing.source_url, status: "kept" });
       continue;
@@ -3907,7 +3914,9 @@ async function handleAdminSyncCpuBenchmarks(request: Request) {
       Number(existing?.cpu_mark_score || 0) !== incoming.cpu_mark_score ||
       Number(existing?.release_year || 0) !== Number(nextReleaseYear || 0) ||
       safeString(existing?.generation, 120) !== safeString(nextGeneration, 120) ||
-      safeString(existing?.category, 80) !== safeString(nextCategory, 80);
+      safeString(existing?.category, 80) !== safeString(nextCategory, 80) ||
+      upgradesSource ||
+      changesSourceUrl;
 
     rows.push({
       ...incoming,
