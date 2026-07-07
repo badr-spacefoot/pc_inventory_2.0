@@ -4015,7 +4015,7 @@ async function handleAdminRefreshCpuReleaseDates(request: Request) {
 
   const { data: existingRows, error: existingError } = await supabase
     .from("cpu_benchmarks")
-    .select("cpu_name,normalized_name,cpu_mark_score,release_year,generation,category,source")
+    .select("cpu_name,normalized_name,cpu_mark_score,release_year,generation,category,source,source_url")
     .in("normalized_name", [...candidates.keys()]);
   if (existingError) throw existingError;
 
@@ -4029,6 +4029,7 @@ async function handleAdminRefreshCpuReleaseDates(request: Request) {
     const candidateCpuName = safeString(candidate.cpuName, 260);
     const existing = existingByName.get(normalizedName);
     const existingSource = safeString(existing?.source, 120);
+    const existingSourceUrl = safeExternalUrl(existing?.source_url);
     const reference = knownCpuReleaseReference(candidateCpuName);
     const referenceGeneration = reference?.generation || inferCpuGeneration(candidateCpuName);
     const existingGeneration = safeString(existing?.generation, 120);
@@ -4057,7 +4058,8 @@ async function handleAdminRefreshCpuReleaseDates(request: Request) {
       release_year: lookup.releaseYear,
       generation,
       category,
-      source: lookup.source,
+      source: existingSource || lookup.source,
+      source_url: existingSourceUrl || null,
       updated_at: now,
     });
     resultRows.push({
