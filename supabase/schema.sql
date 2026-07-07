@@ -373,11 +373,16 @@ create table if not exists public.market_price_history (
 create table if not exists public.device_invoices (
   id uuid primary key default gen_random_uuid(),
   device_id uuid not null references public.devices(id) on delete cascade,
+  invoice_type text not null default 'purchase' check (invoice_type in ('purchase', 'warranty_extension', 'repair', 'accessory', 'other')),
   invoice_number text,
   supplier text,
   invoice_date date,
   purchase_price numeric check (purchase_price is null or purchase_price >= 0),
   currency text not null default 'EUR',
+  warranty_start_date date,
+  warranty_end_date date,
+  warranty_provider text,
+  warranty_duration_months integer check (warranty_duration_months is null or warranty_duration_months >= 0),
   file_name text,
   file_url text,
   file_path text,
@@ -388,6 +393,11 @@ create table if not exists public.device_invoices (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.device_invoices
+  drop constraint if exists device_invoices_warranty_dates_check,
+  add constraint device_invoices_warranty_dates_check
+    check (warranty_start_date is null or warranty_end_date is null or warranty_end_date >= warranty_start_date);
 
 create index if not exists idx_devices_last_seen_at on public.devices(last_seen_at desc);
 create index if not exists idx_devices_status on public.devices(status);
@@ -422,6 +432,8 @@ create index if not exists idx_hardware_enrichment_priority on public.hardware_e
 create index if not exists idx_cpu_benchmarks_normalized_name on public.cpu_benchmarks(normalized_name);
 create index if not exists idx_market_price_history_device_collected on public.market_price_history(device_id, collected_at desc);
 create index if not exists idx_device_invoices_device_date on public.device_invoices(device_id, invoice_date desc nulls last, created_at desc);
+create index if not exists idx_device_invoices_device_type_date on public.device_invoices(device_id, invoice_type, invoice_date desc nulls last, created_at desc);
+create index if not exists idx_device_invoices_warranty_end on public.device_invoices(device_id, warranty_end_date desc nulls last) where invoice_type = 'warranty_extension';
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -559,6 +571,7 @@ left join lateral (
   select di.id, di.purchase_price, di.currency, di.invoice_date
   from public.device_invoices di
   where di.device_id = d.id
+    and di.invoice_type = 'purchase'
     and di.purchase_price is not null
   order by di.invoice_date desc nulls last, di.created_at desc
   limit 1

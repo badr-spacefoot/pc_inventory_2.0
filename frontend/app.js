@@ -616,6 +616,19 @@ const englishTranslations = {
   "Factures": "Invoices",
   "Facture": "Invoice",
   "Ajouter une facture": "Add invoice",
+  "Type facture": "Invoice type",
+  "Facture achat": "Purchase invoice",
+  "Extension garantie": "Warranty extension",
+  "Reparation": "Repair",
+  "Accessoire": "Accessory",
+  "Autre facture": "Other invoice",
+  "Garantie": "Warranty",
+  "Garantie fournisseur": "Warranty provider",
+  "Debut garantie": "Warranty start",
+  "Fin garantie": "Warranty end",
+  "Duree garantie mois": "Warranty duration (months)",
+  "Garantie active jusqu'au": "Warranty active until",
+  "Garantie expiree": "Warranty expired",
   "Fournisseur": "Supplier",
   "Numero facture": "Invoice number",
   "Date facture": "Invoice date",
@@ -3713,6 +3726,39 @@ function promptRetirementNote(device) {
   });
 }
 
+const invoiceTypeLabels = {
+  purchase: "Facture achat",
+  warranty_extension: "Extension garantie",
+  repair: "Reparation",
+  accessory: "Accessoire",
+  other: "Autre facture",
+};
+
+function invoiceTypeValue(invoice) {
+  return String(invoice?.invoice_type || "purchase").trim() || "purchase";
+}
+
+function invoiceTypeLabel(invoice) {
+  return invoiceTypeLabels[invoiceTypeValue(invoice)] || invoiceTypeLabels.other;
+}
+
+function warrantyInvoiceMeta(invoice) {
+  if (invoiceTypeValue(invoice) !== "warranty_extension") return [];
+  return [
+    invoice.warranty_provider ? `${translate("Garantie fournisseur")}: ${invoice.warranty_provider}` : "",
+    invoice.warranty_start_date ? `${translate("Debut garantie")}: ${formatDate(invoice.warranty_start_date)}` : "",
+    invoice.warranty_end_date ? `${translate("Fin garantie")}: ${formatDate(invoice.warranty_end_date)}` : "",
+    invoice.warranty_duration_months ? `${translate("Duree garantie mois")}: ${invoice.warranty_duration_months}` : "",
+  ].filter(Boolean);
+}
+
+function latestWarrantyInvoice(invoices = []) {
+  return invoices
+    .filter((invoice) => invoiceTypeValue(invoice) === "warranty_extension")
+    .slice()
+    .sort((a, b) => String(b.warranty_end_date || b.invoice_date || b.created_at || "").localeCompare(String(a.warranty_end_date || a.invoice_date || a.created_at || "")))[0] || null;
+}
+
 function renderInvoiceList(invoices = [], canEditDevice = false) {
   if (!invoices.length) return `<p class="helper">${translate("Aucune facture.")}</p>`;
   return `
@@ -3720,11 +3766,15 @@ function renderInvoiceList(invoices = [], canEditDevice = false) {
       ${invoices.map((invoice) => `
         <article class="invoice-item">
           <div>
-            <strong>${escapeHtml(invoice.supplier || invoice.invoice_number || translate("Factures"))}</strong>
+            <div class="invoice-title">
+              <strong>${escapeHtml(invoice.supplier || invoice.invoice_number || translate("Factures"))}</strong>
+              <span class="invoice-type-badge invoice-type-${escapeHtml(invoiceTypeValue(invoice))}">${escapeHtml(translate(invoiceTypeLabel(invoice)))}</span>
+            </div>
             <small>${[
               invoice.invoice_number ? `${translate("Numero facture")}: ${invoice.invoice_number}` : "",
               invoice.invoice_date ? formatDate(invoice.invoice_date) : "",
               invoice.purchase_price ? moneyWithCurrency(invoice.purchase_price, invoice.currency) : "",
+              ...warrantyInvoiceMeta(invoice),
             ].filter(Boolean).map(escapeHtml).join(" - ")}</small>
             ${invoice.file_name ? `<small>${escapeHtml(invoice.file_name)}</small>` : ""}
             ${invoice.notes ? `<p>${escapeHtml(invoice.notes)}</p>` : ""}
@@ -3740,7 +3790,7 @@ function renderInvoiceList(invoices = [], canEditDevice = false) {
 }
 
 function latestPurchaseInvoice(invoices = []) {
-  return invoices.find((invoice) => Number(invoice.purchase_price || 0) > 0) || null;
+  return invoices.find((invoice) => invoiceTypeValue(invoice) === "purchase" && Number(invoice.purchase_price || 0) > 0) || null;
 }
 
 const maxInvoiceUploadBytes = 10 * 1024 * 1024;
@@ -3764,11 +3814,16 @@ async function invoiceFormPayload(form) {
     throw new Error(translate("Fichier trop volumineux. Maximum 10 Mo."));
   }
   const payload = {
+    invoiceType: String(values.invoiceType || "purchase").trim(),
     supplier: String(values.supplier || "").trim(),
     invoiceNumber: String(values.invoiceNumber || "").trim(),
     invoiceDate: String(values.invoiceDate || "").trim(),
     purchasePrice: String(values.purchasePrice || "").trim(),
     currency: String(values.currency || "EUR").trim().toUpperCase(),
+    warrantyProvider: String(values.warrantyProvider || "").trim(),
+    warrantyStartDate: String(values.warrantyStartDate || "").trim(),
+    warrantyEndDate: String(values.warrantyEndDate || "").trim(),
+    warrantyDurationMonths: String(values.warrantyDurationMonths || "").trim(),
     fileName: String(values.fileName || file?.name || "").trim(),
     fileUrl: String(values.fileUrl || "").trim(),
     notes: String(values.notes || "").trim(),
@@ -3801,6 +3856,13 @@ function renderDetail(device, scans, history = []) {
   const memoryDetails = memorySummary(payload);
   const invoices = Array.isArray(device.invoices) ? device.invoices : [];
   const purchaseInvoice = latestPurchaseInvoice(invoices);
+  const warrantyInvoice = latestWarrantyInvoice(invoices);
+  const warrantyDisplay = warrantyInvoice
+    ? [
+      warrantyInvoice.warranty_provider || "",
+      warrantyInvoice.warranty_end_date ? `${translate("Garantie active jusqu'au")} ${formatDate(warrantyInvoice.warranty_end_date)}` : "",
+    ].filter(Boolean).join(" - ")
+    : "";
   const actualPurchaseRaw = purchaseInvoice?.purchase_price ?? device.actual_purchase_price;
   const actualPurchaseCurrency = purchaseInvoice?.currency ?? device.actual_purchase_currency;
   const actualPurchasePrice = Number(actualPurchaseRaw || 0) > 0 ? moneyWithCurrency(actualPurchaseRaw, actualPurchaseCurrency) : "";
@@ -3890,6 +3952,7 @@ function renderDetail(device, scans, history = []) {
         ...(cpuBenchmarkSourceLink ? [["Source score CPU", cpuBenchmarkSourceLink]] : []),
         ["Génération CPU", device.cpu_generation], ["Annee modèle", device.release_year || device.model_release_year],
         ["Prix achat reel", actualPurchasePrice],
+        ["Garantie", warrantyDisplay],
         ["Prix lancement", launchPriceDisplay],
         ["Valeur actuelle estimée", money(device.resale_value || device.estimated_current_value || device.current_market_price_avg)],
         ["Valeur revente", money(device.resale_value || device.estimated_current_value)],
@@ -3922,11 +3985,22 @@ function renderDetail(device, scans, history = []) {
     <section class="detail-tab-panel" data-detail-panel="invoices">
       ${renderInvoiceList(invoices, canEditDevice)}
       ${canEditDevice ? `<form id="invoice-form" class="form-grid invoice-form">
+        <label>${translate("Type facture")}<select name="invoiceType">
+          <option value="purchase">${translate("Facture achat")}</option>
+          <option value="warranty_extension">${translate("Extension garantie")}</option>
+          <option value="repair">${translate("Reparation")}</option>
+          <option value="accessory">${translate("Accessoire")}</option>
+          <option value="other">${translate("Autre facture")}</option>
+        </select></label>
         <label>${translate("Fournisseur")}<input name="supplier" maxlength="160" placeholder="Apple, Dell, LDLC..." /></label>
         <label>${translate("Numero facture")}<input name="invoiceNumber" maxlength="120" /></label>
         <label>${translate("Date facture")}<input name="invoiceDate" type="date" /></label>
         <label>${translate("Montant facture")}<input name="purchasePrice" type="number" min="0" step="0.01" /></label>
         <label>${translate("Devise")}<input name="currency" maxlength="3" value="EUR" /></label>
+        <label class="invoice-warranty-field">${translate("Garantie fournisseur")}<input name="warrantyProvider" maxlength="160" placeholder="Dell, AppleCare, assureur..." /></label>
+        <label class="invoice-warranty-field">${translate("Debut garantie")}<input name="warrantyStartDate" type="date" /></label>
+        <label class="invoice-warranty-field">${translate("Fin garantie")}<input name="warrantyEndDate" type="date" /></label>
+        <label class="invoice-warranty-field">${translate("Duree garantie mois")}<input name="warrantyDurationMonths" type="number" min="0" step="1" /></label>
         <label>${translate("Nom fichier")}<input name="fileName" maxlength="255" placeholder="facture-macbook.pdf" /></label>
         <label>${translate("Fichier facture")}<input name="invoiceFile" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,image/*,application/pdf" /></label>
         <label class="wide">${translate("Lien facture")}<input name="fileUrl" type="url" maxlength="2000" placeholder="https://..." /></label>
@@ -3953,6 +4027,7 @@ function renderDetail(device, scans, history = []) {
         ["Dernier enrichissement", formatDate(device.last_enriched_at)],
         ["Confiance prix", device.price_confidence_score ? `${device.price_confidence_score}/100` : ""],
         ["Prix achat reel", actualPurchasePrice],
+        ["Garantie", warrantyDisplay],
         ["Valeur actuelle estimée", money(device.resale_value || device.estimated_current_value || device.current_market_price_avg)],
         ["Cout remplacement", money(device.replacement_cost)],
         ["Methode valuation", localizedEnrichmentValue(device.valuation_method)],
@@ -3989,29 +4064,38 @@ function renderDetail(device, scans, history = []) {
     }
   });
 
-  if ($("#invoice-form")) $("#invoice-form").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const button = event.currentTarget.querySelector("button[type='submit']");
-    const originalText = button.textContent;
-    button.disabled = true;
-    try {
-      button.textContent = translate("Lecture du fichier...");
-      const payload = await invoiceFormPayload(event.currentTarget);
-      await api(`/admin/devices/${device.id}/invoices`, {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-      await loadAdminData();
-      await selectDevice(device.id);
-      activateDetailTab("invoices");
-      toast("Facture ajoutee.", "success");
-    } catch (error) {
-      toast(error.message, "error");
-    } finally {
-      button.disabled = false;
-      button.textContent = originalText;
-    }
-  });
+  const invoiceForm = $("#invoice-form");
+  if (invoiceForm) {
+    const invoiceTypeSelect = invoiceForm.elements.invoiceType;
+    const syncInvoiceType = () => {
+      invoiceForm.classList.toggle("is-warranty", invoiceTypeSelect?.value === "warranty_extension");
+    };
+    invoiceTypeSelect?.addEventListener("change", syncInvoiceType);
+    syncInvoiceType();
+    invoiceForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button = event.currentTarget.querySelector("button[type='submit']");
+      const originalText = button.textContent;
+      button.disabled = true;
+      try {
+        button.textContent = translate("Lecture du fichier...");
+        const payload = await invoiceFormPayload(event.currentTarget);
+        await api(`/admin/devices/${device.id}/invoices`, {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        await loadAdminData();
+        await selectDevice(device.id);
+        activateDetailTab("invoices");
+        toast("Facture ajoutee.", "success");
+      } catch (error) {
+        toast(error.message, "error");
+      } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+      }
+    });
+  }
 
   $$(".invoice-delete").forEach((button) => {
     button.addEventListener("click", async () => {

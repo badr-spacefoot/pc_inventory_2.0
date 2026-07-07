@@ -3223,7 +3223,7 @@ async function handleAdminDeviceDetail(request: Request, id: string) {
 
     .from("device_invoices")
 
-    .select("id,invoice_number,supplier,invoice_date,purchase_price,currency,file_name,file_url,file_path,file_mime_type,file_size_bytes,notes,created_by,created_at,updated_at")
+    .select("id,invoice_type,invoice_number,supplier,invoice_date,purchase_price,currency,warranty_start_date,warranty_end_date,warranty_provider,warranty_duration_months,file_name,file_url,file_path,file_mime_type,file_size_bytes,notes,created_by,created_at,updated_at")
 
     .eq("device_id", id)
 
@@ -4348,15 +4348,30 @@ function invoiceDateValue(value: unknown) {
 
 
 
+const allowedInvoiceTypes = new Set(["purchase", "warranty_extension", "repair", "accessory", "other"]);
+
+function invoiceTypeLabel(type: unknown) {
+  const value = safeString(type, 40) || "purchase";
+  if (value === "warranty_extension") return "Extension garantie";
+  if (value === "repair") return "Reparation";
+  if (value === "accessory") return "Accessoire";
+  if (value === "other") return "Autre facture";
+  return "Facture achat";
+}
+
 function invoiceSummary(invoice: Json) {
 
   return [
+
+    invoiceTypeLabel(invoice.invoice_type),
 
     safeString(invoice.supplier),
 
     safeString(invoice.invoice_number) ? `#${safeString(invoice.invoice_number)}` : "",
 
     safeString(invoice.purchase_price) ? `${safeString(invoice.purchase_price)} ${safeString(invoice.currency) || "EUR"}` : "",
+
+    safeString(invoice.warranty_end_date) ? `fin garantie ${safeString(invoice.warranty_end_date)}` : "",
 
     safeString(invoice.invoice_date),
 
@@ -4372,9 +4387,11 @@ async function syncLatestInvoiceValuation(deviceId: string) {
 
     .from("device_invoices")
 
-    .select("id,invoice_date,purchase_price,currency,supplier,invoice_number")
+    .select("id,invoice_type,invoice_date,purchase_price,currency,supplier,invoice_number")
 
     .eq("device_id", deviceId)
+
+    .eq("invoice_type", "purchase")
 
     .not("purchase_price", "is", null)
 
@@ -4614,9 +4631,31 @@ async function handleAdminDeviceInvoice(request: Request, id: string) {
 
   const body = await request.json().catch(() => ({}));
 
+  const invoiceType = safeString(body.invoiceType ?? body.invoice_type, 40) || "purchase";
+
+  if (!allowedInvoiceTypes.has(invoiceType)) return badRequest(request, "Type de facture invalide.");
+
   const invoiceDate = invoiceDateValue(body.invoiceDate ?? body.invoice_date);
 
   if (invoiceDate === "") return badRequest(request, "Date de facture invalide. Format attendu: YYYY-MM-DD.");
+
+  const warrantyStartDate = invoiceDateValue(body.warrantyStartDate ?? body.warranty_start_date);
+
+  if (warrantyStartDate === "") return badRequest(request, "Date de debut de garantie invalide. Format attendu: YYYY-MM-DD.");
+
+  const warrantyEndDate = invoiceDateValue(body.warrantyEndDate ?? body.warranty_end_date);
+
+  if (warrantyEndDate === "") return badRequest(request, "Date de fin de garantie invalide. Format attendu: YYYY-MM-DD.");
+
+  if (warrantyStartDate && warrantyEndDate && warrantyEndDate < warrantyStartDate) {
+    return badRequest(request, "La fin de garantie doit etre posterieure au debut.");
+  }
+
+  const warrantyDurationMonths = safeNumber(body.warrantyDurationMonths ?? body.warranty_duration_months);
+
+  if (warrantyDurationMonths !== null && (!Number.isInteger(warrantyDurationMonths) || warrantyDurationMonths < 0)) {
+    return badRequest(request, "Duree de garantie invalide.");
+  }
 
   const purchasePrice = safeNumber(body.purchasePrice ?? body.purchase_price);
 
@@ -4641,6 +4680,8 @@ async function handleAdminDeviceInvoice(request: Request, id: string) {
 
     device_id: id,
 
+    invoice_type: invoiceType,
+
     invoice_number: safeString(body.invoiceNumber ?? body.invoice_number, 120) || null,
 
     supplier: safeString(body.supplier, 160) || null,
@@ -4650,6 +4691,14 @@ async function handleAdminDeviceInvoice(request: Request, id: string) {
     purchase_price: purchasePrice,
 
     currency,
+
+    warranty_start_date: warrantyStartDate,
+
+    warranty_end_date: warrantyEndDate,
+
+    warranty_provider: safeString(body.warrantyProvider ?? body.warranty_provider, 160) || null,
+
+    warranty_duration_months: warrantyDurationMonths,
 
     file_name: uploadedFile.file_name || safeString(body.fileName ?? body.file_name, 255) || null,
 
@@ -4667,7 +4716,7 @@ async function handleAdminDeviceInvoice(request: Request, id: string) {
 
   };
 
-  if (!values.invoice_number && !values.supplier && !values.invoice_date && purchasePrice === null && !values.file_url && !values.file_path && !values.notes) {
+  if (!values.invoice_number && !values.supplier && !values.invoice_date && purchasePrice === null && !values.warranty_provider && !values.warranty_start_date && !values.warranty_end_date && warrantyDurationMonths === null && !values.file_url && !values.file_path && !values.notes) {
 
     return badRequest(request, "Renseignez au moins une information de facture.");
 
@@ -4701,7 +4750,7 @@ async function handleAdminDeviceInvoice(request: Request, id: string) {
 
   }]);
 
-  await audit("device_invoice_added", "device", id, { invoice_id: data.id, purchase_price: purchasePrice, currency });
+  await audit("device_invoice_added", "device", id, { invoice_id: data.id, invoice_type: invoiceType, purchase_price: purchasePrice, currency });
 
   const signedInvoice = (await signInvoiceRows([data]))[0];
 
