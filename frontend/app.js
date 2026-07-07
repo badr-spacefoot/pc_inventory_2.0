@@ -3110,15 +3110,22 @@ function renderFleetAgeCpu(items) {
     `;
     return;
   }
-  const width = 720;
-  const height = 340;
-  const pad = { left: 54, right: 22, top: 28, bottom: 48 };
+  const width = 960;
+  const height = 420;
+  const pad = { left: 74, right: 34, top: 42, bottom: 66 };
   const maxAge = Math.max(6, ...points.map((point) => point.age));
   const maxCpu = Math.max(18000, ...points.map((point) => point.cpu));
   const plotWidth = width - pad.left - pad.right;
   const plotHeight = height - pad.top - pad.bottom;
+  const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const x = (age) => pad.left + (Math.min(age, maxAge) / maxAge) * plotWidth;
   const y = (cpu) => pad.top + plotHeight - (Math.min(cpu, maxCpu) / maxCpu) * plotHeight;
+  const pointJitter = (device, axis) => {
+    const seed = String(device.id || device.hostname || device.serial_number || device.model || "")
+      .split("")
+      .reduce((sum, char) => sum + char.charCodeAt(0), axis === "x" ? 17 : 43);
+    return ((seed % 100) - 50) / 50;
+  };
   const axisAges = [0, Math.round(maxAge / 2), maxAge];
   const axisScores = [0, Math.round(maxCpu / 2), maxCpu];
   target.innerHTML = `
@@ -3130,21 +3137,27 @@ function renderFleetAgeCpu(items) {
       <span class="fleet-card-note">${translate("Points par machine avec couleur de criticite")}</span>
     </div>
     <div class="age-cpu-chart" role="img" aria-label="${translate("Age materiel vs CPU")}">
-      <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
-        <rect class="zone zone-good" x="${pad.left}" y="${pad.top}" width="${plotWidth * 0.45}" height="${plotHeight * 0.46}"></rect>
+      <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">
+        <rect class="chart-frame" x="${pad.left}" y="${pad.top}" width="${plotWidth}" height="${plotHeight}"></rect>
+        <rect class="zone zone-good" x="${pad.left}" y="${pad.top}" width="${plotWidth * 0.45}" height="${plotHeight}"></rect>
         <rect class="zone zone-watch" x="${pad.left + plotWidth * 0.45}" y="${pad.top}" width="${plotWidth * 0.3}" height="${plotHeight}"></rect>
         <rect class="zone zone-replace" x="${pad.left + plotWidth * 0.75}" y="${pad.top}" width="${plotWidth * 0.25}" height="${plotHeight}"></rect>
-        ${axisAges.map((age) => `<line class="grid-line" x1="${x(age)}" x2="${x(age)}" y1="${pad.top}" y2="${pad.top + plotHeight}"></line><text class="axis-label" x="${x(age)}" y="${height - 16}">${age}a</text>`).join("")}
-        ${axisScores.map((score) => `<line class="grid-line" x1="${pad.left}" x2="${pad.left + plotWidth}" y1="${y(score)}" y2="${y(score)}"></line><text class="axis-label axis-y" x="10" y="${y(score) + 4}">${formatFleetNumber(score)}</text>`).join("")}
+        ${axisAges.map((age) => `<line class="grid-line" x1="${x(age)}" x2="${x(age)}" y1="${pad.top}" y2="${pad.top + plotHeight}"></line><text class="axis-label axis-x" x="${x(age)}" y="${height - 36}">${age}a</text>`).join("")}
+        ${axisScores.map((score) => `<line class="grid-line" x1="${pad.left}" x2="${pad.left + plotWidth}" y1="${y(score)}" y2="${y(score)}"></line><text class="axis-label axis-y" x="${pad.left - 16}" y="${y(score) + 4}">${formatFleetNumber(score)}</text>`).join("")}
+        <line class="threshold-line" x1="${pad.left}" x2="${pad.left + plotWidth}" y1="${y(7000)}" y2="${y(7000)}"></line>
         <line class="axis-line" x1="${pad.left}" x2="${pad.left + plotWidth}" y1="${pad.top + plotHeight}" y2="${pad.top + plotHeight}"></line>
         <line class="axis-line" x1="${pad.left}" x2="${pad.left}" y1="${pad.top}" y2="${pad.top + plotHeight}"></line>
-        <text class="zone-label" x="${pad.left + 12}" y="${pad.top + 20}">${translate("Recent / correct")}</text>
-        <text class="zone-label" x="${pad.left + plotWidth * 0.48}" y="${pad.top + 20}">${translate("Vieillissant")}</text>
-        <text class="zone-label" x="${pad.left + plotWidth * 0.78}" y="${pad.top + 20}">${translate("A remplacer")}</text>
+        <text class="zone-label" x="${pad.left + 18}" y="${pad.top + 26}">${translate("Recent / correct")}</text>
+        <text class="zone-label" x="${pad.left + plotWidth * 0.49}" y="${pad.top + 26}">${translate("Vieillissant")}</text>
+        <text class="zone-label" x="${pad.left + plotWidth * 0.79}" y="${pad.top + 26}">${translate("A remplacer")}</text>
+        <text class="axis-title axis-title-x" x="${pad.left + plotWidth / 2}" y="${height - 10}">${translate("Age materiel")}</text>
+        <text class="axis-title axis-title-y" x="18" y="${pad.top + plotHeight / 2}" transform="rotate(-90 18 ${pad.top + plotHeight / 2})">${translate("Score CPU")}</text>
         ${points.map((point) => {
           const className = point.score >= 75 ? "replace" : point.score >= 50 ? "watch" : "ok";
           const title = `${point.device.hostname || point.device.model || "Machine"} - ${point.age} ${state.language === "en" ? "yrs" : "ans"} - CPU ${point.cpu}`;
-          return `<circle class="age-point ${className}" cx="${x(point.age)}" cy="${y(point.cpu)}" r="5"><title>${escapeHtml(title)}</title></circle>`;
+          const cx = clamp(x(point.age) + pointJitter(point.device, "x") * 9, pad.left + 6, pad.left + plotWidth - 6);
+          const cy = clamp(y(point.cpu) + pointJitter(point.device, "y") * 7, pad.top + 6, pad.top + plotHeight - 6);
+          return `<circle class="age-point ${className}" cx="${cx}" cy="${cy}" r="5.8"><title>${escapeHtml(title)}</title></circle>`;
         }).join("")}
       </svg>
       <div class="age-cpu-legend">

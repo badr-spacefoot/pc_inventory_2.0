@@ -2869,20 +2869,38 @@ tbody tr.is-selected {
 }
 
 .age-cpu-chart {
-  min-height: 360px;
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 18% 0%, color-mix(in srgb, var(--brand) 10%, transparent), transparent 34%),
+    var(--soft);
 }
 
 .age-cpu-chart svg {
   width: 100%;
-  height: min(48vw, 360px);
-  min-height: 300px;
+  max-width: 1120px;
+  height: auto;
+  aspect-ratio: 16 / 7;
+  max-height: 430px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--soft);
+  background: color-mix(in srgb, var(--surface) 76%, #0b1511);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ink) 7%, transparent);
+}
+
+.age-cpu-chart .chart-frame {
+  fill: color-mix(in srgb, var(--surface) 62%, transparent);
+  stroke: color-mix(in srgb, var(--ink) 14%, transparent);
+  stroke-width: 1;
 }
 
 .age-cpu-chart .zone {
-  opacity: 0.22;
+  opacity: 0.18;
 }
 
 .age-cpu-chart .zone-good {
@@ -2898,29 +2916,52 @@ tbody tr.is-selected {
 }
 
 .age-cpu-chart .grid-line {
-  stroke: var(--chart-grid);
+  stroke: color-mix(in srgb, var(--muted) 18%, transparent);
   stroke-width: 1;
 }
 
-.age-cpu-chart .axis-line {
-  stroke: var(--muted);
+.age-cpu-chart .threshold-line {
+  stroke: color-mix(in srgb, var(--accent) 68%, transparent);
   stroke-width: 1.5;
+  stroke-dasharray: 7 7;
+}
+
+.age-cpu-chart .axis-line {
+  stroke: color-mix(in srgb, var(--muted) 62%, transparent);
+  stroke-width: 1.4;
 }
 
 .age-cpu-chart .axis-label,
-.age-cpu-chart .zone-label {
+.age-cpu-chart .zone-label,
+.age-cpu-chart .axis-title {
   fill: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 800;
 }
 
+.age-cpu-chart .axis-x,
+.age-cpu-chart .axis-title-x {
+  text-anchor: middle;
+}
+
 .age-cpu-chart .axis-y {
-  text-anchor: start;
+  text-anchor: end;
+}
+
+.age-cpu-chart .axis-title {
+  fill: color-mix(in srgb, var(--ink) 72%, var(--muted));
+  font-size: 14px;
+}
+
+.age-cpu-chart .zone-label {
+  fill: color-mix(in srgb, var(--ink) 72%, var(--muted));
+  letter-spacing: 0;
 }
 
 .age-point {
   stroke: var(--surface);
-  stroke-width: 2;
+  stroke-width: 2.4;
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.35));
 }
 
 .age-point.ok {
@@ -2938,8 +2979,9 @@ tbody tr.is-selected {
 .age-cpu-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 14px;
-  margin-top: 12px;
+  justify-content: center;
+  gap: 10px 16px;
+  margin-top: 0;
   color: var(--muted);
   font-weight: 800;
 }
@@ -2951,8 +2993,8 @@ tbody tr.is-selected {
 }
 
 .age-cpu-legend i {
-  width: 11px;
-  height: 11px;
+  width: 10px;
+  height: 10px;
   border-radius: 999px;
   background: var(--brand);
 }
@@ -3019,10 +3061,6 @@ tbody tr.is-selected {
   .fleet-health-layout,
   .fleet-value-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .fleet-age-cpu-card {
-    grid-column: auto;
   }
 
   .filters {
@@ -3151,7 +3189,8 @@ tbody tr.is-selected {
   }
 
   .age-cpu-chart svg {
-    height: 320px;
+    aspect-ratio: 4 / 3;
+    min-height: 260px;
   }
 
   .admin-nav {
