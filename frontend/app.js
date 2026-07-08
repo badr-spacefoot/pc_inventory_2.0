@@ -5105,7 +5105,7 @@ function renderOrganization() {
             <span class="organization-icon" style="--item-color:${escapeHtml(team.color || "#16735f")}">${teamIcon(normalizeTeamInfo(team.name, team.abbreviation).iconType)}</span>
             <span>
               <strong>${escapeHtml(displayWithAbbreviation(team.name, team.abbreviation))}</strong>
-              <small>${state.language === "en" ? `${team.device_count} computer(s), ${team.user_count || 0} user(s)` : `${team.device_count} machine(s), ${team.user_count || 0} utilisateur(s)`}${team.description ? ` - ${escapeHtml(team.description)}` : ""}</small>
+              <small>${state.language === "en" ? `${team.device_count} computer(s), ${team.user_count || 0} current user(s)` : `${team.device_count} machine(s), ${team.user_count || 0} utilisateur(s) actuel(s)`}${team.description ? ` - ${escapeHtml(team.description)}` : ""}</small>
             </span>
             <span class="organization-chevron">&rsaquo;</span>
           </button>
@@ -5128,7 +5128,7 @@ function renderOrganization() {
             <span class="organization-icon site type-${escapeHtml(site.discipline || site.establishment_type || "office")}" style="--item-color:${escapeHtml(site.color || "#64748b")}">${locationIcon(site.discipline || site.establishment_type || "office")}</span>
             <span>
               <strong>${escapeHtml(displayWithAbbreviation(site.name, site.abbreviation))}</strong>
-              <small>${translate(establishmentTypeLabels[site.establishment_type] || establishmentTypeLabels.office)} - ${state.language === "en" ? `${site.device_count} computer(s), ${site.user_count || 0} user(s)` : `${site.device_count} machine(s), ${site.user_count || 0} utilisateur(s)`}${location ? ` - ${escapeHtml(location)}` : ""}</small>
+              <small>${translate(establishmentTypeLabels[site.establishment_type] || establishmentTypeLabels.office)} - ${state.language === "en" ? `${site.device_count} computer(s), ${site.user_count || 0} current user(s)` : `${site.device_count} machine(s), ${site.user_count || 0} utilisateur(s) actuel(s)`}${location ? ` - ${escapeHtml(location)}` : ""}</small>
             </span>
             <span class="organization-chevron">&rsaquo;</span>
           </button>

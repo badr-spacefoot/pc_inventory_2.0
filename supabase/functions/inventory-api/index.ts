@@ -2828,7 +2828,7 @@ async function handleAdminOrganization(request: Request) {
         .select("id,name,abbreviation,establishment_type,discipline,color,address,postal_code,city,country,latitude,longitude,active,sort_index,created_at")
         .order("sort_index", { nullsFirst: false })
         .order("name"),
-      supabase.from("devices").select("team_id,establishment_id"),
+      supabase.from("devices").select("assigned_user_id,team_id,establishment_id,status"),
       supabase.from("users").select("id,first_name,last_name,email,service,team_id,establishment_id").order("last_name"),
     ]);
   if (teamsError) throw teamsError;
@@ -2838,18 +2838,36 @@ async function handleAdminOrganization(request: Request) {
 
   const teamCounts = new Map<string, number>();
   const establishmentCounts = new Map<string, number>();
-  const teamUserCounts = new Map<string, number>();
-  const establishmentUserCounts = new Map<string, number>();
+  const teamUserIds = new Map<string, Set<string>>();
+  const establishmentUserIds = new Map<string, Set<string>>();
   for (const device of devices ?? []) {
     if (device.team_id) teamCounts.set(device.team_id, (teamCounts.get(device.team_id) ?? 0) + 1);
     if (device.establishment_id) {
       establishmentCounts.set(device.establishment_id, (establishmentCounts.get(device.establishment_id) ?? 0) + 1);
     }
   }
-  for (const user of users ?? []) {
-    if (user.team_id) teamUserCounts.set(user.team_id, (teamUserCounts.get(user.team_id) ?? 0) + 1);
-    if (user.establishment_id) {
-      establishmentUserCounts.set(user.establishment_id, (establishmentUserCounts.get(user.establishment_id) ?? 0) + 1);
+  for (const device of devices ?? []) {
+    if (["retired", "stock", "lost"].includes(safeString(device.status))) continue;
+
+    const assignedUserId = safeString(device.assigned_user_id);
+
+    if (!assignedUserId) continue;
+
+    if (device.team_id) {
+
+      const ids = teamUserIds.get(device.team_id) ?? new Set<string>();
+
+      ids.add(assignedUserId);
+
+      teamUserIds.set(device.team_id, ids);
+
+    }
+    if (device.establishment_id) {
+      const ids = establishmentUserIds.get(device.establishment_id) ?? new Set<string>();
+
+      ids.add(assignedUserId);
+
+      establishmentUserIds.set(device.establishment_id, ids);
     }
   }
 
@@ -2857,12 +2875,12 @@ async function handleAdminOrganization(request: Request) {
     teams: (teams ?? []).map((team) => ({
       ...team,
       device_count: teamCounts.get(team.id) ?? 0,
-      user_count: teamUserCounts.get(team.id) ?? 0,
+      user_count: teamUserIds.get(team.id)?.size ?? 0,
     })),
     establishments: (establishments ?? []).map((site) => ({
       ...site,
       device_count: establishmentCounts.get(site.id) ?? 0,
-      user_count: establishmentUserCounts.get(site.id) ?? 0,
+      user_count: establishmentUserIds.get(site.id)?.size ?? 0,
     })),
     users: users ?? [],
     map_provider: googleMapsApiKey ? "google" : "openstreetmap",
