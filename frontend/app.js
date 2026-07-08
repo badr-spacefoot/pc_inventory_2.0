@@ -3840,16 +3840,15 @@ function warrantyStatusInfo(invoice) {
   const startText = String(invoice.warranty_start_date || "");
   const start = /^\d{4}-\d{2}-\d{2}$/.test(startText) ? new Date(`${startText}T00:00:00`) : null;
   const startUtc = start ? Date.UTC(start.getFullYear(), start.getMonth(), start.getDate()) : null;
-  const totalDays = startUtc !== null ? Math.max(1, Math.ceil((endUtc - startUtc) / 86400000)) : 365;
-  const elapsedDays = startUtc !== null ? Math.max(0, Math.ceil((todayUtc - startUtc) / 86400000)) : Math.max(0, totalDays - Math.max(0, daysLeft));
-  const progress = Math.max(0, Math.min(100, Math.round((elapsedDays / totalDays) * 100)));
+  const totalDays = startUtc !== null ? Math.max(1, Math.ceil((endUtc - startUtc) / 86400000)) : Math.max(365, daysLeft);
+  const progress = Math.max(0, Math.min(100, Math.round((Math.max(0, daysLeft) / totalDays) * 100)));
   if (daysLeft < 0) {
     const days = Math.abs(daysLeft);
     return {
       status: "expired",
       label: translate("Garantie expiree"),
       helper: `${translate("Expiree depuis")} ${days} ${translate(days > 1 ? "jours" : "jour")}`,
-      progress: 100,
+      progress: 0,
     };
   }
   if (daysLeft === 0) {
@@ -3857,7 +3856,7 @@ function warrantyStatusInfo(invoice) {
       status: "warning",
       label: translate("Garantie bientot expiree"),
       helper: translate("Expire aujourd'hui"),
-      progress: Math.max(progress, 92),
+      progress,
     };
   }
   if (daysLeft <= 60) {
@@ -3865,7 +3864,7 @@ function warrantyStatusInfo(invoice) {
       status: "warning",
       label: translate("Garantie bientot expiree"),
       helper: `${translate("Expire dans")} ${daysLeft} ${translate(daysLeft > 1 ? "jours" : "jour")}`,
-      progress: Math.max(progress, 76),
+      progress,
     };
   }
   return {

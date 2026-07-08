@@ -2355,9 +2355,9 @@ tbody tr.is-selected {
 .warranty-status-track span {
   display: block;
   height: 100%;
-  min-width: 8px;
   border-radius: inherit;
   background: var(--brand);
+  transition: width 180ms ease-out;
 }
 
 .warranty-status-active {
