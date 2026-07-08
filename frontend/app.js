@@ -628,6 +628,8 @@ const englishTranslations = {
   "Fin garantie": "Warranty end",
   "Duree garantie mois": "Warranty duration (months)",
   "Garantie active jusqu'au": "Warranty active until",
+  "Garantie constructeur estimee": "Estimated manufacturer warranty",
+  "Garantie standard 1 an": "Standard 1-year warranty",
   "Garantie expiree": "Warranty expired",
   "Garantie active": "Warranty active",
   "Garantie bientot expiree": "Warranty expiring soon",
@@ -637,6 +639,8 @@ const englishTranslations = {
   "Expiree depuis": "Expired for",
   "jours": "days",
   "jour": "day",
+  "Depuis facture achat": "From purchase invoice",
+  "Pre-remplir garantie 1 an": "Prefill 1-year warranty",
   "Date invalide. Utilisez le format JJ/MM/AAAA.": "Invalid date. Use DD/MM/YYYY.",
   "Fournisseur": "Supplier",
   "Numero facture": "Invoice number",
@@ -1598,6 +1602,42 @@ function normalizeDateInputValue(value) {
 
 function dateInputPlaceholder() {
   return state.language === "en" ? "DD/MM/YYYY" : "JJ/MM/AAAA";
+}
+
+function dateOnlyObject(value) {
+  const text = String(value || "").trim();
+  if (!text) return null;
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const date = match
+    ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+    : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function isoDateOnly(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+  const year = String(date.getFullYear()).padStart(4, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function addMonthsToDateOnly(value, months) {
+  const start = dateOnlyObject(value);
+  if (!start) return "";
+  const result = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const originalDay = result.getDate();
+  result.setMonth(result.getMonth() + months);
+  if (result.getDate() !== originalDay) result.setDate(0);
+  return isoDateOnly(result);
+}
+
+function formatDateForInput(value) {
+  const date = dateOnlyObject(value);
+  if (!date) return "";
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${day}/${month}/${date.getFullYear()}`;
 }
 
 function effectiveTimePreference() {
@@ -3823,6 +3863,7 @@ function renderInvoiceDetails(invoice) {
 
 function warrantyStatusInfo(invoice) {
   if (invoiceTypeValue(invoice) !== "warranty_extension") return null;
+  const activeLabel = invoice.is_estimated_warranty ? translate("Garantie constructeur estimee") : translate("Garantie active");
   if (!invoice.warranty_end_date) {
     return {
       status: "unknown",
@@ -3869,7 +3910,7 @@ function warrantyStatusInfo(invoice) {
   }
   return {
     status: "active",
-    label: translate("Garantie active"),
+    label: activeLabel,
     helper: `${translate("Expire dans")} ${daysLeft} ${translate(daysLeft > 1 ? "jours" : "jour")}`,
     progress,
   };
@@ -3896,6 +3937,30 @@ function latestWarrantyInvoice(invoices = []) {
     .filter((invoice) => invoiceTypeValue(invoice) === "warranty_extension")
     .slice()
     .sort((a, b) => String(b.warranty_end_date || b.invoice_date || b.created_at || "").localeCompare(String(a.warranty_end_date || a.invoice_date || a.created_at || "")))[0] || null;
+}
+
+function latestDatedPurchaseInvoice(invoices = []) {
+  return invoices
+    .filter((invoice) => invoiceTypeValue(invoice) === "purchase" && invoice.invoice_date)
+    .slice()
+    .sort((a, b) => String(b.invoice_date || b.created_at || "").localeCompare(String(a.invoice_date || a.created_at || "")))[0] || null;
+}
+
+function standardWarrantyInvoiceFromPurchase(purchaseInvoice) {
+  if (!purchaseInvoice?.invoice_date) return null;
+  const warrantyEndDate = addMonthsToDateOnly(purchaseInvoice.invoice_date, 12);
+  if (!warrantyEndDate) return null;
+  return {
+    ...purchaseInvoice,
+    id: `standard-warranty-${purchaseInvoice.id || purchaseInvoice.invoice_date}`,
+    invoice_type: "warranty_extension",
+    supplier: purchaseInvoice.supplier || translate("Garantie standard 1 an"),
+    warranty_provider: translate("Garantie standard 1 an"),
+    warranty_start_date: purchaseInvoice.invoice_date,
+    warranty_end_date: warrantyEndDate,
+    warranty_duration_months: 12,
+    is_estimated_warranty: true,
+  };
 }
 
 function renderInvoiceList(invoices = [], canEditDevice = false) {
@@ -3991,11 +4056,16 @@ function renderDetail(device, scans, history = []) {
   const memoryDetails = memorySummary(payload);
   const invoices = Array.isArray(device.invoices) ? device.invoices : [];
   const purchaseInvoice = latestPurchaseInvoice(invoices);
+  const purchaseDateInvoice = latestDatedPurchaseInvoice(invoices);
   const warrantyInvoice = latestWarrantyInvoice(invoices);
-  const warrantyDisplay = warrantyInvoice
+  const warrantySummaryInvoice = warrantyInvoice || standardWarrantyInvoiceFromPurchase(purchaseDateInvoice);
+  const warrantySummaryStatus = warrantySummaryInvoice ? warrantyStatusInfo(warrantySummaryInvoice) : null;
+  const warrantyDisplay = warrantySummaryInvoice
     ? [
-      warrantyInvoice.warranty_provider || "",
-      warrantyInvoice.warranty_end_date ? `${translate("Garantie active jusqu'au")} ${formatDateOnly(warrantyInvoice.warranty_end_date)}` : "",
+      warrantySummaryInvoice.warranty_provider || "",
+      warrantySummaryStatus?.label || "",
+      warrantySummaryInvoice.warranty_end_date ? `${translate("Fin garantie")} ${formatDateOnly(warrantySummaryInvoice.warranty_end_date)}` : "",
+      warrantySummaryInvoice.is_estimated_warranty ? translate("Depuis facture achat") : "",
     ].filter(Boolean).join(" - ")
     : "";
   const actualPurchaseRaw = purchaseInvoice?.purchase_price ?? device.actual_purchase_price;
@@ -4044,6 +4114,7 @@ function renderDetail(device, scans, history = []) {
         <span title="${escapeHtml(fullDeviceModel(device))}">${escapeHtml(shortDeviceModel(device) || translate("Non renseigné"))}</span>
       </span>
     </div>
+    ${warrantySummaryInvoice ? `<div class="detail-warranty-summary">${renderWarrantyStatusBar(warrantySummaryInvoice)}</div>` : ""}
     <nav class="detail-tabs" aria-label="${escapeHtml(translate("Sections machine"))}">
       <button class="detail-tab is-active" type="button" data-detail-tab="overview">${translate("Vue generale")}</button>
       <button class="detail-tab" type="button" data-detail-tab="hardware">${translate("Matériel")}</button>
@@ -4136,6 +4207,10 @@ function renderDetail(device, scans, history = []) {
         <label class="invoice-warranty-field">${translate("Debut garantie")}<input name="warrantyStartDate" inputmode="numeric" autocomplete="off" placeholder="${dateInputPlaceholder()}" pattern="\\d{1,2}[\\/\\-\\s.]\\d{1,2}[\\/\\-\\s.]\\d{4}" /></label>
         <label class="invoice-warranty-field">${translate("Fin garantie")}<input name="warrantyEndDate" inputmode="numeric" autocomplete="off" placeholder="${dateInputPlaceholder()}" pattern="\\d{1,2}[\\/\\-\\s.]\\d{1,2}[\\/\\-\\s.]\\d{4}" /></label>
         <label class="invoice-warranty-field">${translate("Duree garantie mois")}<input name="warrantyDurationMonths" type="number" min="0" step="1" /></label>
+        ${purchaseDateInvoice?.invoice_date ? `<div class="invoice-warranty-preset wide">
+          <button class="secondary invoice-warranty-preset-button" type="button" data-purchase-date="${escapeHtml(purchaseDateInvoice.invoice_date)}" data-warranty-end="${escapeHtml(addMonthsToDateOnly(purchaseDateInvoice.invoice_date, 12))}">${translate("Pre-remplir garantie 1 an")}</button>
+          <small>${escapeHtml(translate("Depuis facture achat"))}: ${escapeHtml(formatDateOnly(purchaseDateInvoice.invoice_date))}</small>
+        </div>` : ""}
         <label>${translate("Nom fichier")}<input name="fileName" maxlength="255" placeholder="facture-macbook.pdf" /></label>
         <label>${translate("Fichier facture")}<input name="invoiceFile" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,image/*,application/pdf" /></label>
         <label class="wide">${translate("Lien facture")}<input name="fileUrl" type="url" maxlength="2000" placeholder="https://..." /></label>
@@ -4207,6 +4282,20 @@ function renderDetail(device, scans, history = []) {
     };
     invoiceTypeSelect?.addEventListener("change", syncInvoiceType);
     syncInvoiceType();
+    invoiceForm.querySelector(".invoice-warranty-preset-button")?.addEventListener("click", (event) => {
+      const button = event.currentTarget;
+      const purchaseDate = button.dataset.purchaseDate || "";
+      const warrantyEnd = button.dataset.warrantyEnd || addMonthsToDateOnly(purchaseDate, 12);
+      if (invoiceTypeSelect) invoiceTypeSelect.value = "warranty_extension";
+      invoiceForm.elements.supplier.value = invoiceForm.elements.supplier.value || translate("Garantie standard 1 an");
+      invoiceForm.elements.invoiceDate.value = invoiceForm.elements.invoiceDate.value || formatDateForInput(purchaseDate);
+      invoiceForm.elements.warrantyProvider.value = invoiceForm.elements.warrantyProvider.value || translate("Garantie standard 1 an");
+      invoiceForm.elements.warrantyStartDate.value = formatDateForInput(purchaseDate);
+      invoiceForm.elements.warrantyEndDate.value = formatDateForInput(warrantyEnd);
+      invoiceForm.elements.warrantyDurationMonths.value = "12";
+      invoiceForm.elements.notes.value = invoiceForm.elements.notes.value || translate("Depuis facture achat");
+      syncInvoiceType();
+    });
     invoiceForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const button = event.currentTarget.querySelector("button[type='submit']");

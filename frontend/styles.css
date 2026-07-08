@@ -2388,6 +2388,14 @@ tbody tr.is-selected {
   background: color-mix(in srgb, var(--muted) 62%, transparent);
 }
 
+.detail-warranty-summary {
+  margin: 12px 0 14px;
+}
+
+.detail-warranty-summary .warranty-status {
+  margin-top: 0;
+}
+
 .invoice-data-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
@@ -2452,6 +2460,22 @@ tbody tr.is-selected {
 
 .invoice-form .wide {
   grid-column: 1 / -1;
+}
+
+.invoice-warranty-preset {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+}
+
+.invoice-warranty-preset small {
+  color: var(--muted);
+  font-weight: 700;
 }
 
 .invoice-form:not(.is-warranty) .invoice-warranty-field {
