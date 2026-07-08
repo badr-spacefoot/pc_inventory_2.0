@@ -2268,6 +2268,11 @@ tbody tr.is-selected {
   background: var(--soft);
 }
 
+.invoice-content {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
 .invoice-item strong,
 .invoice-item small {
   display: block;
@@ -2311,10 +2316,118 @@ tbody tr.is-selected {
   background: rgba(216, 142, 60, 0.12);
 }
 
-.invoice-item p {
-  margin: 8px 0 0;
+.warranty-status {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+}
+
+.warranty-status-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.warranty-status-header span {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.warranty-status-header strong {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.warranty-status-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--line) 58%, transparent);
+}
+
+.warranty-status-track span {
+  display: block;
+  height: 100%;
+  min-width: 8px;
+  border-radius: inherit;
+  background: var(--brand);
+}
+
+.warranty-status-active {
+  border-color: rgba(52, 171, 143, 0.28);
+}
+
+.warranty-status-active .warranty-status-track span {
+  background: linear-gradient(90deg, #34ab8f, #6bd7b6);
+}
+
+.warranty-status-warning {
+  border-color: rgba(223, 177, 64, 0.36);
+}
+
+.warranty-status-warning .warranty-status-track span {
+  background: linear-gradient(90deg, #dca73c, #f2cf62);
+}
+
+.warranty-status-expired {
+  border-color: rgba(224, 91, 91, 0.4);
+}
+
+.warranty-status-expired .warranty-status-track span {
+  background: linear-gradient(90deg, #d94f4f, #ff8377);
+}
+
+.warranty-status-unknown .warranty-status-track span {
+  background: color-mix(in srgb, var(--muted) 62%, transparent);
+}
+
+.invoice-data-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 8px;
+  margin: 10px 0 0;
+}
+
+.invoice-data-grid div {
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+}
+
+.invoice-data-grid dt {
+  margin: 0 0 3px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.invoice-data-grid dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.invoice-note {
+  margin: 10px 0 0;
+  padding: 8px 9px;
+  border-left: 3px solid var(--brand);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface) 68%, transparent);
   color: var(--muted);
   font-size: 12px;
+  line-height: 1.45;
 }
 
 .invoice-actions {

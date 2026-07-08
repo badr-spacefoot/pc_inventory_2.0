@@ -629,6 +629,15 @@ const englishTranslations = {
   "Duree garantie mois": "Warranty duration (months)",
   "Garantie active jusqu'au": "Warranty active until",
   "Garantie expiree": "Warranty expired",
+  "Garantie active": "Warranty active",
+  "Garantie bientot expiree": "Warranty expiring soon",
+  "Garantie incomplete": "Incomplete warranty",
+  "Expire aujourd'hui": "Expires today",
+  "Expire dans": "Expires in",
+  "Expiree depuis": "Expired for",
+  "jours": "days",
+  "jour": "day",
+  "Date invalide. Utilisez le format JJ/MM/AAAA.": "Invalid date. Use DD/MM/YYYY.",
   "Fournisseur": "Supplier",
   "Numero facture": "Invoice number",
   "Date facture": "Invoice date",
@@ -1551,6 +1560,44 @@ function formatDate(value) {
     timeStyle: "short",
     hour12: preference === "12h",
   }).format(new Date(value));
+}
+
+function formatDateOnly(value) {
+  if (!value) return "-";
+  const locale = state.language === "en" ? "en-US" : "fr-FR";
+  const text = String(value);
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(text)
+    ? new Date(`${text}T00:00:00`)
+    : new Date(value);
+  return new Intl.DateTimeFormat(locale, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
+
+function normalizeDateInputValue(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const match = text.match(/^(\d{1,2})[\/\-\s.](\d{1,2})[\/\-\s.](\d{4})$/);
+  if (!match) throw new Error(translate("Date invalide. Utilisez le format JJ/MM/AAAA."));
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    throw new Error(translate("Date invalide. Utilisez le format JJ/MM/AAAA."));
+  }
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function dateInputPlaceholder() {
+  return state.language === "en" ? "DD/MM/YYYY" : "JJ/MM/AAAA";
 }
 
 function effectiveTimePreference() {
@@ -3742,14 +3789,107 @@ function invoiceTypeLabel(invoice) {
   return invoiceTypeLabels[invoiceTypeValue(invoice)] || invoiceTypeLabels.other;
 }
 
-function warrantyInvoiceMeta(invoice) {
-  if (invoiceTypeValue(invoice) !== "warranty_extension") return [];
+function invoiceDetailRows(invoice) {
+  const rows = [
+    invoice.invoice_number ? ["Numero facture", invoice.invoice_number] : null,
+    invoice.invoice_date ? ["Date facture", formatDateOnly(invoice.invoice_date)] : null,
+    invoice.purchase_price ? ["Montant facture", moneyWithCurrency(invoice.purchase_price, invoice.currency)] : null,
+  ];
+  if (invoiceTypeValue(invoice) === "warranty_extension") {
+    rows.push(
+      invoice.warranty_provider ? ["Garantie fournisseur", invoice.warranty_provider] : null,
+      invoice.warranty_start_date ? ["Debut garantie", formatDateOnly(invoice.warranty_start_date)] : null,
+      invoice.warranty_end_date ? ["Fin garantie", formatDateOnly(invoice.warranty_end_date)] : null,
+      invoice.warranty_duration_months ? ["Duree garantie mois", `${invoice.warranty_duration_months} ${state.language === "en" ? "months" : "mois"}`] : null,
+    );
+  }
+  return rows.filter(Boolean);
+}
+
+function renderInvoiceDetails(invoice) {
+  const rows = invoiceDetailRows(invoice);
+  if (!rows.length) return "";
   return [
-    invoice.warranty_provider ? `${translate("Garantie fournisseur")}: ${invoice.warranty_provider}` : "",
-    invoice.warranty_start_date ? `${translate("Debut garantie")}: ${formatDate(invoice.warranty_start_date)}` : "",
-    invoice.warranty_end_date ? `${translate("Fin garantie")}: ${formatDate(invoice.warranty_end_date)}` : "",
-    invoice.warranty_duration_months ? `${translate("Duree garantie mois")}: ${invoice.warranty_duration_months}` : "",
-  ].filter(Boolean);
+    `<dl class="invoice-data-grid">`,
+    ...rows.map(([label, value]) => `
+      <div>
+        <dt>${escapeHtml(translate(label))}</dt>
+        <dd>${escapeHtml(value)}</dd>
+      </div>
+    `),
+    `</dl>`,
+  ].join("");
+}
+
+function warrantyStatusInfo(invoice) {
+  if (invoiceTypeValue(invoice) !== "warranty_extension") return null;
+  if (!invoice.warranty_end_date) {
+    return {
+      status: "unknown",
+      label: translate("Garantie incomplete"),
+      helper: translate("Fin garantie"),
+      progress: 0,
+    };
+  }
+  const today = new Date();
+  const todayUtc = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+  const endText = String(invoice.warranty_end_date);
+  const end = /^\d{4}-\d{2}-\d{2}$/.test(endText) ? new Date(`${endText}T00:00:00`) : new Date(invoice.warranty_end_date);
+  const endUtc = Date.UTC(end.getFullYear(), end.getMonth(), end.getDate());
+  const daysLeft = Math.ceil((endUtc - todayUtc) / 86400000);
+  const startText = String(invoice.warranty_start_date || "");
+  const start = /^\d{4}-\d{2}-\d{2}$/.test(startText) ? new Date(`${startText}T00:00:00`) : null;
+  const startUtc = start ? Date.UTC(start.getFullYear(), start.getMonth(), start.getDate()) : null;
+  const totalDays = startUtc !== null ? Math.max(1, Math.ceil((endUtc - startUtc) / 86400000)) : 365;
+  const elapsedDays = startUtc !== null ? Math.max(0, Math.ceil((todayUtc - startUtc) / 86400000)) : Math.max(0, totalDays - Math.max(0, daysLeft));
+  const progress = Math.max(0, Math.min(100, Math.round((elapsedDays / totalDays) * 100)));
+  if (daysLeft < 0) {
+    const days = Math.abs(daysLeft);
+    return {
+      status: "expired",
+      label: translate("Garantie expiree"),
+      helper: `${translate("Expiree depuis")} ${days} ${translate(days > 1 ? "jours" : "jour")}`,
+      progress: 100,
+    };
+  }
+  if (daysLeft === 0) {
+    return {
+      status: "warning",
+      label: translate("Garantie bientot expiree"),
+      helper: translate("Expire aujourd'hui"),
+      progress: Math.max(progress, 92),
+    };
+  }
+  if (daysLeft <= 60) {
+    return {
+      status: "warning",
+      label: translate("Garantie bientot expiree"),
+      helper: `${translate("Expire dans")} ${daysLeft} ${translate(daysLeft > 1 ? "jours" : "jour")}`,
+      progress: Math.max(progress, 76),
+    };
+  }
+  return {
+    status: "active",
+    label: translate("Garantie active"),
+    helper: `${translate("Expire dans")} ${daysLeft} ${translate(daysLeft > 1 ? "jours" : "jour")}`,
+    progress,
+  };
+}
+
+function renderWarrantyStatusBar(invoice) {
+  const info = warrantyStatusInfo(invoice);
+  if (!info) return "";
+  return `
+    <div class="warranty-status warranty-status-${escapeHtml(info.status)}" role="group" aria-label="${escapeHtml(`${info.label}. ${info.helper}`)}">
+      <div class="warranty-status-header">
+        <span>${escapeHtml(info.label)}</span>
+        <strong>${escapeHtml(info.helper)}</strong>
+      </div>
+      <div class="warranty-status-track" aria-hidden="true">
+        <span style="width: ${Number(info.progress) || 0}%"></span>
+      </div>
+    </div>
+  `;
 }
 
 function latestWarrantyInvoice(invoices = []) {
@@ -3765,19 +3905,15 @@ function renderInvoiceList(invoices = [], canEditDevice = false) {
     <div class="invoice-list">
       ${invoices.map((invoice) => `
         <article class="invoice-item">
-          <div>
+          <div class="invoice-content">
             <div class="invoice-title">
               <strong>${escapeHtml(invoice.supplier || invoice.invoice_number || translate("Factures"))}</strong>
               <span class="invoice-type-badge invoice-type-${escapeHtml(invoiceTypeValue(invoice))}">${escapeHtml(translate(invoiceTypeLabel(invoice)))}</span>
             </div>
-            <small>${[
-              invoice.invoice_number ? `${translate("Numero facture")}: ${invoice.invoice_number}` : "",
-              invoice.invoice_date ? formatDate(invoice.invoice_date) : "",
-              invoice.purchase_price ? moneyWithCurrency(invoice.purchase_price, invoice.currency) : "",
-              ...warrantyInvoiceMeta(invoice),
-            ].filter(Boolean).map(escapeHtml).join(" - ")}</small>
+            ${renderWarrantyStatusBar(invoice)}
+            ${renderInvoiceDetails(invoice)}
             ${invoice.file_name ? `<small>${escapeHtml(invoice.file_name)}</small>` : ""}
-            ${invoice.notes ? `<p>${escapeHtml(invoice.notes)}</p>` : ""}
+            ${invoice.notes ? `<p class="invoice-note">${escapeHtml(invoice.notes)}</p>` : ""}
           </div>
           <div class="invoice-actions">
             ${invoice.file_url ? `<a class="secondary button-like" href="${escapeHtml(invoice.file_url)}" target="_blank" rel="noopener">${translate("Ouvrir la facture")}</a>` : ""}
@@ -3817,12 +3953,12 @@ async function invoiceFormPayload(form) {
     invoiceType: String(values.invoiceType || "purchase").trim(),
     supplier: String(values.supplier || "").trim(),
     invoiceNumber: String(values.invoiceNumber || "").trim(),
-    invoiceDate: String(values.invoiceDate || "").trim(),
+    invoiceDate: normalizeDateInputValue(values.invoiceDate),
     purchasePrice: String(values.purchasePrice || "").trim(),
     currency: String(values.currency || "EUR").trim().toUpperCase(),
     warrantyProvider: String(values.warrantyProvider || "").trim(),
-    warrantyStartDate: String(values.warrantyStartDate || "").trim(),
-    warrantyEndDate: String(values.warrantyEndDate || "").trim(),
+    warrantyStartDate: normalizeDateInputValue(values.warrantyStartDate),
+    warrantyEndDate: normalizeDateInputValue(values.warrantyEndDate),
     warrantyDurationMonths: String(values.warrantyDurationMonths || "").trim(),
     fileName: String(values.fileName || file?.name || "").trim(),
     fileUrl: String(values.fileUrl || "").trim(),
@@ -3860,7 +3996,7 @@ function renderDetail(device, scans, history = []) {
   const warrantyDisplay = warrantyInvoice
     ? [
       warrantyInvoice.warranty_provider || "",
-      warrantyInvoice.warranty_end_date ? `${translate("Garantie active jusqu'au")} ${formatDate(warrantyInvoice.warranty_end_date)}` : "",
+      warrantyInvoice.warranty_end_date ? `${translate("Garantie active jusqu'au")} ${formatDateOnly(warrantyInvoice.warranty_end_date)}` : "",
     ].filter(Boolean).join(" - ")
     : "";
   const actualPurchaseRaw = purchaseInvoice?.purchase_price ?? device.actual_purchase_price;
@@ -3994,12 +4130,12 @@ function renderDetail(device, scans, history = []) {
         </select></label>
         <label>${translate("Fournisseur")}<input name="supplier" maxlength="160" placeholder="Apple, Dell, LDLC..." /></label>
         <label>${translate("Numero facture")}<input name="invoiceNumber" maxlength="120" /></label>
-        <label>${translate("Date facture")}<input name="invoiceDate" type="date" /></label>
+        <label>${translate("Date facture")}<input name="invoiceDate" inputmode="numeric" autocomplete="off" placeholder="${dateInputPlaceholder()}" pattern="\\d{1,2}[\\/\\-\\s.]\\d{1,2}[\\/\\-\\s.]\\d{4}" /></label>
         <label>${translate("Montant facture")}<input name="purchasePrice" type="number" min="0" step="0.01" /></label>
         <label>${translate("Devise")}<input name="currency" maxlength="3" value="EUR" /></label>
         <label class="invoice-warranty-field">${translate("Garantie fournisseur")}<input name="warrantyProvider" maxlength="160" placeholder="Dell, AppleCare, assureur..." /></label>
-        <label class="invoice-warranty-field">${translate("Debut garantie")}<input name="warrantyStartDate" type="date" /></label>
-        <label class="invoice-warranty-field">${translate("Fin garantie")}<input name="warrantyEndDate" type="date" /></label>
+        <label class="invoice-warranty-field">${translate("Debut garantie")}<input name="warrantyStartDate" inputmode="numeric" autocomplete="off" placeholder="${dateInputPlaceholder()}" pattern="\\d{1,2}[\\/\\-\\s.]\\d{1,2}[\\/\\-\\s.]\\d{4}" /></label>
+        <label class="invoice-warranty-field">${translate("Fin garantie")}<input name="warrantyEndDate" inputmode="numeric" autocomplete="off" placeholder="${dateInputPlaceholder()}" pattern="\\d{1,2}[\\/\\-\\s.]\\d{1,2}[\\/\\-\\s.]\\d{4}" /></label>
         <label class="invoice-warranty-field">${translate("Duree garantie mois")}<input name="warrantyDurationMonths" type="number" min="0" step="1" /></label>
         <label>${translate("Nom fichier")}<input name="fileName" maxlength="255" placeholder="facture-macbook.pdf" /></label>
         <label>${translate("Fichier facture")}<input name="invoiceFile" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,image/*,application/pdf" /></label>
