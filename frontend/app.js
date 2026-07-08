@@ -629,6 +629,7 @@ const englishTranslations = {
   "Duree garantie mois": "Warranty duration (months)",
   "Garantie active jusqu'au": "Warranty active until",
   "Garantie constructeur estimee": "Estimated manufacturer warranty",
+  "Garantie constructeur": "Manufacturer warranty",
   "Garantie standard 1 an": "Standard 1-year warranty",
   "Garantie expiree": "Warranty expired",
   "Garantie active": "Warranty active",
@@ -639,8 +640,10 @@ const englishTranslations = {
   "Expiree depuis": "Expired for",
   "jours": "days",
   "jour": "day",
+  "mois": "months",
   "Depuis facture achat": "From purchase invoice",
-  "Pre-remplir garantie 1 an": "Prefill 1-year warranty",
+  "Duree constructeur": "Manufacturer warranty duration",
+  "Pre-remplir garantie": "Prefill warranty",
   "Date invalide. Utilisez le format JJ/MM/AAAA.": "Invalid date. Use DD/MM/YYYY.",
   "Fournisseur": "Supplier",
   "Numero facture": "Invoice number",
@@ -4036,6 +4039,24 @@ async function invoiceFormPayload(form) {
   return payload;
 }
 
+function syncWarrantyEndFromDuration(form) {
+  const startInput = form.elements.warrantyStartDate;
+  const endInput = form.elements.warrantyEndDate;
+  const durationInput = form.elements.warrantyDurationMonths;
+  if (!startInput || !endInput || !durationInput) return;
+  const durationMonths = Number(durationInput.value || 0);
+  if (!durationMonths || durationMonths < 0) return;
+  let startIso = "";
+  try {
+    startIso = normalizeDateInputValue(startInput.value);
+  } catch {
+    return;
+  }
+  if (!startIso) return;
+  const endIso = addMonthsToDateOnly(startIso, durationMonths);
+  if (endIso) endInput.value = formatDateForInput(endIso);
+}
+
 function renderDetail(device, scans, history = []) {
   state.selectedDetail = device;
   state.selectedScans = scans;
@@ -4208,7 +4229,16 @@ function renderDetail(device, scans, history = []) {
         <label class="invoice-warranty-field">${translate("Fin garantie")}<input name="warrantyEndDate" inputmode="numeric" autocomplete="off" placeholder="${dateInputPlaceholder()}" pattern="\\d{1,2}[\\/\\-\\s.]\\d{1,2}[\\/\\-\\s.]\\d{4}" /></label>
         <label class="invoice-warranty-field">${translate("Duree garantie mois")}<input name="warrantyDurationMonths" type="number" min="0" step="1" /></label>
         ${purchaseDateInvoice?.invoice_date ? `<div class="invoice-warranty-preset wide">
-          <button class="secondary invoice-warranty-preset-button" type="button" data-purchase-date="${escapeHtml(purchaseDateInvoice.invoice_date)}" data-warranty-end="${escapeHtml(addMonthsToDateOnly(purchaseDateInvoice.invoice_date, 12))}">${translate("Pre-remplir garantie 1 an")}</button>
+          <label>${translate("Duree constructeur")}
+            <select class="invoice-warranty-preset-duration">
+              <option value="12">12 ${translate("mois")}</option>
+              <option value="24">24 ${translate("mois")}</option>
+              <option value="36">36 ${translate("mois")}</option>
+              <option value="48">48 ${translate("mois")}</option>
+              <option value="60">60 ${translate("mois")}</option>
+            </select>
+          </label>
+          <button class="secondary invoice-warranty-preset-button" type="button" data-purchase-date="${escapeHtml(purchaseDateInvoice.invoice_date)}">${translate("Pre-remplir garantie")}</button>
           <small>${escapeHtml(translate("Depuis facture achat"))}: ${escapeHtml(formatDateOnly(purchaseDateInvoice.invoice_date))}</small>
         </div>` : ""}
         <label>${translate("Nom fichier")}<input name="fileName" maxlength="255" placeholder="facture-macbook.pdf" /></label>
@@ -4285,17 +4315,21 @@ function renderDetail(device, scans, history = []) {
     invoiceForm.querySelector(".invoice-warranty-preset-button")?.addEventListener("click", (event) => {
       const button = event.currentTarget;
       const purchaseDate = button.dataset.purchaseDate || "";
-      const warrantyEnd = button.dataset.warrantyEnd || addMonthsToDateOnly(purchaseDate, 12);
+      const selectedDuration = Number(invoiceForm.querySelector(".invoice-warranty-preset-duration")?.value || 12);
+      const durationMonths = selectedDuration > 0 ? selectedDuration : 12;
+      const warrantyEnd = addMonthsToDateOnly(purchaseDate, durationMonths);
       if (invoiceTypeSelect) invoiceTypeSelect.value = "warranty_extension";
-      invoiceForm.elements.supplier.value = invoiceForm.elements.supplier.value || translate("Garantie standard 1 an");
+      invoiceForm.elements.supplier.value = invoiceForm.elements.supplier.value || translate("Garantie constructeur");
       invoiceForm.elements.invoiceDate.value = invoiceForm.elements.invoiceDate.value || formatDateForInput(purchaseDate);
-      invoiceForm.elements.warrantyProvider.value = invoiceForm.elements.warrantyProvider.value || translate("Garantie standard 1 an");
+      invoiceForm.elements.warrantyProvider.value = invoiceForm.elements.warrantyProvider.value || translate("Garantie constructeur");
       invoiceForm.elements.warrantyStartDate.value = formatDateForInput(purchaseDate);
       invoiceForm.elements.warrantyEndDate.value = formatDateForInput(warrantyEnd);
-      invoiceForm.elements.warrantyDurationMonths.value = "12";
+      invoiceForm.elements.warrantyDurationMonths.value = String(durationMonths);
       invoiceForm.elements.notes.value = invoiceForm.elements.notes.value || translate("Depuis facture achat");
       syncInvoiceType();
     });
+    invoiceForm.elements.warrantyStartDate?.addEventListener("change", () => syncWarrantyEndFromDuration(invoiceForm));
+    invoiceForm.elements.warrantyDurationMonths?.addEventListener("change", () => syncWarrantyEndFromDuration(invoiceForm));
     invoiceForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const button = event.currentTarget.querySelector("button[type='submit']");

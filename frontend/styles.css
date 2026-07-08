@@ -2473,6 +2473,17 @@ tbody tr.is-selected {
   background: color-mix(in srgb, var(--surface) 82%, transparent);
 }
 
+.invoice-warranty-preset label {
+  display: grid;
+  gap: 5px;
+  min-width: 160px;
+  margin: 0;
+}
+
+.invoice-warranty-preset select {
+  min-height: 38px;
+}
+
 .invoice-warranty-preset small {
   color: var(--muted);
   font-weight: 700;
