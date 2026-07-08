@@ -1819,7 +1819,7 @@ function daysSince(value) {
 }
 
 function ageBucket(device) {
-  if (device.status === "replace") return "old";
+  if (isReplacementSignal(device)) return "old";
   const score = ageSignalScore(device);
   if (score >= 75) return "old";
   if (score >= 45) return "aging";
