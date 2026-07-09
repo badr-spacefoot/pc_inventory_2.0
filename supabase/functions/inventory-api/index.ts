@@ -2841,7 +2841,7 @@ async function handleAdminOrganization(request: Request) {
   const teamUserIds = new Map<string, Set<string>>();
   const establishmentUserIds = new Map<string, Set<string>>();
   for (const device of devices ?? []) {
-    if (device.team_id) teamCounts.set(device.team_id, (teamCounts.get(device.team_id) ?? 0) + 1);
+    if (!["retired", "stock", "lost"].includes(safeString(device.status)) && device.team_id) teamCounts.set(device.team_id, (teamCounts.get(device.team_id) ?? 0) + 1);
     if (device.establishment_id) {
       establishmentCounts.set(device.establishment_id, (establishmentCounts.get(device.establishment_id) ?? 0) + 1);
     }
@@ -2862,7 +2862,7 @@ async function handleAdminOrganization(request: Request) {
       teamUserIds.set(device.team_id, ids);
 
     }
-    if (device.establishment_id) {
+    if (!["retired", "stock", "lost"].includes(safeString(device.status)) && device.establishment_id) {
       const ids = establishmentUserIds.get(device.establishment_id) ?? new Set<string>();
 
       ids.add(assignedUserId);
