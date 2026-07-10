@@ -1,790 +1,83 @@
-const CONFIG = {
-  apiBaseUrl: window.IT_INVENTORY_API_URL || "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api",
-  scriptUrl: window.IT_INVENTORY_SCRIPT_URL || "https://badr-spacefoot.github.io/pc_inventory_2.0/scripts/collect-windows.ps1",
-  collectorReleaseConfigUrl: window.IT_INVENTORY_COLLECTOR_RELEASES_URL || "./collector-releases.json",
-  staleDays: Number(window.IT_INVENTORY_STALE_DAYS || 30),
-  weatherLatitude: Number(window.IT_INVENTORY_WEATHER_LATITUDE || 48.8932),
-  weatherLongitude: Number(window.IT_INVENTORY_WEATHER_LONGITUDE || 2.2879),
-  weatherLocationLabel: window.IT_INVENTORY_WEATHER_LOCATION || "Levallois-Perret",
-};
+const {
+  config: CONFIG,
+  constants: {
+    collectorInstallStateKey: COLLECTOR_INSTALL_STATE_KEY,
+    collectorDownloadStateKey: COLLECTOR_DOWNLOAD_STATE_KEY,
+    enrichmentWorkflowStateKey: ENRICHMENT_WORKFLOW_STATE_KEY,
+    enrichmentBatchSize: ENRICHMENT_BATCH_SIZE,
+  },
+  createInitialState,
+  createApiClient,
+  createInventoryApi,
+  createPublicResourceService,
+  queryElement,
+  queryElements,
+  translations: {
+    english: englishTranslations,
+    frenchNotifications: frenchNotificationTranslations,
+    normalizeKey: normalizeTranslationKey,
+    localizeError: localizeErrorMessage,
+  },
+  domain: {
+    inventory: inventoryDomain,
+    dates: dateDomain,
+    collector: collectorDomain,
+    fleet: fleetDomain,
+    invoices: invoiceDomain,
+    history: historyDomain,
+    organization: organizationDomain,
+    formatters: formattersDomain,
+    enrichment: enrichmentDomain,
+    notifications: notificationDomain,
+  },
+} = window.SpacefootCore;
 
-const COLLECTOR_INSTALL_STATE_KEY = "it_inventory_collector_install_state";
-const COLLECTOR_DOWNLOAD_STATE_KEY = "it_inventory_collector_download_state";
-const ENRICHMENT_BATCH_SIZE = 10;
-
-const state = {
-  adminToken: localStorage.getItem("it_inventory_admin_token") || "",
-  currentAdmin: JSON.parse(localStorage.getItem("it_inventory_admin_user") || "null"),
-  language: localStorage.getItem("it_inventory_language") || "fr",
-  themePreference: localStorage.getItem("it_inventory_theme_preference") || "system",
-  timeFormatPreference: localStorage.getItem("it_inventory_time_format") || "auto",
-  temperatureUnit: localStorage.getItem("it_inventory_temperature_unit") || "celsius",
-  weather: null,
-  devices: [],
-  filtered: [],
-  selectedDeviceId: "",
-  selectedDetail: null,
-  selectedScans: [],
-  selectedHistory: [],
-  activeDetailTab: "overview",
-  accessTokens: [],
-  collectionInvites: [],
-  currentInviteCode: "",
-  currentInvite: null,
-  rawInviteUrls: {},
-  rawAccessTokens: {},
-  teams: [],
-  establishments: [],
-  users: [],
-  cpuBenchmarkStats: null,
-  adminUsers: [],
-  notifications: [],
-  unreadNotifications: 0,
-  pendingChanges: [],
-  collectionDraft: JSON.parse(localStorage.getItem("it_inventory_collection_draft") || "{}"),
-  scriptPreviewText: "",
-  collectorReleases: null,
-  detectedPlatform: "unknown",
-  prefillCode: "",
-  prefillPayload: null,
-  collectorLaunchUrl: "",
-  collectorInstallState: JSON.parse(localStorage.getItem(COLLECTOR_INSTALL_STATE_KEY) || "null"),
-  collectorDownloadState: JSON.parse(localStorage.getItem(COLLECTOR_DOWNLOAD_STATE_KEY) || "null"),
-  mapProvider: "openstreetmap",
-  currentView: "collect",
-  currentAdminView: "fleet",
-};
+const state = createInitialState();
 let pendingRetirement = null;
 let activeEnrichmentRun = null;
+const enrichmentWorkflowCoordinator = new enrichmentDomain.EnrichmentWorkflowCoordinator();
+let lastEnrichmentWorkflow = null;
+let renderedEnrichmentWorkflowSteps = [];
+let activeEnrichmentJobProgress = null;
+let unifiedEnrichmentRunActive = false;
+let pendingFilterFrame = null;
 
 const statusLabels = {
-  fr: { active: "Actif", replace: "Remplacement planifie", stock: "En stock", lost: "Perdu", retired: "Sorti du parc" },
+  fr: { active: "Actif", replace: "Remplacement planifié", stock: "En stock", lost: "Perdu", retired: "Sorti du parc" },
   en: { active: "Active", replace: "Planned replacement", stock: "In stock", lost: "Lost", retired: "Retired" },
 };
 
-const $ = (selector) => document.querySelector(selector);
-const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+const $ = queryElement;
+const $$ = queryElements;
 const originalText = new WeakMap();
 const originalAttributes = new WeakMap();
 let pendingReassignment = null;
+const apiClient = createApiClient(() => state.adminToken);
+const inventoryApi = createInventoryApi(apiClient);
+const publicResources = createPublicResourceService();
+const { downloadLabel, macosInstallCommand, osIconSvg, platformLabel, ubuntuInstallCommand } = collectorDomain;
 
 const organizationPalette = [
-  "#3b6ea8", "#21867a", "#4f8a52", "#b88325", "#b86632", "#b45c75",
-  "#7b61a8", "#4e68b0", "#2f8898", "#7a963f", "#64748b", "#b15f9a",
+  "#3b6ea8",
+  "#21867a",
+  "#4f8a52",
+  "#b88325",
+  "#b86632",
+  "#b45c75",
+  "#7b61a8",
+  "#4e68b0",
+  "#2f8898",
+  "#7a963f",
+  "#64748b",
+  "#b15f9a",
 ];
 
-const englishTranslations = {
-  "Inventaire IT": "IT Inventory",
-  "Navigation principale": "Main navigation",
-  "Collecte": "Collection",
-  "Activer le mode sombre": "Enable dark mode",
-  "Activer le mode clair": "Enable light mode",
-  "Changer de theme": "Change theme",
-  "Theme systeme": "System theme",
-  "Changer de langue": "Change language",
-  "Accès utilisateur": "User access",
-  "Declarer un poste": "Register a computer",
-  "Une page web seule ne peut pas lire le numero de serie, le CPU, la RAM ou le stockage complet. La collecte materielle passe donc par un script local lance volontairement par l'utilisateur.": "A web page alone cannot read the serial number, CPU, RAM, or full storage details. Hardware collection therefore uses a local script run voluntarily by the user.",
-  "Token de collecte": "Collection token",
-  "Invitation chargée": "Invitation loaded",
-  "Vos informations sont pre-remplies. Telechargez le collecteur, relisez puis envoyez.": "Your information is prefilled. Download the collector, review, then submit.",
-  "Mode support IT: utiliser un token manuel": "IT support mode: use a manual token",
-  "Lien d'invitation": "Invitation link",
-  "Chargé automatiquement depuis le lien": "Loaded automatically from the link",
-  "Methode recommandee: telechargez l'application adaptee a votre systeme. Le fichier de pre-remplissage est telecharge automatiquement et le collecteur le detectera au demarrage.": "Recommended method: download the app for your system. After installation, open it from this page to load the profile automatically.",
-  "Methode recommandee: telechargez l'application adaptee a votre systeme. Apres installation, ouvrez le collecteur depuis cette page pour charger le profil automatiquement.": "Recommended method: download the app for your system. After installation, open the collector from this page to load the profile automatically.",
-  "Code support de pré-remplissage": "Support prefill code",
-  "Preparation terminee. Telechargez le collecteur.": "Preparation complete. Download the collector.",
-  "Invitations de collecte": "Collection invitations",
-  "Créer un lien d'invitation": "Create invitation link",
-  "Envoyez ce lien a l'utilisateur. Il ne verra pas le token technique.": "Send this link to the user. They will not see the technical token.",
-  "Lien copie.": "Link copied.",
-  "Aucun lien a copier": "No link to copy",
-  "Invitation créée.": "Invitation created.",
-  "Invitation révoquée.": "Invitation revoked.",
-  "Invitation supprimée.": "Invitation deleted.",
-  "Supprimer cette invitation ?": "Delete this invitation?",
-  "Aucune invitation générée.": "No invitations generated.",
-  "Tokens techniques avances": "Advanced technical tokens",
-  "Optionnel": "Optional",
-  "Champ requis.": "Required field.",
-  "Adresse email invalide.": "Invalid email address.",
-  "Email propriétaire invalide.": "Invalid owner email.",
-  "Veuillez compléter les champs requis.": "Please complete the required fields.",
-  "Nom": "Last name",
-  "Prénom": "First name",
-  "Équipe": "Team",
-  "Établissement": "Location",
-  "Proposer une nouvelle equipe": "Propose a new team",
-  "Proposer un nouvel etablissement": "Propose a new location",
-  "Selectionnez une equipe": "Select a team",
-  "Selectionnez un etablissement": "Select a location",
-  "Collecte transparente": "Transparent collection",
-  "Ce collecteur recupere uniquement les informations d'inventaire utiles a l'equipe IT.": "This collector only gathers inventory information needed by the IT team.",
-  "hostname, OS, fabricant, modèle et numéro de série": "hostname, OS, manufacturer, model, and serial number",
-  "Numéro modèle / SKU": "Model number / SKU",
-  "Etiquette service": "Service tag",
-  "CPU, RAM, stockage, GPU si disponible": "CPU, RAM, storage, GPU if available",
-  "IP locale, MAC si autorisee, utilisateur OS connecte": "Local IP, MAC if allowed, logged-in OS user",
-  "Aucun fichier personnel, historique navigateur, mot de passe ou outil de controle distant n'est lu ou installe.": "No personal files, browser history, passwords, or remote-control tool are read or installed.",
-  "Commentaire optionnel": "Optional comment",
-  "Generer la commande": "Generate command",
-  "Preparer le collecteur": "Prepare collector",
-  "Remplissez le formulaire pour preparer le collecteur et pre-remplir l'application.": "Complete the form to prepare the collector and prefill the app.",
-  "Methode recommandee: telechargez l'application adaptee a votre systeme, chargez le code de pre-remplissage, relisez les donnees collectees puis envoyez.": "Recommended method: download the app for your system, load the prefill code, review the collected data, then submit.",
-  "Token temporaire a utiliser dans l'application": "Temporary token to use in the app",
-  "Code de pré-remplissage": "Prefill code",
-  "Copier le code de pré-remplissage": "Copy prefill code",
-  "Copier le token collecteur": "Copy collector token",
-  "Application native recommandee": "Recommended native app",
-  "Detection du systeme en cours...": "Detecting system...",
-  "Télécharger le collecteur": "Download collector",
-  "Autres versions": "Other versions",
-  "Autre plateforme": "Other platform",
-  "Télécharger le collecteur Windows": "Download Windows Collector",
-  "Télécharger le collecteur macOS": "Download macOS Collector",
-  "Télécharger le collecteur Linux": "Download Linux Collector",
-  "Télécharger le collecteur": "Download Collector",
-  "Collecteur detecte pour": "Collector detected for",
-  "Choisissez votre plateforme ci-dessous.": "Choose your platform below.",
-  "Aucun asset collecteur disponible pour cette plateforme.": "No collector asset is available for this platform.",
-  "Code cree. Telechargez le collecteur puis chargez le code de pre-remplissage.": "Code created. Download the collector, then load the prefill code.",
-  "Application collecteur": "Collector app",
-  "Version transparente Python/Tkinter pour Windows, Ubuntu/Linux et macOS. Elle affiche les données avant envoi.": "Transparent Python/Tkinter version for Windows, Ubuntu/Linux, and macOS. It shows data before sending.",
-  "Fallback PowerShell": "PowerShell fallback",
-  "Mode avancé IT": "Advanced IT mode",
-  "Script lisible pour diagnostic ou support IT. Les antivirus peuvent bloquer les scripts lances depuis le navigateur.": "Readable script for diagnostics or IT support. Antivirus tools may block browser-launched scripts.",
-  "Script lisible, non obfusque, a copier ou telecharger si l'application collecteur n'est pas disponible.": "Readable, non-obfuscated script to copy or download if the collector app is unavailable.",
-  "Copier la commande": "Copy command",
-  "Copier le script": "Copy script",
-  "Apercu du script PowerShell": "PowerShell script preview",
-  "Télécharger le script": "Download script",
-  "Connexion": "Sign in",
-  "Mot de passe admin": "Admin password",
-  "Mot de passe": "Password",
-  "Identifiant": "Username",
-  "Nom affiche": "Display name",
-  "Utilisateurs & roles": "Users & roles",
-  "Utilisateurs": "Users",
-  "Nouveau compte": "New account",
-  "Enregistrer le compte": "Save account",
-  "Compte actif": "Active account",
-  "Compte utilisateur": "User account",
-  "Dernière connexion": "Last login",
-  "Creation": "Created",
-  "Securite": "Security",
-  "Vide = inchange": "Empty = unchanged",
-  "Generer un mot de passe": "Generate password",
-  "Copier le mot de passe": "Copy password",
-  "Password copied": "Password copied",
-  "No password to copy": "No password to copy",
-  "Mot de passe généré.": "Password generated.",
-  "Copie impossible.": "Copy failed.",
-  "Aucune commande a copier": "No command to copy",
-  "Aucun token a copier": "No token to copy",
-  "Code copie.": "Code copied.",
-  "Aucun code a copier": "No code to copy",
-  "Télécharger le fichier de pré-remplissage": "Download prefill file",
-  "Fichier de pre-remplissage telecharge. Ouvrez le collecteur: il le detectera automatiquement.": "Prefill file downloaded. Open the collector: it will detect it automatically.",
-  "Aucun code de pré-remplissage": "No prefill code",
-  "Aucun script a copier": "No script to copy",
-  "Actif": "Active",
-  "Desactive": "Disabled",
-  "Centre de notifications": "Notification center",
-  "Validation": "Validation",
-  "Pending changes": "Pending changes",
-  "Validations": "Pending changes",
-  "Les propositions utilisateur ne creent pas d'equipe ou d'etablissement avant validation admin.": "User proposals do not create teams or locations before admin approval.",
-  "Approuver": "Approve",
-  "Rejeter": "Reject",
-  "Lier a l'existant": "Link existing",
-  "Modifier et approuver": "Modify and approve",
-  "Proposition traitee.": "Proposal processed.",
-  "Format horaire": "Time format",
-  "Heure": "Time",
-  "Heure actuelle": "Current time",
-  "Meteo": "Weather",
-  "Meteo indisponible": "Weather unavailable",
-  "Basculer Celsius Fahrenheit": "Toggle Celsius/Fahrenheit",
-  "Auto": "Auto",
-  "Sortir la machine du parc": "Retire device",
-  "Ajoutez une note avant de confirmer la sortie du parc.": "Please add a retirement note before confirming.",
-  "Note de sortie du parc requise.": "Retirement note required.",
-  "Confirmer": "Confirm",
-  "Aucun utilisateur actuel": "No current user",
-  "Chronologie utilisateurs": "User timeline",
-  "Utilise de": "Used from",
-  "a": "to",
-  "a aujourd'hui": "to present",
-  "Durée": "Duration",
-  "Assigne par": "Assigned by",
-  "Retire par": "Unassigned by",
-  "Source": "Source",
-  "Pourquoi": "Why",
-  "Qui": "Who",
-  "Quand": "When",
-  "Comment": "How",
-  "Quoi": "What",
-  "MANUAL_ADMIN": "Manual admin",
-  "COLLECTOR": "Collector",
-  "IMPORT": "Import",
-  "SYSTEM": "System",
-  "notification.deviceRetired.title": "Device retired",
-  "notification.deviceRetired.message": "A device has been retired.",
-  "notification.deviceReactivated.title": "Device reactivated",
-  "notification.deviceReactivated.message": "A device has been reactivated.",
-  "notification.deviceReassigned.title": "Device reassigned",
-  "notification.deviceReassigned.message": "A device assignment has changed.",
-  "notification.pendingTeam.title": "Pending team proposal",
-  "notification.pendingTeam.message": "A new team proposal is waiting for review.",
-  "notification.pendingLocation.title": "Pending location proposal",
-  "notification.pendingLocation.message": "A new location proposal is waiting for review.",
-  "notification.collectorReceived.title": "Collector submission received",
-  "notification.collectorReceived.message": "A device inventory submission was received.",
-  "notification.collectorFailed.title": "Collector submission failed",
-  "notification.collectorFailed.message": "A device inventory submission failed.",
-  "notification.adminAction.title": "Admin action completed",
-  "notification.adminAction.message": "An admin action has been completed.",
-  "notification.tokenRevoked.title": "Token revoked",
-  "notification.tokenRevoked.message": "A collection token was revoked.",
-  "notification.tokenDeleted.title": "Token deleted",
-  "notification.tokenDeleted.message": "A collection token was deleted.",
-  "notification.tokenExpired.title": "Token expired",
-  "notification.tokenExpired.message": "A collection token has expired.",
-  "notification.ownerChanged.title": "Device owner changed",
-  "notification.ownerChanged.message": "A device owner has changed.",
-  "notification.teamChanged.title": "Team changed",
-  "notification.teamChanged.message": "A device team has changed.",
-  "notification.locationChanged.title": "Location changed",
-  "notification.locationChanged.message": "A device location has changed.",
-  "notification.osChanged.title": "OS changed",
-  "notification.osChanged.message": "A device operating system has changed.",
-  "notification.hardwareChanged.title": "Hardware changed",
-  "notification.hardwareChanged.message": "A device hardware profile has changed.",
-  "notification.userRemoved.title": "Current user removed",
-  "notification.userRemoved.message": "A device no longer has a current user.",
-  "notification.deviceOld.title": "Device older than threshold",
-  "notification.deviceOld.message": "A device is older than the replacement threshold.",
-  "notification.lowCpu.title": "Low CPU score",
-  "notification.lowCpu.message": "A device has a low CPU performance score.",
-  "notification.lowRam.title": "Low RAM device",
-  "notification.lowRam.message": "A device has less RAM than recommended.",
-  "notification.pendingApproved.title": "Pending change approved",
-  "notification.pendingApproved.message": "A pending change has been approved.",
-  "notification.pendingRejected.title": "Pending change rejected",
-  "notification.pendingRejected.message": "A pending change has been rejected.",
-  "notification.deleteBlocked.title": "Deletion blocked",
-  "notification.deleteBlocked.message": "This team or location still has linked devices or users.",
-  "Abréviation déjà utilisée par une autre équipe.": "Abbreviation already used by another team.",
-  "Abréviation déjà utilisée par un autre établissement.": "Abbreviation already used by another location.",
-  "Commande generee. Proposition envoyee a l'admin.": "Command generated. Proposal sent to admin.",
-  "Commande copiee.": "Command copied.",
-  "Script copie.": "Script copied.",
-  "Tout marquer comme lu": "Mark all as read",
-  "Marquer lu": "Mark read",
-  "Non lues": "Unread",
-  "Lues": "Read",
-  "Severite": "Severity",
-  "Compte créé.": "Account created.",
-  "Compte mis a jour.": "Account updated.",
-  "Compte supprimé.": "Account deleted.",
-  "Notifications mises a jour.": "Notifications updated.",
-  "Notification marquee comme lue.": "Notification marked as read.",
-  "Element lié introuvable.": "Related item not found.",
-  "Se connecter": "Sign in",
-  "Dashboard": "Dashboard",
-  "Vue du parc informatique": "IT fleet overview",
-  "Actualiser": "Refresh",
-  "Enrichir": "Enrich",
-  "Enrichir les données": "Enrich data",
-  "Déconnexion": "Sign out",
-  "Sections d'administration": "Administration sections",
-  "Parc": "Fleet",
-  "Organisation": "Organization",
-  "Valorisation": "Valuation",
-  "Accès": "Access",
-  "Accès collecte": "Collection access",
-  "Tokens temporaires": "Temporary tokens",
-  "Libellé": "Label",
-  "Durée": "Duration",
-  "1 heure": "1 hour",
-  "24 heures": "24 hours",
-  "7 jours": "7 days",
-  "30 jours": "30 days",
-  "90 jours": "90 days",
-  "1 an": "1 year",
-  "Utilisations maximum": "Maximum uses",
-  "Illimite": "Unlimited",
-  "Generer un token": "Generate token",
-  "Ce token ne sera affiche qu'une fois. Conservez-le dans un endroit securise.": "This token is shown only once. Store it in a secure place.",
-  "Copier le token": "Copy token",
-  "Prefixe": "Prefix",
-  "Expiration": "Expiration",
-  "Utilisations": "Uses",
-  "Dernière utilisation": "Last used",
-  "Etat": "Status",
-  "Structure": "Structure",
-  "Équipes": "Teams",
-  "Nouvelle équipe": "New team",
-  "Nom de l'équipe": "Team name",
-  "Abréviation": "Abbreviation",
-  "Description": "Description",
-  "Couleur": "Color",
-  "Équipe active": "Active team",
-  "Enregistrer l'équipe": "Save team",
-  "Implantations": "Locations",
-  "Établissements": "Locations",
-  "Nouvel établissement": "New location",
-  "Nom de l'établissement": "Location name",
-  "Type d'établissement": "Location type",
-  "Discipline": "Discipline",
-  "Entrepot": "Warehouse",
-  "Boutique": "Store",
-  "Siege social": "Headquarters",
-  "Centre R&D": "R&D center",
-  "Comptabilite": "Accounting",
-  "Bureau": "Office",
-  "Teletravail": "Remote",
-  "Autre": "Other",
-  "Sport general": "General sport",
-  "Velo / cycling": "Bike / cycling",
-  "Sports de raquette": "Racket sports",
-  "Couleur par défaut": "Default color",
-  "Rechercher une adresse": "Search for an address",
-  "Commencez a saisir une adresse...": "Start typing an address...",
-  "Adresse": "Address",
-  "Code postal": "Postal code",
-  "Ville": "City",
-  "Pays": "Country",
-  "Établissement actif": "Active location",
-  "Enregistrer l'établissement": "Save location",
-  "Renseignez latitude et longitude pour afficher la carte.": "Enter latitude and longitude to display the map.",
-  "Ouvrir dans OpenStreetMap": "Open in OpenStreetMap",
-  "Ouvrir dans Google Maps": "Open in Google Maps",
-  "Recherche": "Search",
-  "Anciennete": "Age",
-  "Signal parc": "Fleet signal",
-  "Toutes": "All",
-  "Tous": "All",
-  "Recent": "Recent",
-  "A surveiller": "Monitor",
-  "A remplacer": "Replace",
-  "Remplacement planifie": "Planned replacement",
-  "Signal remplacement": "Replacement signal",
-  "Modèle": "Model",
-  "Statut": "Status",
-  "Actif": "Active",
-  "En stock": "In stock",
-  "Perdu": "Lost",
-  "Sorti du parc": "Retired",
-  "Score CPU": "CPU score",
-  "Plateforme CPU": "CPU platform",
-  "Source score CPU": "CPU score source",
-  "Voir la source": "View source",
-  "Faible": "Low",
-  "Moyen": "Medium",
-  "Bon": "Good",
-  "Valeur": "Value",
-  "Moins de 180 EUR": "Less than EUR 180",
-  "180-350 EUR": "EUR 180-350",
-  "Plus de 350 EUR": "More than EUR 350",
-  "Trier par": "Sort by",
-  "Effacer les filtres": "Clear filters",
-  "Réinitialiser les filtres": "Reset filters",
-  "Machines": "Computers",
-  "Total machines": "Total computers",
-  "Machines actives": "Active computers",
-  "Machines a remplacer": "Computers to replace",
-  "Machines sans remontee": "Computers not reporting",
-  "Machines Windows 10": "Windows 10 computers",
-  "Valeur du parc": "Fleet value",
-  "Age moyen du parc": "Average fleet age",
-  "Dashboard parc informatique": "IT fleet dashboard",
-  "Indicateurs principaux du parc": "Main fleet indicators",
-  "A traiter en priorite": "Priority actions",
-  "Actions IT triees par score de risque": "IT actions sorted by risk score",
-  "Aucune action prioritaire": "No priority action",
-  "Le parc filtre ne remonte pas de risque majeur.": "The filtered fleet does not show major risk.",
-  "Risque": "Risk",
-  "Raison": "Reason",
-  "Priorite": "Priority",
-  "Repartition du parc": "Fleet distribution",
-  "Sante du parc": "Fleet health",
-  "Valorisation": "Valuation",
-  "Bon etat": "Healthy",
-  "Critique": "Critical",
-  "Score global": "Overall score",
-  "Principales raisons": "Main reasons",
-  "Postes a remplacer en priorite": "Computers to replace first",
-  "Derniere remontee": "Last report",
-  "Derniere remontee +30 jours": "Last report over 30 days",
-  "Stockage faible": "Low storage",
-  "OS obsolete": "Obsolete OS",
-  "Score CPU faible": "Low CPU score",
-  "Materiel vieillissant": "Aging hardware",
-  "Statut remplacement": "Planned replacement status",
-  "CPU inconnu": "Unknown CPU",
-  "OS obsolète": "Obsolete OS",
-  "Moins de 30 Go libres": "Less than 30 GB free",
-  "Estimation basee sur modele, CPU, RAM, GPU et age materiel": "Estimate based on model, CPU, RAM, GPU and hardware age",
-  "Valeur moyenne par machine": "Average value per computer",
-  "Valeur des remplacements": "Replacement candidates value",
-  "Signal recent": "Recent signal",
-  "Signal a surveiller": "Monitor signal",
-  "Signal ancien": "Old signal",
-  "Age materiel": "Hardware age",
-  "Score CPU": "CPU score",
-  "Age materiel vs CPU": "Hardware age vs CPU",
-  "Recent / correct": "Recent / healthy",
-  "Vieillissant": "Aging",
-  "A remplacer": "Replace",
-  "Points par machine avec couleur de criticite": "Points per computer colored by criticality",
-  "Machines avec donnees CPU et age disponibles": "Computers with CPU and age data available",
-  "Enrichissement requis pour afficher le nuage age CPU.": "Enrichment is required to show the age CPU chart.",
-  "Dossiers actifs uniquement": "Active records only",
-  "Statut actif dans le parc": "Active status in fleet",
-  "Statut, âge, CPU ou priorité élevée": "Status, age, CPU or high priority",
-  "machines avec données d'âge": "computers with age data",
-  "Aucun risque majeur": "No major risk",
-  "Sites, equipes et OS": "Locations, teams and OS",
-  "Etablissements": "Locations",
-  "Etablissement": "Location",
-  "Equipes": "Teams",
-  "Equipe": "Team",
-  "Par etablissement": "By location",
-  "Par equipe": "By team",
-  "Par systeme": "By system",
-  "Modeles frequents": "Common models",
-  "Recent / a surveiller / ancien": "Recent / monitor / old",
-  "Top etablissements": "Top locations",
-  "Utilisateur": "User",
-  "Dernière remontée": "Last report",
-  "Detail": "Details",
-  "Selectionnez une machine": "Select a computer",
-  "Aucune machine selectionnee.": "No computer selected.",
-  "Aucune machine s?lectionn?e.": "No computer selected.",
-  "Valeur estimée": "Estimated value",
-  "Valeur matérielle": "Hardware value",
-  "Valorisation du parc": "Fleet valuation",
-  "Enrichir toutes les machines": "Enrich all devices",
-  "Recalculer les valeurs": "Recalculate values",
-  "Actualiser dates CPU": "Refresh CPU launch dates",
-  "Synchroniser scores CPU": "Sync CPU scores",
-  "Importer benchmarks CPU": "Import CPU benchmarks",
-  "Exporter inventaire enrichi": "Export enriched inventory",
-  "Les valeurs sont des estimations basees sur le modèle, le CPU, la RAM, le GPU, la categorie et une depreciation par age.": "Values are estimates based on model, CPU, RAM, GPU, category, and age depreciation.",
-  "Valeur de lancement totale": "Total launch value",
-  "Valeur actuelle totale": "Total current value",
-  "Depreciation moyenne": "Average depreciation",
-  "Age moyen": "Average age",
-  "Plus de 4 ans": "Older than 4 years",
-  "Priorite elevee": "High priority",
-  "Valeur par équipe": "Value by team",
-  "Distribution des ages": "Age distribution",
-  "Distribution des performances": "Performance distribution",
-  "Priorite de remplacement": "Replacement priority",
-  "Benchmarks importés": "Imported benchmarks",
-  "Jeu intégré": "Bundled dataset",
-  "Enrichir cette machine": "Enrich this device",
-  "Source enrichissement": "Enrichment source",
-  "Statut enrichissement": "Enrichment status",
-  "Priorite remplacement": "Replacement priority",
-  "Categorie matérielle": "Hardware category",
-  "Valeur actuelle estimée": "Estimated current value",
-  "Confiance prix": "Price confidence",
-  "Notes enrichissement": "Enrichment notes",
-  "GPU": "GPU",
-  "Type stockage": "Storage type",
-  "Fichier CPU importe.": "CPU file imported.",
-  "Scores CPU synchronises.": "CPU scores synced.",
-  "Enrichissement terminé.": "Enrichment completed.",
-  "Recalcul terminé.": "Recalculation completed.",
-  "Actualisation...": "Refreshing...",
-  "completed": "Completed",
-  "partial": "Partial",
-  "failed": "Failed",
-  "pending": "Pending",
-  "Valeur revente": "Resale value",
-  "Cout remplacement": "Replacement cost",
-  "Valeur comptable": "Book value",
-  "Methode valuation": "Valuation method",
-  "Confiance valuation": "Valuation confidence",
-  "Observations marche": "Market observations",
-  "Raisons valuation": "Valuation reasons",
-  "Prix marche observes": "Observed market prices",
-  "Confiance A-B": "A-B confidence",
-  "market_verified": "Market verified",
-  "market_blended": "Market blended",
-  "manufacturer_msrp": "Manufacturer MSRP",
-  "model_matched": "Model matched",
-  "spec_estimate": "Spec estimate",
-  "fallback_estimate": "Fallback estimate",
-  "invoice_backed": "Invoice backed",
-  "business-laptop": "Business laptop",
-  "workstation": "Workstation",
-  "mini-pc": "Mini PC",
-  "desktop": "Desktop",
-  "all-in-one": "All-in-one",
-  "keep": "Keep",
-  "watch": "Monitor",
-  "replace": "Replace",
-  "CPU faible": "Low CPU",
-  "Stockage faible": "Low storage",
-  "Chargement de l'historique...": "Loading history...",
-  "IP locale": "Local IP",
-  "Stockage": "Storage",
-  "Utilisateur OS": "OS user",
-  "Score age": "Age score",
-  "Génération CPU": "CPU génération",
-  "Annee CPU": "CPU year",
-  "Annee modèle": "Model year",
-  "Prix lancement": "Launch price",
-  "Valeur actuelle": "Current value",
-  "Confiance": "Confidence",
-  "Reco": "Recommendation",
-  "Dernier enrichissement": "Last enrichment",
-  "Mettre a jour": "Update",
-  "Historique des scans": "Scan history",
-  "Cycle de vie": "Lifecycle",
-  "Version OS": "OS version",
-  "Aucun scan detaille.": "No detailed scans.",
-  "Historique prix marché": "Market price history",
-  "Aucun prix externe collecte.": "No external prices collected.",
-  "Non renseigné": "Not provided",
-  "Aucune donnee.": "No data.",
-  "Machines par établissement": "Computers by location",
-  "Machines par équipe": "Computers by team",
-  "Non mises a jour": "Not recently updated",
-  "A jour": "Up to date",
-  "Anciennete du parc": "Fleet age",
-  "Signal du parc": "Fleet signal",
-  "Modeles presents": "Most common models",
-  "RAM moyenne par équipe": "Average RAM by team",
-  "Valeur actuelle estimée": "Estimated current value",
-  "Valeur par établissement": "Value by location",
-  "Top machines a remplacer": "Top computers to replace",
-  "Age matériel vs CPU": "Hardware age vs CPU",
-  "Enrichissement requis.": "Enrichment required.",
-  "Enrichissement...": "Enriching...",
-  "Aucune équipe.": "No teams.",
-  "Aucun établissement.": "No locations.",
-  "Aucun token généré.": "No tokens generated.",
-  "Révoquer": "Revoke",
-  "Supprimer": "Delete",
-  "Supprimer cette machine": "Delete this device",
-  "Machine supprimée.": "Device deleted.",
-  "Annuler": "Cancel",
-  "Confirmer la suppression": "Confirm deletion",
-  "Révoqué": "Revoked",
-  "Expiré": "Expired",
-  "Epuise": "Exhausted",
-  "Valide": "Valid",
-  "Token complet indisponible apres rechargement": "Full token unavailable after reload",
-  "Agence Paris - juin": "Paris office - June",
-  "Nom, hostname, modèle, serial...": "Name, hostname, model, serial...",
-  "Commande générée.": "Command generated.",
-  "Commande copiee.": "Command copied.",
-  "Token généré.": "Token generated.",
-  "Token copie.": "Token copied.",
-  "Token révoqué.": "Token revoked.",
-  "Token supprimé.": "Token deleted.",
-  "Équipe supprimée.": "Team deleted.",
-  "Établissement supprimé.": "Location deleted.",
-  "Affectations mises a jour.": "Assignments updated.",
-  "Réaffectation terminée.": "Reassignment completed.",
-  "Ordre enregistre.": "Order saved.",
-  "Fabricant": "Manufacturer",
-  "Trier par": "Sort by",
-  "Famille": "Family",
-  "Affectations": "Assignments",
-  "Propriétaire": "Owner",
-  "Prénom propriétaire": "Owner first name",
-  "Nom propriétaire": "Owner last name",
-  "Email propriétaire": "Owner email",
-  "Enregistrer les affectations": "Save assignments",
-  "Reaffecter les elements liés": "Reassign linked records",
-  "Nouvelle destination": "New destination",
-  "Reaffecter": "Reassign",
-  "Machines par fabricant": "Devices by manufacturer",
-  "Fabricant et OS": "Manufacturer and OS",
-  "Age moyen par fabricant": "Average age by manufacturer",
-  "Vue generale": "Overview",
-  "Matériel": "Hardware",
-  "Réseau": "Network",
-  "Affectation": "Assignment",
-  "Historique": "History",
-  "Factures": "Invoices",
-  "Facture": "Invoice",
-  "Ajouter une facture": "Add invoice",
-  "Type facture": "Invoice type",
-  "Facture achat": "Purchase invoice",
-  "Extension garantie": "Warranty extension",
-  "Reparation": "Repair",
-  "Accessoire": "Accessory",
-  "Autre facture": "Other invoice",
-  "Garantie": "Warranty",
-  "Garantie fournisseur": "Warranty provider",
-  "Debut garantie": "Warranty start",
-  "Fin garantie": "Warranty end",
-  "Duree garantie mois": "Warranty duration (months)",
-  "Garantie active jusqu'au": "Warranty active until",
-  "Garantie constructeur estimee": "Estimated manufacturer warranty",
-  "Garantie constructeur": "Manufacturer warranty",
-  "Garantie standard 1 an": "Standard 1-year warranty",
-  "Garantie expiree": "Warranty expired",
-  "Garantie active": "Warranty active",
-  "Garantie bientot expiree": "Warranty expiring soon",
-  "Garantie incomplete": "Incomplete warranty",
-  "Expire aujourd'hui": "Expires today",
-  "Expire dans": "Expires in",
-  "Expiree depuis": "Expired for",
-  "jours": "days",
-  "jour": "day",
-  "mois": "months",
-  "Depuis facture achat": "From purchase invoice",
-  "Duree constructeur": "Manufacturer warranty duration",
-  "Pre-remplir garantie": "Prefill warranty",
-  "Date invalide. Utilisez le format JJ/MM/AAAA.": "Invalid date. Use DD/MM/YYYY.",
-  "Fournisseur": "Supplier",
-  "Numero facture": "Invoice number",
-  "Date facture": "Invoice date",
-  "Montant facture": "Invoice amount",
-  "Devise": "Currency",
-  "Lien facture": "Invoice link",
-  "Fichier facture": "Invoice file",
-  "Nom fichier": "File name",
-  "Notes facture": "Invoice notes",
-  "Ouvrir la facture": "Open invoice",
-  "Aucune facture.": "No invoice.",
-  "Facture ajoutee.": "Invoice added.",
-  "Facture supprimee.": "Invoice deleted.",
-  "Supprimer cette facture ?": "Delete this invoice?",
-  "Supprimer la facture": "Delete invoice",
-  "Prix achat reel": "Actual purchase price",
-  "Fichier trop volumineux. Maximum 10 Mo.": "File too large. Maximum 10 MB.",
-  "Lecture du fichier...": "Reading file...",
-  "Qualite donnees": "Data quality",
-  "Donnees a jour": "Data up to date",
-  "Donnees a verifier": "Data to review",
-  "Donnees obsoletes": "Outdated data",
-  "Donnees critiques": "Critical data issue",
-  "Aucune collecte": "No collection",
-  "Derniere collecte ancienne": "Last collection is old",
-  "Champs critiques manquants": "Missing critical fields",
-  "Donnees materielles incompletes": "Incomplete hardware data",
-  "Profil utilisateur incomplet": "Incomplete user profile",
-  "Email utilisateur a verifier": "User email to review",
-  "Collector ancien": "Outdated collector",
-  "utilisables": "usable",
-  "libres": "free",
-  "total": "total",
-  "De": "From",
-  "Vers": "To",
-  "Aucun historique.": "No history.",
-  "Ajouter la note": "Add note",
-  "Ajouter une note a l'historique...": "Add a history note...",
-  "Machine créée": "Device created",
-  "Machine mise à jour": "Device updated",
-  "Machine sortie du parc": "Device retired",
-  "Machine réactivée": "Device reactivated",
-  "Utilisateur affecté": "User assigned",
-  "Utilisateur réaffecté": "User reassigned",
-  "Utilisateur retiré": "User removed",
-  "Équipe modifiée": "Team changed",
-  "Établissement modifié": "Location changed",
-  "Système mis à jour": "OS changed",
-  "Matériel modifié": "Hardware changed",
-  "Statut modifié": "Status changed",
-  "Collecte mise à jour": "Collector update",
-  "Reinitialisation detectee": "Reset detected",
-  "Note administrateur": "Admin note",
-  "Import mis a jour": "Import updated",
-  "Facture ajoutee": "Invoice added",
-  "Facture supprimee": "Invoice deleted",
-  "Modification groupee": "Grouped update",
-  "Sections machine": "Device sections",
-  "Scans": "Scans",
-  "Prix marché": "Market prices",
-  "Nom d'hote": "Hostname",
-  "Version OS": "OS version",
-  "Numéro de série": "Serial number",
-  "RAM totale": "Total RAM",
-  "Mémoire": "Memory",
-  "Stockage total": "Total storage",
-  "Type stockage": "Storage type",
-  "Utilisateur OS": "OS user",
-  "Email propriétaire": "Owner email",
-  "Note ajoutee.": "Note added.",
-  "Statut mis a jour.": "Status updated.",
-  "Equipe mise a jour.": "Team updated.",
-  "Équipe créée.": "Team created.",
-  "Etablissement mis a jour.": "Location updated.",
-  "Établissement créé.": "Location created.",
-  "Recherche d'adresse...": "Searching addresses...",
-  "Aucune adresse trouvee.": "No address found.",
-  "Selection de l'adresse...": "Loading address...",
-  "Adresse completee automatiquement.": "Address completed automatically.",
-  "Google Places n'est pas configure.": "Google Places is not configured.",
-  "Mode clair": "Light mode",
-  "Mode sombre": "Dark mode",
-};
-
-const frenchNotificationTranslations = {
-  "notification.deviceRetired.title": "Machine sortie du parc",
-  "notification.deviceRetired.message": "Une machine a ete sortie du parc.",
-  "notification.deviceReactivated.title": "Machine réactivée",
-  "notification.deviceReactivated.message": "Une machine a ete reactivee.",
-  "notification.deviceReassigned.title": "Machine reaffectee",
-  "notification.deviceReassigned.message": "L'affectation d'une machine a change.",
-  "notification.pendingTeam.title": "Proposition d'équipe en attente",
-  "notification.pendingTeam.message": "Une nouvelle proposition d'équipe attend validation.",
-  "notification.pendingLocation.title": "Proposition d'établissement en attente",
-  "notification.pendingLocation.message": "Une nouvelle proposition d'établissement attend validation.",
-  "notification.collectorReceived.title": "Collecte reçue",
-  "notification.collectorReceived.message": "Une remontee d'inventaire machine a ete recue.",
-  "notification.collectorFailed.title": "Échec de collecte",
-  "notification.collectorFailed.message": "Une remontee d'inventaire machine a echoue.",
-  "notification.adminAction.title": "Action admin terminée",
-  "notification.adminAction.message": "Une action admin a ete terminee.",
-  "notification.tokenRevoked.title": "Token révoqué",
-  "notification.tokenRevoked.message": "Un token de collecte a ete revoque.",
-  "notification.tokenDeleted.title": "Token supprimé",
-  "notification.tokenDeleted.message": "Un token de collecte a ete supprime.",
-  "notification.tokenExpired.title": "Token expiré",
-  "notification.tokenExpired.message": "Un token de collecte a expire.",
-  "notification.ownerChanged.title": "Propriétaire modifié",
-  "notification.ownerChanged.message": "Le proprietaire d'une machine a change.",
-  "notification.teamChanged.title": "Équipe modifiée",
-  "notification.teamChanged.message": "L'equipe d'une machine a change.",
-  "notification.locationChanged.title": "Établissement modifié",
-  "notification.locationChanged.message": "L'etablissement d'une machine a change.",
-  "notification.osChanged.title": "OS modifié",
-  "notification.osChanged.message": "Le systeme d'exploitation d'une machine a change.",
-  "notification.hardwareChanged.title": "Matériel modifié",
-  "notification.hardwareChanged.message": "Le profil materiel d'une machine a change.",
-  "notification.userRemoved.title": "Utilisateur actuel retire",
-  "notification.userRemoved.message": "Une machine n'a plus d'utilisateur actuel.",
-  "notification.deviceOld.title": "Machine au-dessus du seuil d'ancienneté",
-  "notification.deviceOld.message": "Une machine depasse le seuil de remplacement.",
-  "notification.lowCpu.title": "Score CPU faible",
-  "notification.lowCpu.message": "Une machine a un score CPU faible.",
-  "notification.lowRam.title": "RAM faible",
-  "notification.lowRam.message": "Une machine a moins de RAM que recommande.",
-  "notification.pendingApproved.title": "Proposition approuvee",
-  "notification.pendingApproved.message": "Une proposition a ete approuvee.",
-  "notification.pendingRejected.title": "Proposition rejetee",
-  "notification.pendingRejected.message": "Une proposition a ete rejetee.",
-  "notification.deleteBlocked.title": "Suppression bloquée",
-  "notification.deleteBlocked.message": "Cette équipe ou cet établissement contient encore des machines ou utilisateurs liés.",
-};
-
 function translate(value) {
-  if (String(value || "").startsWith("notification.")) {
-    return state.language === "en"
-      ? englishTranslations[value] || value
-      : frenchNotificationTranslations[value] || value;
+  const key = normalizeTranslationKey(value);
+  if (key.startsWith("notification.")) {
+    return state.language === "en" ? englishTranslations[key] || value : frenchNotificationTranslations[key] || value;
   }
-  return state.language === "en" ? englishTranslations[value] || value : value;
+  return state.language === "en" ? englishTranslations[key] || value : value;
 }
 
 function currentStatusLabels() {
@@ -794,22 +87,46 @@ function currentStatusLabels() {
 function localizedEnrichmentValue(value) {
   const labels = {
     fr: {
-      completed: "Terminé", partial: "Partiel", failed: "Échec", pending: "En attente",
-      "business-laptop": "Portable professionnel", workstation: "Station de travail",
-      "mini-pc": "Mini PC", desktop: "Ordinateur fixe", "all-in-one": "Tout-en-un",
-      keep: "Garder", watch: "Surveiller", replace: "Remplacer",
-      market_verified: "Prix marche verifie", market_blended: "Prix marche mixte", manufacturer_msrp: "Prix constructeur verifie",
-      model_matched: "Modele identifie", spec_estimate: "Estimation technique",
-      fallback_estimate: "Estimation prudente", invoice_backed: "Facture verifiee",
+      completed: "Terminé",
+      partial: "Partiel",
+      failed: "Échec",
+      pending: "En attente",
+      "business-laptop": "Portable professionnel",
+      workstation: "Station de travail",
+      "mini-pc": "Mini PC",
+      desktop: "Ordinateur fixe",
+      "all-in-one": "Tout-en-un",
+      keep: "Garder",
+      watch: "Surveiller",
+      replace: "Remplacer",
+      market_verified: "Prix marché vérifié",
+      market_blended: "Prix marché mixte",
+      manufacturer_msrp: "Prix constructeur vérifié",
+      model_matched: "Modèle identifié",
+      spec_estimate: "Estimation technique",
+      fallback_estimate: "Estimation prudente",
+      invoice_backed: "Facture verifiee",
     },
     en: {
-      completed: "Completed", partial: "Partial", failed: "Failed", pending: "Pending",
-      "business-laptop": "Business laptop", workstation: "Workstation",
-      "mini-pc": "Mini PC", desktop: "Desktop", "all-in-one": "All-in-one",
-      keep: "Keep", watch: "Monitor", replace: "Replace",
-      market_verified: "Market verified", market_blended: "Market blended", manufacturer_msrp: "Manufacturer MSRP",
-      model_matched: "Model matched", spec_estimate: "Spec estimate",
-      fallback_estimate: "Fallback estimate", invoice_backed: "Invoice backed",
+      completed: "Completed",
+      partial: "Partial",
+      failed: "Failed",
+      pending: "Pending",
+      "business-laptop": "Business laptop",
+      workstation: "Workstation",
+      "mini-pc": "Mini PC",
+      desktop: "Desktop",
+      "all-in-one": "All-in-one",
+      keep: "Keep",
+      watch: "Monitor",
+      replace: "Replace",
+      market_verified: "Market verified",
+      market_blended: "Market blended",
+      manufacturer_msrp: "Manufacturer MSRP",
+      model_matched: "Model matched",
+      spec_estimate: "Spec estimate",
+      fallback_estimate: "Fallback estimate",
+      invoice_backed: "Invoice backed",
     },
   };
   return labels[state.language]?.[value] || value;
@@ -834,6 +151,15 @@ function cpuPlatformLabel(cpuName) {
 function valuationReasonsDisplay(device) {
   const reasons = Array.isArray(device.valuation_reasons) ? device.valuation_reasons : [];
   return reasons.map((reason) => String(reason).replaceAll("_", " ")).join(" / ");
+}
+
+function localizedMarketCondition(value) {
+  const condition = String(value || "").trim();
+  if (!condition) return "-";
+  return condition
+    .split(" - ")
+    .map((part) => translate(part))
+    .join(" - ");
 }
 
 function translateElement(root) {
@@ -868,10 +194,10 @@ function applyLanguage(language, persist = true) {
   state.language = language === "en" ? "en" : "fr";
   document.documentElement.lang = state.language;
   if (persist) localStorage.setItem("it_inventory_language", state.language);
-  $("#current-language-flag").textContent = state.language === "en"
-    ? "\u{1F1EC}\u{1F1E7}"
-    : "\u{1F1EB}\u{1F1F7}";
-  $$("[data-language]").forEach((button) => button.classList.toggle("is-active", button.dataset.language === state.language));
+  $("#current-language-flag").textContent = state.language === "en" ? "\u{1F1EC}\u{1F1E7}" : "\u{1F1EB}\u{1F1F7}";
+  $$("[data-language]").forEach((button) =>
+    button.classList.toggle("is-active", button.dataset.language === state.language),
+  );
   renderDevices();
   renderMetrics();
   renderOemMetrics();
@@ -911,9 +237,8 @@ function setTheme(preference, persist = true) {
   const toggle = $("#theme-toggle");
   if (toggle) {
     const dark = theme === "dark";
-    const label = state.themePreference === "system"
-      ? translate("Theme systeme")
-      : translate(dark ? "Mode sombre" : "Mode clair");
+    const label =
+      state.themePreference === "system" ? translate("Theme systeme") : translate(dark ? "Mode sombre" : "Mode clair");
     toggle.setAttribute("aria-label", label);
     toggle.title = label;
   }
@@ -927,27 +252,33 @@ function toast(message, type = "info") {
   window.setTimeout(() => node.classList.remove("show"), 3200);
 }
 
-async function api(path, options = {}) {
-  const headers = {
-    "Content-Type": "application/json",
-    ...(options.headers || {}),
-  };
-  if (state.adminToken) headers.Authorization = `Bearer ${state.adminToken}`;
-  const response = await fetch(`${CONFIG.apiBaseUrl}${path}`, { ...options, headers });
-  const contentType = response.headers.get("content-type") || "";
-  const body = contentType.includes("application/json") ? await response.json() : await response.text();
-  if (!response.ok) {
-    const error = new Error(body.error || body.message || "Erreur API");
-    error.details = typeof body === "object" ? body : {};
-    error.status = response.status;
-    throw error;
-  }
-  return body;
-}
-
 const rolePermissions = {
-  ADMIN: ["DEVICE_VIEW", "DEVICE_EDIT", "DEVICE_DELETE", "TEAM_MANAGE", "LOCATION_MANAGE", "TOKEN_MANAGE", "USER_MANAGE", "PENDING_CHANGE_APPROVE", "EXPORT_DATA", "VIEW_HISTORY", "VIEW_DASHBOARD", "NOTIFICATION_VIEW", "NOTIFICATION_MANAGE"],
-  MANAGER: ["DEVICE_VIEW", "DEVICE_EDIT", "TEAM_MANAGE", "LOCATION_MANAGE", "EXPORT_DATA", "VIEW_HISTORY", "VIEW_DASHBOARD", "NOTIFICATION_VIEW", "PENDING_CHANGE_APPROVE"],
+  ADMIN: [
+    "DEVICE_VIEW",
+    "DEVICE_EDIT",
+    "DEVICE_DELETE",
+    "TEAM_MANAGE",
+    "LOCATION_MANAGE",
+    "TOKEN_MANAGE",
+    "USER_MANAGE",
+    "PENDING_CHANGE_APPROVE",
+    "EXPORT_DATA",
+    "VIEW_HISTORY",
+    "VIEW_DASHBOARD",
+    "NOTIFICATION_VIEW",
+    "NOTIFICATION_MANAGE",
+  ],
+  MANAGER: [
+    "DEVICE_VIEW",
+    "DEVICE_EDIT",
+    "TEAM_MANAGE",
+    "LOCATION_MANAGE",
+    "EXPORT_DATA",
+    "VIEW_HISTORY",
+    "VIEW_DASHBOARD",
+    "NOTIFICATION_VIEW",
+    "PENDING_CHANGE_APPROVE",
+  ],
   VIEWER: ["DEVICE_VIEW", "VIEW_HISTORY", "VIEW_DASHBOARD", "NOTIFICATION_VIEW"],
   READ_ONLY: ["DEVICE_VIEW", "VIEW_HISTORY", "VIEW_DASHBOARD", "NOTIFICATION_VIEW"],
   COLLECTOR_USER: [],
@@ -968,10 +299,18 @@ function applyPermissions() {
     }
   });
   const editable = canPerformAction("DEVICE_EDIT");
-  ["#enrich-admin", "#valuation-enrich-all", "#valuation-recalculate", "#refresh-cpu-release-dates", "#sync-cpu-benchmarks", "#import-cpu-benchmarks"].forEach((selector) => {
+  [
+    "#valuation-enrich-fleet",
+    "#valuation-enrich-all",
+    "#valuation-recalculate",
+    "#refresh-cpu-release-dates",
+    "#sync-cpu-benchmarks",
+    "#import-cpu-benchmarks",
+  ].forEach((selector) => {
     const node = $(selector);
     if (node) node.classList.toggle("is-hidden", !editable);
   });
+  $$("[data-admin-only]").forEach((node) => node.classList.toggle("is-hidden", state.currentAdmin?.role !== "ADMIN"));
   $("#export-csv")?.classList.toggle("is-hidden", !canPerformAction("EXPORT_DATA"));
   const sessionLabel = $("#admin-session-label");
   if (sessionLabel) {
@@ -988,9 +327,11 @@ function applyPermissions() {
 function roleIcon(role) {
   const paths = {
     ADMIN: '<path d="M12 3 4 6v6c0 5 3.4 8.1 8 10 4.6-1.9 8-5 8-10V6l-8-3Z"></path><path d="m9 12 2 2 4-5"></path>',
-    MANAGER: '<rect width="18" height="14" x="3" y="7" rx="2"></rect><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"></path>',
+    MANAGER:
+      '<rect width="18" height="14" x="3" y="7" rx="2"></rect><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"></path>',
     VIEWER: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"></path><circle cx="12" cy="12" r="3"></circle>',
-    READ_ONLY: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"></path><circle cx="12" cy="12" r="3"></circle>',
+    READ_ONLY:
+      '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"></path><circle cx="12" cy="12" r="3"></circle>',
     COLLECTOR_USER: '<path d="M12 3v12"></path><path d="m8 11 4 4 4-4"></path><path d="M4 21h16"></path>',
   };
   return `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[role] || paths.VIEWER}</svg>`;
@@ -1041,11 +382,6 @@ function restoreCollectionDraft() {
   toggleProposalFields();
 }
 
-function clearCollectionDraft() {
-  state.collectionDraft = {};
-  localStorage.removeItem("it_inventory_collection_draft");
-}
-
 function toggleProposalFields() {
   const form = collectionForm();
   if (!form) return;
@@ -1090,7 +426,7 @@ async function loadInviteFromUrl() {
   state.currentInviteCode = inviteCode;
   collectionForm().elements.inviteCode.value = inviteCode;
   try {
-    const invite = await api(`/collect/invite/${encodeURIComponent(inviteCode)}`);
+    const invite = await inventoryApi.getCollectionInvite(inviteCode);
     applyCollectionInvite(invite);
     toast("Invitation chargée.", "success");
   } catch (error) {
@@ -1133,7 +469,9 @@ function validateCollectionForm(form) {
 }
 
 function normalize(value) {
-  return String(value || "").trim().toLowerCase();
+  return String(value || "")
+    .trim()
+    .toLowerCase();
 }
 
 function escapeHtml(value) {
@@ -1155,11 +493,17 @@ function fallbackAbbreviation(name) {
     .filter(Boolean);
   if (words.length === 0) return "";
   if (words.length === 1) return words[0].slice(0, 3).toUpperCase();
-  return words.slice(0, 3).map((word) => word[0]).join("").toUpperCase();
+  return words
+    .slice(0, 3)
+    .map((word) => word[0])
+    .join("")
+    .toUpperCase();
 }
 
 function displayWithAbbreviation(name, abbreviation) {
-  const abbr = String(abbreviation || "").trim().toUpperCase();
+  const abbr = String(abbreviation || "")
+    .trim()
+    .toUpperCase();
   return abbr ? `${abbr} - ${name}` : name;
 }
 
@@ -1188,58 +532,7 @@ function establishmentRecordById(id) {
   return state.establishments.find((site) => site.id === id) || null;
 }
 
-function normalizeOsInfo(osString) {
-  const original = String(osString || "").trim();
-  const normalized = original.toLowerCase();
-  const buildVersion = original.match(/\b\d+\.\d+\.\d+(?:\.\d+)?\b/)?.[0] || "";
-  let osFamily = "Unknown";
-  let iconType = "unknown";
-  let osVersion = "";
-  if (normalized.includes("windows server")) {
-    const serverVersion = original.match(/Windows Server\s*(\d{4})?/i)?.[1] || "";
-    osFamily = "Windows Server";
-    osVersion = serverVersion;
-    iconType = "windows-server";
-  } else if (normalized.includes("windows 11")) {
-    osFamily = "Windows 11";
-    iconType = "windows-11";
-  } else if (normalized.includes("windows 10")) {
-    osFamily = "Windows 10";
-    iconType = "windows-10";
-  } else if (/\b(ubuntu)\b/.test(normalized)) {
-    osFamily = "Ubuntu";
-    osVersion = original.match(/\b\d{2}\.\d{2}(?:\.\d+)?(?:\s+LTS)?/i)?.[0] || "";
-    iconType = "ubuntu";
-  } else if (/\b(debian|fedora|linux)\b/.test(normalized)) {
-    const distro = normalized.includes("debian") ? "Debian" : normalized.includes("fedora") ? "Fedora" : "Linux";
-    osFamily = distro;
-    osVersion = original.match(/\b\d+(?:\.\d+){1,2}\b/)?.[0] || "";
-    iconType = "linux";
-  } else if (/\b(macos|mac os|darwin|sonoma|ventura|monterey|sequoia)\b/.test(normalized)) {
-    osFamily = "macOS";
-    const releaseName = original.match(/\b(Sequoia|Sonoma|Ventura|Monterey)\b/i)?.[0] || "";
-    const releaseNumber = original.match(/\b\d{1,2}\.\d+(?:\.\d+)?\b/)?.[0] || "";
-    osVersion = [releaseName, releaseNumber].filter(Boolean).join(" ");
-    iconType = "macos";
-  }
-
-  let osEdition = "Unknown";
-  if (/\b(enterprise|entreprise)\b/.test(normalized)) osEdition = "Enterprise";
-  else if (/\b(education|educational)\b/.test(normalized)) osEdition = "Education";
-  else if (/\b(professionnel|professional|pro)\b/.test(normalized)) osEdition = "Pro";
-  else if (/\b(famille|home)\b/.test(normalized)) osEdition = "Home";
-
-  return {
-    osFamily,
-    osVersion,
-    osEdition,
-    buildVersion,
-    displayLabel: [osFamily, osVersion, osEdition === "Unknown" ? "" : osEdition].filter(Boolean).join(" "),
-    iconType,
-    badgeClass: `os-${iconType}`,
-    rawOsString: original,
-  };
-}
+const normalizeOsInfo = inventoryDomain.normalizeOsInfo;
 
 function osIcon(iconType) {
   if (iconType === "windows-11") {
@@ -1263,51 +556,29 @@ function osIcon(iconType) {
 }
 
 function renderOsBadge(device) {
-  const fullOs = [device.os_name || device.osType || device.os_type, device.os_version].filter(Boolean).join(" ").trim();
+  const fullOs = [device.os_name || device.osType || device.os_type, device.os_version]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
   if (!fullOs) return "-";
   const info = normalizeOsInfo(fullOs);
   return `<span class="os-badge ${info.iconType}" title="${escapeHtml(fullOs)}" aria-label="${escapeHtml(fullOs)}">${osIcon(info.iconType)}<span>${escapeHtml(info.displayLabel)}</span></span>`;
 }
 
-function roundedCapacityGb(value) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric) || numeric <= 0) return "";
-  const common = [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192];
-  const match = common.find((candidate) => Math.abs(numeric - candidate) / candidate <= 0.08);
-  return match || Math.round(numeric);
+function displayLocale() {
+  return state.language === "fr" ? "fr-FR" : "en-US";
 }
 
 function formatCapacityGb(value, suffix = "Go") {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric) || numeric <= 0) return "";
-  const rounded = roundedCapacityGb(numeric);
-  if (rounded && Math.abs(rounded - numeric) >= 0.1) {
-    return `${rounded} ${suffix} (${numeric.toLocaleString(state.language === "fr" ? "fr-FR" : "en-US", { maximumFractionDigits: 2 })} ${suffix})`;
-  }
-  return `${numeric.toLocaleString(state.language === "fr" ? "fr-FR" : "en-US", { maximumFractionDigits: 2 })} ${suffix}`;
+  return inventoryDomain.formatCapacityGb(value, displayLocale(), suffix);
 }
 
 function formatStorageUsableGb(value) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric) || numeric <= 0) return "";
-  return `${numeric.toLocaleString(state.language === "fr" ? "fr-FR" : "en-US", { maximumFractionDigits: numeric >= 100 ? 0 : 1 })} Go`;
-}
-
-function storageMarketingCapacityGb(value) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric) || numeric <= 0) return 0;
-  const common = [64, 128, 256, 512, 1024, 1536, 2048, 4096, 8192];
-  return common.find((candidate) => numeric >= candidate * 0.88 && numeric <= candidate * 1.02) || roundedCapacityGb(numeric);
+  return inventoryDomain.formatStorageUsableGb(value, displayLocale());
 }
 
 function formatStorageMarketingCapacity(value) {
-  const capacity = storageMarketingCapacityGb(value);
-  if (!capacity) return "";
-  if (capacity >= 1024) {
-    const tb = capacity / 1024;
-    return `${tb.toLocaleString(state.language === "fr" ? "fr-FR" : "en-US", { maximumFractionDigits: 1 })} To`;
-  }
-  return `${capacity} Go`;
+  return inventoryDomain.formatStorageMarketingCapacity(value, displayLocale());
 }
 
 function formatStorageTotalGb(value) {
@@ -1332,71 +603,31 @@ function memorySummary(payload = {}) {
   const modules = Array.isArray(payload.memoryModules) ? payload.memoryModules : [];
   if (!modules.length) return "";
   const types = [...new Set(modules.map((module) => module.memoryType || module.type).filter(Boolean))];
-  const speeds = [...new Set(modules.map((module) => Number(module.speedMhz || module.configuredSpeedMhz || 0)).filter(Boolean))];
+  const speeds = [
+    ...new Set(modules.map((module) => Number(module.speedMhz || module.configuredSpeedMhz || 0)).filter(Boolean)),
+  ];
   const slots = modules.length;
   return [
     slots ? `${slots} slot${slots > 1 ? "s" : ""}` : "",
     types.join(" + "),
     speeds.length ? `${speeds.join(" / ")} MHz` : "",
-  ].filter(Boolean).join(" · ");
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
-const manufacturerRules = [
-  ["Surface", /\bsurface\b/],
-  ["Dell", /\bdell\b/],
-  ["HP", /\b(hp|hewlett[- ]?packard)\b/],
-  ["Lenovo", /\blenovo\b/],
-  ["ASUS", /\b(asus|asustek)\b/],
-  ["Acer", /\bacer\b/],
-  ["Apple", /\bapple\b/],
-  ["Microsoft", /\bmicrosoft\b/],
-  ["MSI", /\b(msi|micro-star)\b/],
-  ["Samsung", /\bsamsung\b/],
-  ["Fujitsu", /\bfujitsu\b/],
-  ["Dynabook", /\bdynabook\b/],
-  ["Toshiba", /\btoshiba\b/],
-  ["Huawei", /\bhuawei\b/],
-  ["Framework", /\bframework\b/],
-  ["Intel NUC", /\b(intel.*nuc|nuc)\b/],
-  ["Gigabyte", /\bgigabyte\b/],
-];
-
-function normalizeManufacturer(manufacturerString, modelString = "") {
-  const rawManufacturer = String(manufacturerString || "").trim();
-  const searchable = `${rawManufacturer} ${modelString || ""}`.toLowerCase();
-  const generic = /^(|system manufacturer|default string|to be filled by o\.e\.m\.|unknown|not available|oem)$/i;
-  const matched = generic.test(rawManufacturer) ? null : manufacturerRules.find(([, pattern]) => pattern.test(searchable));
-  const manufacturerName = matched?.[0] || "Unknown";
-  const normalizedName = manufacturerName.toLowerCase().replaceAll(" ", "-");
-  return {
-    manufacturerName,
-    normalizedName,
-    logoType: normalizedName,
-    badgeClass: `manufacturer-badge oem-${normalizedName}`,
-    colorClass: `oem-${normalizedName}`,
-    rawManufacturer,
-  };
-}
-
-function detectDeviceFamily(manufacturer, model) {
-  const text = String(model || "");
-  const rules = {
-    Dell: ["Latitude", "Precision", "OptiPlex", "XPS"],
-    HP: ["EliteBook", "ProBook", "ZBook", "EliteDesk"],
-    Lenovo: ["ThinkPad", "ThinkCentre", "ThinkBook"],
-    Apple: ["MacBook Air", "MacBook Pro", "iMac", "Mac Mini"],
-    Microsoft: ["Surface Laptop", "Surface Pro", "Surface Studio", "Surface"],
-    Surface: ["Surface Laptop", "Surface Pro", "Surface Studio", "Surface"],
-  };
-  return (rules[manufacturer] || []).find((family) => text.toLowerCase().includes(family.toLowerCase())) || "";
-}
+const normalizeManufacturer = inventoryDomain.normalizeManufacturer;
+const detectDeviceFamily = inventoryDomain.detectDeviceFamily;
 
 function renderManufacturerLogo(info) {
-  const assetName = {
-    Surface: "microsoft",
-    Microsoft: "microsoft",
-    "Intel NUC": "intel",
-  }[info.manufacturerName] || info.logoType || "unknown";
+  const assetName =
+    {
+      Surface: "microsoft",
+      Microsoft: "microsoft",
+      "Intel NUC": "intel",
+    }[info.manufacturerName] ||
+    info.logoType ||
+    "unknown";
   return `<img src="./assets/logos/oem/${escapeHtml(assetName)}.svg" alt="" loading="lazy" />`;
 }
 
@@ -1415,7 +646,10 @@ function fullDeviceModel(device = {}) {
 
 function normalizeTeamInfo(teamName, abbreviation = "") {
   const rawTeamName = String(teamName || "").trim();
-  const normalized = rawTeamName.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const normalized = rawTeamName
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
   const rules = [
     ["sav", /\b(sav|service apres[- ]vente|support)\b/],
     ["purchase", /\b(achat|achats|procurement|mp)\b/],
@@ -1433,7 +667,9 @@ function normalizeTeamInfo(teamName, abbreviation = "") {
     ["ads", /\b(publicite|advertising|ads|acquisition|campaign|campagne|pub)\b/],
     ["marketing", /\b(marketing|communication)\b/],
   ];
-  const storedAbbreviation = String(abbreviation || "").trim().toUpperCase();
+  const storedAbbreviation = String(abbreviation || "")
+    .trim()
+    .toUpperCase();
   const fallback = fallbackAbbreviation(rawTeamName);
   const iconType = rules.find(([, pattern]) => pattern.test(normalized))?.[0] || "team";
   return {
@@ -1450,15 +686,22 @@ function normalizeTeamInfo(teamName, abbreviation = "") {
 function teamIcon(type) {
   const paths = {
     sav: '<path d="M4 14v-2a8 8 0 0 1 16 0v2M4 14a2 2 0 0 0 2 2h1v-6H6a2 2 0 0 0-2 2v2Zm16 0a2 2 0 0 1-2 2h-1v-6h1a2 2 0 0 1 2 2v2ZM17 18c-1 2-3 3-5 3"/>',
-    purchase: '<circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/><path d="M3 4h2l2.4 10.4a2 2 0 0 0 2 1.6h7.8a2 2 0 0 0 2-1.6L21 7H6"/>',
+    purchase:
+      '<circle cx="9" cy="20" r="1"/><circle cx="18" cy="20" r="1"/><path d="M3 4h2l2.4 10.4a2 2 0 0 0 2 1.6h7.8a2 2 0 0 0 2-1.6L21 7H6"/>',
     hr: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
-    sales: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18"/>',
+    sales:
+      '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 12h18"/>',
     tech: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M12 15h5"/>',
-    design: '<path d="m12 19 7-7 3 3-7 7-3-3ZM18 13l-1.5-7.5L2 2l3.5 14.5L13 18M2 2l7.6 7.6"/><circle cx="11" cy="11" r="2"/>',
-    store: '<path d="M3 9l2-5h14l2 5M5 13v7h14v-7M9 20v-6h6v6"/><path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"/>',
-    logistics: '<path d="M3 6h11v11H3zM14 10h4l3 3v4h-7z"/><circle cx="7" cy="19" r="2"/><circle cx="18" cy="19" r="2"/>',
-    marketplace: '<path d="M3 9l2-5h14l2 5M5 13v7h14v-7"/><path d="M8 16h8M8 20v-7M16 20v-7"/><circle cx="12" cy="6" r="1"/>',
-    catalog: '<path d="M4 5c0-1 4-2 8-2s8 1 8 2-4 2-8 2-8-1-8-2Z"/><path d="M4 5v6c0 1 4 2 8 2s8-1 8-2V5M4 11v6c0 1 4 2 8 2s8-1 8-2v-6"/><path d="M12 8v8M9 13l3 3 3-3"/>',
+    design:
+      '<path d="m12 19 7-7 3 3-7 7-3-3ZM18 13l-1.5-7.5L2 2l3.5 14.5L13 18M2 2l7.6 7.6"/><circle cx="11" cy="11" r="2"/>',
+    store:
+      '<path d="M3 9l2-5h14l2 5M5 13v7h14v-7M9 20v-6h6v6"/><path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"/>',
+    logistics:
+      '<path d="M3 6h11v11H3zM14 10h4l3 3v4h-7z"/><circle cx="7" cy="19" r="2"/><circle cx="18" cy="19" r="2"/>',
+    marketplace:
+      '<path d="M3 9l2-5h14l2 5M5 13v7h14v-7"/><path d="M8 16h8M8 20v-7M16 20v-7"/><circle cx="12" cy="6" r="1"/>',
+    catalog:
+      '<path d="M4 5c0-1 4-2 8-2s8 1 8 2-4 2-8 2-8-1-8-2Z"/><path d="M4 5v6c0 1 4 2 8 2s8-1 8-2V5M4 11v6c0 1 4 2 8 2s8-1 8-2v-6"/><path d="M12 8v8M9 13l3 3 3-3"/>',
     b2c: '<path d="M3 9l2-5h14l2 5M5 13v7h14v-7"/><circle cx="12" cy="14" r="2"/><path d="M8 20v-1a4 4 0 0 1 8 0v1"/>',
     finance: '<path d="M6 7h12M6 12h10M6 17h12"/><path d="M15 4c-5 0-8 3-8 8s3 8 8 8"/>',
     management: '<path d="m12 3 3 6 6 .5-4.5 4 1.5 6.5-6-3.5-6 3.5 1.5-6.5L3 9.5 9 9l3-6Z"/>',
@@ -1478,12 +721,28 @@ function renderTeamBadge(teamName, teamId = "", teamColor = "") {
 
 function locationInfo(type, name = "", discipline = "", abbreviation = "") {
   const disciplineType = String(discipline || "").trim();
-  const normalizedType = ["bike", "racket", "football", "golf", "lifestyle", "running", "general", "office", "store", "warehouse", "headquarters", "remote", "other"].includes(disciplineType)
+  const normalizedType = [
+    "bike",
+    "racket",
+    "football",
+    "golf",
+    "lifestyle",
+    "running",
+    "general",
+    "office",
+    "store",
+    "warehouse",
+    "headquarters",
+    "remote",
+    "other",
+  ].includes(disciplineType)
     ? disciplineType
     : ["office", "store", "warehouse", "headquarters", "remote", "other"].includes(type)
       ? type
       : "other";
-  const storedAbbreviation = String(abbreviation || "").trim().toUpperCase();
+  const storedAbbreviation = String(abbreviation || "")
+    .trim()
+    .toUpperCase();
   const displayLabel = storedAbbreviation || fallbackAbbreviation(name) || name || translate("Non renseigné");
   return {
     iconType: normalizedType,
@@ -1497,11 +756,13 @@ function locationIcon(type) {
   const paths = {
     bike: '<circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><path d="M9 17h3l3-6h-4l-3 6M10 8h3M14 6h2"/>',
     racket: '<ellipse cx="9" cy="8" rx="4" ry="6" transform="rotate(-35 9 8)"/><path d="m12 13 7 7M17 18l2-2"/>',
-    football: '<circle cx="12" cy="12" r="9"/><path d="m12 7 4 3-1.5 5h-5L8 10l4-3ZM5 10l3 0M16 10l3 0M9.5 15 8 19M14.5 15 16 19"/>',
+    football:
+      '<circle cx="12" cy="12" r="9"/><path d="m12 7 4 3-1.5 5h-5L8 10l4-3ZM5 10l3 0M16 10l3 0M9.5 15 8 19M14.5 15 16 19"/>',
     golf: '<path d="M8 21V4l10 3-10 3"/><path d="M4 21h12"/><circle cx="17" cy="18" r="1"/>',
     lifestyle: '<path d="M6 8h12l2 12H4L6 8Z"/><path d="M9 8a3 3 0 0 1 6 0"/><path d="M8 15h8M10 12h4"/>',
     running: '<path d="M4 16c5 0 7-4 11-4h2l3 4-2 2H9c-3 0-4-1-5-2Z"/><path d="M12 12 9 8M15 12l-1-4M6 20h12"/>',
-    general: '<path d="M8 21h8M12 17v4"/><path d="M7 4h10v3a5 5 0 0 1-10 0V4Z"/><path d="M7 6H4a3 3 0 0 0 3 3M17 6h3a3 3 0 0 1-3 3"/>',
+    general:
+      '<path d="M8 21h8M12 17v4"/><path d="M7 4h10v3a5 5 0 0 1-10 0V4Z"/><path d="M7 6H4a3 3 0 0 0 3 3M17 6h3a3 3 0 0 1-3 3"/>',
     office: '<path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M8 7h4M8 11h4M8 15h4M16 9h4v12"/>',
     store: '<path d="M3 9l2-5h14l2 5M5 13v7h14v-7"/><path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"/>',
     warehouse: '<path d="M3 21V8l9-5 9 5v13M7 21v-8h10v8M7 16h10"/>',
@@ -1536,7 +797,7 @@ function confirmAction({ title = "Confirmer la suppression", message, confirmLab
   });
 }
 
-function openReassignment(entityType, sourceId, références) {
+function openReassignment(entityType, sourceId, references) {
   const candidates = entityType === "team" ? state.teams : state.establishments;
   const select = $("#reassign-form").elements.targetId;
   select.innerHTML = candidates
@@ -1544,17 +805,21 @@ function openReassignment(entityType, sourceId, références) {
     .map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`)
     .join("");
   if (!select.options.length) {
-    toast(state.language === "en"
-      ? "Create another active destination before reassigning."
-      : "Creez une autre destination active avant la réaffectation.", "error");
+    toast(
+      state.language === "en"
+        ? "Create another active destination before reassigning."
+        : "Créez une autre destination active avant la réaffectation.",
+      "error",
+    );
     return;
   }
   pendingReassignment = { entityType, sourceId };
   $("#reassign-form").elements.entityType.value = entityType;
   $("#reassign-form").elements.sourceId.value = sourceId;
-  $("#reassign-message").textContent = state.language === "en"
-    ? `${references.devices || 0} device(s) and ${references.users || 0} user(s) are linked. Choose a destination; the original record will then be deleted.`
-    : `${références.devices || 0} machine(s) et ${références.users || 0} utilisateur(s) sont liés. Choisissez une destination; l'ancien element sera ensuite supprimé.`;
+  $("#reassign-message").textContent =
+    state.language === "en"
+      ? `${references.devices || 0} device(s) and ${references.users || 0} user(s) are linked. Choose a destination; the original record will then be deleted.`
+      : `${references.devices || 0} poste(s) et ${references.users || 0} utilisateur(s) sont liés. Choisissez une destination ; l’ancien élément sera ensuite supprimé.`;
   $("#reassign-dialog").showModal();
 }
 
@@ -1573,9 +838,7 @@ function formatDateOnly(value) {
   if (!value) return "-";
   const locale = state.language === "en" ? "en-US" : "fr-FR";
   const text = String(value);
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(text)
-    ? new Date(`${text}T00:00:00`)
-    : new Date(value);
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(text) ? new Date(`${text}T00:00:00`) : new Date(value);
   return new Intl.DateTimeFormat(locale, {
     day: "2-digit",
     month: "2-digit",
@@ -1584,69 +847,18 @@ function formatDateOnly(value) {
 }
 
 function normalizeDateInputValue(value) {
-  const text = String(value || "").trim();
-  if (!text) return "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
-  const match = text.match(/^(\d{1,2})[\/\-\s.](\d{1,2})[\/\-\s.](\d{4})$/);
-  if (!match) throw new Error(translate("Date invalide. Utilisez le format JJ/MM/AAAA."));
-  const day = Number(match[1]);
-  const month = Number(match[2]);
-  const year = Number(match[3]);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  if (
-    date.getUTCFullYear() !== year ||
-    date.getUTCMonth() !== month - 1 ||
-    date.getUTCDate() !== day
-  ) {
-    throw new Error(translate("Date invalide. Utilisez le format JJ/MM/AAAA."));
-  }
-  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  return dateDomain.normalizeDateInputValue(value, translate("Date invalide. Utilisez le format JJ/MM/AAAA."));
 }
 
 function dateInputPlaceholder() {
   return state.language === "en" ? "DD/MM/YYYY" : "JJ/MM/AAAA";
 }
 
-function dateOnlyObject(value) {
-  const text = String(value || "").trim();
-  if (!text) return null;
-  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  const date = match
-    ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
-    : new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function isoDateOnly(date) {
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
-  const year = String(date.getFullYear()).padStart(4, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function addMonthsToDateOnly(value, months) {
-  const start = dateOnlyObject(value);
-  if (!start) return "";
-  const result = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-  const originalDay = result.getDate();
-  result.setMonth(result.getMonth() + months);
-  if (result.getDate() !== originalDay) result.setDate(0);
-  return isoDateOnly(result);
-}
-
-function formatDateForInput(value) {
-  const date = dateOnlyObject(value);
-  if (!date) return "";
-  const day = String(date.getDate()).padStart(2, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  return `${day}/${month}/${date.getFullYear()}`;
-}
+const addMonthsToDateOnly = dateDomain.addMonthsToDateOnly;
+const formatDateForInput = dateDomain.formatDateForInput;
 
 function effectiveTimePreference() {
-  return state.timeFormatPreference === "auto"
-    ? (state.language === "en" ? "12h" : "24h")
-    : state.timeFormatPreference;
+  return state.timeFormatPreference === "auto" ? (state.language === "en" ? "12h" : "24h") : state.timeFormatPreference;
 }
 
 function formatTime(value = new Date()) {
@@ -1683,9 +895,8 @@ function updateTimeFormatButton() {
   const button = $("#time-format-toggle");
   const label = $("#time-format-label");
   if (!button || !label) return;
-  const display = state.timeFormatPreference === "auto"
-    ? "Auto"
-    : (state.timeFormatPreference === "24h" ? "24h" : "AM/PM");
+  const display =
+    state.timeFormatPreference === "auto" ? "Auto" : state.timeFormatPreference === "24h" ? "24h" : "AM/PM";
   label.textContent = display;
   button.title = `${translate("Format horaire")}: ${display}`;
   button.setAttribute("aria-label", `${translate("Format horaire")}: ${display}`);
@@ -1719,19 +930,53 @@ function weatherIcon(code, isDay = true) {
 function weatherLabel(code) {
   const labels = {
     fr: {
-      0: "Ciel clair", 1: "Plutot clair", 2: "Partiellement nuageux", 3: "Couvert",
-      45: "Brouillard", 48: "Brouillard givrant", 51: "Bruine legere", 53: "Bruine", 55: "Bruine forte",
-      61: "Pluie legere", 63: "Pluie", 65: "Pluie forte", 71: "Neige legere", 73: "Neige", 75: "Neige forte",
-      80: "Averses", 81: "Averses", 82: "Averses fortes", 95: "Orage", 96: "Orage avec grele", 99: "Orage avec grele",
+      0: "Ciel clair",
+      1: "Plutot clair",
+      2: "Partiellement nuageux",
+      3: "Couvert",
+      45: "Brouillard",
+      48: "Brouillard givrant",
+      51: "Bruine legere",
+      53: "Bruine",
+      55: "Bruine forte",
+      61: "Pluie legere",
+      63: "Pluie",
+      65: "Pluie forte",
+      71: "Neige legere",
+      73: "Neige",
+      75: "Neige forte",
+      80: "Averses",
+      81: "Averses",
+      82: "Averses fortes",
+      95: "Orage",
+      96: "Orage avec grêle",
+      99: "Orage avec grêle",
     },
     en: {
-      0: "Clear sky", 1: "Mostly clear", 2: "Partly cloudy", 3: "Overcast",
-      45: "Fog", 48: "Rime fog", 51: "Light drizzle", 53: "Drizzle", 55: "Dense drizzle",
-      61: "Light rain", 63: "Rain", 65: "Heavy rain", 71: "Light snow", 73: "Snow", 75: "Heavy snow",
-      80: "Showers", 81: "Showers", 82: "Heavy showers", 95: "Thunderstorm", 96: "Thunderstorm with hail", 99: "Thunderstorm with hail",
+      0: "Clear sky",
+      1: "Mostly clear",
+      2: "Partly cloudy",
+      3: "Overcast",
+      45: "Fog",
+      48: "Rime fog",
+      51: "Light drizzle",
+      53: "Drizzle",
+      55: "Dense drizzle",
+      61: "Light rain",
+      63: "Rain",
+      65: "Heavy rain",
+      71: "Light snow",
+      73: "Snow",
+      75: "Heavy snow",
+      80: "Showers",
+      81: "Showers",
+      82: "Heavy showers",
+      95: "Thunderstorm",
+      96: "Thunderstorm with hail",
+      99: "Thunderstorm with hail",
     },
   };
-  return labels[state.language]?.[Number(code)] || (state.language === "en" ? "Weather" : "Meteo");
+  return labels[state.language]?.[Number(code)] || (state.language === "en" ? "Weather" : "Météo");
 }
 
 function updateWeatherDisplay() {
@@ -1764,22 +1009,12 @@ function updateWeatherDisplay() {
 
 async function loadWeather() {
   const unit = state.temperatureUnit === "fahrenheit" ? "fahrenheit" : "celsius";
-  const url = new URL("https://api.open-meteo.com/v1/forecast");
-  url.searchParams.set("latitude", String(CONFIG.weatherLatitude));
-  url.searchParams.set("longitude", String(CONFIG.weatherLongitude));
-  url.searchParams.set("current", "temperature_2m,weather_code,is_day");
-  url.searchParams.set("timezone", "auto");
-  url.searchParams.set("temperature_unit", unit);
   try {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`Weather ${response.status}`);
-    const data = await response.json();
-    state.weather = {
-      temperature: data.current?.temperature_2m,
-      weatherCode: data.current?.weather_code,
-      isDay: Boolean(data.current?.is_day),
-      collectedAt: data.current?.time,
-    };
+    state.weather = await publicResources.getWeather({
+      latitude: CONFIG.weatherLatitude,
+      longitude: CONFIG.weatherLongitude,
+      temperatureUnit: unit,
+    });
   } catch {
     state.weather = null;
   }
@@ -1807,45 +1042,23 @@ function formatDuration(startValue, endValue = null) {
   const months = Math.floor((days % 365) / 30);
   const restDays = days - years * 365 - months * 30;
   const parts = [];
-  if (years) parts.push(state.language === "en" ? `${years} year${years > 1 ? "s" : ""}` : `${years} an${years > 1 ? "s" : ""}`);
+  if (years)
+    parts.push(state.language === "en" ? `${years} year${years > 1 ? "s" : ""}` : `${years} an${years > 1 ? "s" : ""}`);
   if (months) parts.push(state.language === "en" ? `${months} month${months > 1 ? "s" : ""}` : `${months} mois`);
-  if (restDays || parts.length === 0) parts.push(state.language === "en" ? `${restDays} day${restDays > 1 ? "s" : ""}` : `${restDays} jour${restDays > 1 ? "s" : ""}`);
+  if (restDays || parts.length === 0)
+    parts.push(
+      state.language === "en"
+        ? `${restDays} day${restDays > 1 ? "s" : ""}`
+        : `${restDays} jour${restDays > 1 ? "s" : ""}`,
+    );
   return parts.join(", ");
 }
 
-function daysSince(value) {
-  if (!value) return 9999;
-  return Math.floor((Date.now() - new Date(value).getTime()) / 86400000);
+function fleetEvaluationContext() {
+  return { staleDays: CONFIG.staleDays };
 }
 
-function ageBucket(device) {
-  if (isReplacementSignal(device)) return "old";
-  const score = ageSignalScore(device);
-  if (score >= 75) return "old";
-  if (score >= 45) return "aging";
-  return "recent";
-}
-
-function ageSignalScore(device) {
-  let score = Number(device.hardware_age_score || 0);
-  const age = deviceAge(device);
-  const ram = Number(device.ram_total_gb || 0);
-  const cpuScore = Number(device.cpu_benchmark_score || device.cpu_score || 0);
-  if (age !== null) {
-    if (age >= 6) {
-      if (ram > 0 && ram < 8) score = Math.max(score, 85);
-      else if (ram > 0 && ram < 16) score = Math.max(score, 75);
-      else if (cpuScore > 0 && cpuScore < 8000) score = Math.max(score, 75);
-      else score = Math.max(score, 55);
-    } else if (age >= 4) {
-      if (ram > 0 && ram < 8) score = Math.max(score, 65);
-      else if (ram > 0 && ram < 16) score = Math.max(score, 55);
-      else score = Math.max(score, 35);
-    }
-  }
-  return score;
-}
-
+const daysSince = fleetDomain.daysSince;
 function money(value) {
   const number = Number(value || 0);
   if (!number) return "-";
@@ -1871,38 +1084,19 @@ function moneyWithCurrency(value, currency = "EUR") {
   }).format(number);
 }
 
-function estimatedValue(device) {
-  return Number(device.resale_value || device.estimated_current_value || device.current_market_price_avg || device.current_new_price || device.estimated_launch_price || 0);
-}
-
-function cpuScoreBucket(device) {
-  const score = Number(device.cpu_score || 0);
-  if (!score) return "";
-  if (score < 7000) return "low";
-  if (score < 12000) return "medium";
-  return "high";
-}
-
-function valueBucket(device) {
-  const value = estimatedValue(device);
-  if (!value) return "";
-  if (value < 180) return "low";
-  if (value <= 350) return "medium";
-  return "high";
-}
+const estimatedValue = inventoryDomain.estimatedValue;
 
 function setOptions(select, values, label, preserveOrder = false) {
   const previousValue = select.value;
   select.innerHTML = `<option value="">${label}</option>`;
   const options = values.filter(Boolean);
   if (!preserveOrder) options.sort((a, b) => String(a).localeCompare(String(b), "fr"));
-  options
-    .forEach((value) => {
-      const option = document.createElement("option");
-      option.value = value;
-      option.textContent = value;
-      select.appendChild(option);
-    });
+  options.forEach((value) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    select.appendChild(option);
+  });
   if (!previousValue) return;
   const hasPreviousValue = [...select.options].some((option) => option.value === previousValue);
   if (!hasPreviousValue) {
@@ -1918,50 +1112,16 @@ function statusClass(status) {
   return `status ${status || "active"}`;
 }
 
-function deviceStatusRank(status) {
-  const ranks = {
-    active: 0,
-    replace: 1,
-    lost: 2,
-    stock: 3,
-    retired: 4,
-  };
-  return ranks[String(status || "active")] ?? 5;
-}
-
-function compareDeviceStatus(left, right) {
-  return deviceStatusRank(left.status) - deviceStatusRank(right.status);
-}
-
-function deviceRowStatusClass(status) {
-  return `device-row-status-${String(status || "active").replace(/[^a-z0-9_-]+/gi, "-").toLowerCase()}`;
-}
-
-function isMissingInventoryValue(value) {
-  const normalized = String(value ?? "").trim().toLowerCase();
-  return !normalized || ["-", "unknown", "none", "null", "undefined", "n/a"].includes(normalized);
-}
-
-function versionParts(value) {
-  const match = String(value || "").match(/(\d+)\.(\d+)\.(\d+)/);
-  return match ? match.slice(1).map(Number) : null;
-}
-
-function compareVersions(left, right) {
-  const leftParts = versionParts(left);
-  const rightParts = versionParts(right);
-  if (!leftParts || !rightParts) return 0;
-  for (let index = 0; index < 3; index += 1) {
-    if (leftParts[index] !== rightParts[index]) return leftParts[index] - rightParts[index];
-  }
-  return 0;
-}
+const deviceRowStatusClass = inventoryDomain.deviceRowStatusClass;
+const isMissingInventoryValue = inventoryDomain.isMissingInventoryValue;
+const compareVersions = inventoryDomain.compareVersions;
 
 function deviceDataQuality(device) {
   const reasons = [];
   let level = "ok";
   const seenDays = daysSince(device.last_seen_at);
-  const latestCollectorVersion = state.collectorReleases?.latestVersion || state.collectorReleases?.assets?.windows?.version || "";
+  const latestCollectorVersion =
+    state.collectorReleases?.latestVersion || state.collectorReleases?.assets?.windows?.version || "";
   const criticalHardwareFields = [
     device.os_name,
     device.manufacturer,
@@ -1978,10 +1138,10 @@ function deviceDataQuality(device) {
     reasons.push(translate("Aucune collecte"));
   } else if (seenDays > Math.max(CONFIG.staleDays * 3, 90)) {
     level = "critical";
-    reasons.push(`${translate("Derniere collecte ancienne")} (${seenDays}j)`);
+    reasons.push(`${translate("Dernière collecte ancienne")} (${seenDays}j)`);
   } else if (seenDays > CONFIG.staleDays) {
     level = "warning";
-    reasons.push(`${translate("Derniere collecte ancienne")} (${seenDays}j)`);
+    reasons.push(`${translate("Dernière collecte ancienne")} (${seenDays}j)`);
   }
 
   if (missingCriticalFields >= 3) {
@@ -1989,29 +1149,45 @@ function deviceDataQuality(device) {
     reasons.push(translate("Champs critiques manquants"));
   } else if (missingCriticalFields > 0) {
     if (level === "ok") level = "review";
-    reasons.push(translate("Donnees materielles incompletes"));
+    reasons.push(translate("Données matérielles incomplètes"));
   }
 
-  if (!unassignedStatus && (isMissingInventoryValue(device.first_name) || isMissingInventoryValue(device.last_name) || isMissingInventoryValue(device.email) || isMissingInventoryValue(device.team_name) || isMissingInventoryValue(device.establishment_name))) {
+  if (
+    !unassignedStatus &&
+    (isMissingInventoryValue(device.first_name) ||
+      isMissingInventoryValue(device.last_name) ||
+      isMissingInventoryValue(device.email) ||
+      isMissingInventoryValue(device.team_name) ||
+      isMissingInventoryValue(device.establishment_name))
+  ) {
     if (level === "ok") level = "review";
     reasons.push(translate("Profil utilisateur incomplet"));
   }
 
-  if (!unassignedStatus && String(device.email || "").toLowerCase().endsWith(".local")) {
+  if (
+    !unassignedStatus &&
+    String(device.email || "")
+      .toLowerCase()
+      .endsWith(".local")
+  ) {
     if (level === "ok") level = "review";
-    reasons.push(translate("Email utilisateur a verifier"));
+    reasons.push(translate("E-mail utilisateur à vérifier"));
   }
 
-  if (latestCollectorVersion && device.script_version && compareVersions(device.script_version, latestCollectorVersion) < 0) {
+  if (
+    latestCollectorVersion &&
+    device.script_version &&
+    compareVersions(device.script_version, latestCollectorVersion) < 0
+  ) {
     if (level === "ok") level = "review";
     reasons.push(translate("Collector ancien"));
   }
 
   const labels = {
-    ok: translate("Donnees a jour"),
-    review: translate("Donnees a verifier"),
-    warning: translate("Donnees obsoletes"),
-    critical: translate("Donnees critiques"),
+    ok: translate("Données à jour"),
+    review: translate("Données à vérifier"),
+    warning: translate("Données obsolètes"),
+    critical: translate("Données critiques"),
   };
   return {
     level,
@@ -2035,7 +1211,7 @@ function dataQualityIcon(level) {
 
 function renderDataQualitySignal(device) {
   const quality = deviceDataQuality(device);
-  const title = `${translate("Qualite donnees")}: ${quality.label} - ${quality.reasons.join(" / ")}`;
+  const title = `${translate("Qualité des données")}: ${quality.label} - ${quality.reasons.join(" / ")}`;
   return `
     <span class="data-quality-signal data-quality-${quality.level}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}">
       ${dataQualityIcon(quality.level)}
@@ -2062,12 +1238,7 @@ function copyIcon() {
 }
 
 function generateStrongPassword(length = 18) {
-  const groups = [
-    "ABCDEFGHJKLMNPQRSTUVWXYZ",
-    "abcdefghijkmnopqrstuvwxyz",
-    "23456789",
-    "!@#$%^&*_-+=?",
-  ];
+  const groups = ["ABCDEFGHJKLMNPQRSTUVWXYZ", "abcdefghijkmnopqrstuvwxyz", "23456789", "!@#$%^&*_-+=?"];
   const all = groups.join("");
   const bytes = new Uint32Array(length);
   crypto.getRandomValues(bytes);
@@ -2109,13 +1280,12 @@ function renderAccessTokens() {
   $("#tokens-table").innerHTML = state.accessTokens
     .map((token) => {
       const status = tokenState(token);
-      const usage = token.max_uses === null
-        ? `${token.use_count} / ${state.language === "en" ? "unlimited" : "illimite"}`
-        : `${token.use_count} / ${token.max_uses}`;
+      const usage =
+        token.max_uses === null
+          ? `${token.use_count} / ${state.language === "en" ? "unlimited" : "illimité"}`
+          : `${token.use_count} / ${token.max_uses}`;
       const canCopy = Boolean(state.rawAccessTokens[token.id]);
-      const copyTitle = canCopy
-        ? "Copier le token"
-        : "Token complet indisponible apres rechargement";
+      const copyTitle = canCopy ? "Copier le token" : "Token complet indisponible apres rechargement";
       return `
         <tr>
           <td>${escapeHtml(token.label)}</td>
@@ -2162,7 +1332,7 @@ function renderAccessTokens() {
     button.addEventListener("click", async () => {
       button.disabled = true;
       try {
-        await api(`/admin/access-tokens/${button.dataset.id}/revoke`, { method: "POST", body: "{}" });
+        await inventoryApi.revokeAccessToken(button.dataset.id);
         await loadAccessTokens();
         toast("Token révoqué.");
       } catch (error) {
@@ -2175,14 +1345,15 @@ function renderAccessTokens() {
   $$(".delete-token").forEach((button) => {
     button.addEventListener("click", async () => {
       const confirmed = await confirmAction({
-        message: state.language === "en"
-          ? `Permanently delete the token "${button.dataset.label}"? This action cannot be undone.`
-          : `Supprimer definitivement le token "${button.dataset.label}" ? Cette action est irreversible.`,
+        message:
+          state.language === "en"
+            ? `Permanently delete the token "${button.dataset.label}"? This action cannot be undone.`
+            : `Supprimer définitivement le token "${button.dataset.label}" ? Cette action est irréversible.`,
       });
       if (!confirmed) return;
       button.disabled = true;
       try {
-        await api(`/admin/access-tokens/${button.dataset.id}`, { method: "DELETE" });
+        await inventoryApi.deleteAccessToken(button.dataset.id);
         delete state.rawAccessTokens[button.dataset.id];
         await loadAccessTokens();
         toast("Token supprimé.");
@@ -2225,10 +1396,10 @@ function renderCollectionInvites() {
   table.innerHTML = state.collectionInvites
     .map((invite) => {
       const status = inviteState(invite);
-      const usage = invite.max_uses === null
-        ? `${invite.use_count} / ${state.language === "en" ? "unlimited" : "illimite"}`
-        : `${invite.use_count} / ${invite.max_uses}`;
-      const inviteUrl = displayInviteUrl(invite.invite_url || state.rawInviteUrls[invite.id] || "");
+      const usage =
+        invite.max_uses === null
+          ? `${invite.use_count} / ${state.language === "en" ? "unlimited" : "illimité"}`
+          : `${invite.use_count} / ${invite.max_uses}`;
       return `
         <tr>
           <td>${escapeHtml(invite.label)}</td>
@@ -2259,14 +1430,18 @@ function renderCollectionInvites() {
   $$(".copy-invite-row").forEach((button) => {
     button.addEventListener("click", async () => {
       const invite = state.collectionInvites.find((item) => item.id === button.dataset.id);
-      await copyText(displayInviteUrl(invite?.invite_url || state.rawInviteUrls[button.dataset.id]), "Lien copie.", "Aucun lien a copier");
+      await copyText(
+        displayInviteUrl(invite?.invite_url || state.rawInviteUrls[button.dataset.id]),
+        "Lien copie.",
+        "Aucun lien à copier",
+      );
     });
   });
   $$(".revoke-invite").forEach((button) => {
     button.addEventListener("click", async () => {
       button.disabled = true;
       try {
-        await api(`/admin/collection-invites/${button.dataset.id}/revoke`, { method: "POST", body: "{}" });
+        await inventoryApi.revokeCollectionInvite(button.dataset.id);
         await loadCollectionInvites();
         toast("Invitation révoquée.");
       } catch (error) {
@@ -2280,7 +1455,7 @@ function renderCollectionInvites() {
       if (!confirm(translate("Supprimer cette invitation ?"))) return;
       button.disabled = true;
       try {
-        await api(`/admin/collection-invites/${button.dataset.id}`, { method: "DELETE" });
+        await inventoryApi.deleteCollectionInvite(button.dataset.id);
         delete state.rawInviteUrls[button.dataset.id];
         await loadCollectionInvites();
         toast("Invitation supprimée.");
@@ -2294,20 +1469,23 @@ function renderCollectionInvites() {
 
 async function loadCollectionInvites() {
   if (!canPerformAction("TOKEN_MANAGE")) return;
-  const data = await api("/admin/collection-invites");
+  const data = await inventoryApi.listCollectionInvites();
   state.collectionInvites = data.invites || [];
   renderCollectionInvites();
 }
 
 async function loadAccessTokens() {
   if (!canPerformAction("TOKEN_MANAGE")) return;
-  const data = await api("/admin/access-tokens");
+  const data = await inventoryApi.listAccessTokens();
   state.accessTokens = data.tokens || [];
   renderAccessTokens();
 }
 
 function renderAdminUsers() {
-  $("#admin-users-table").innerHTML = state.adminUsers.map((user) => `
+  $("#admin-users-table").innerHTML =
+    state.adminUsers
+      .map(
+        (user) => `
     <tr data-id="${user.id}">
       <td><span class="cell-primary">${escapeHtml(user.username)}</span><span class="cell-secondary">${escapeHtml(user.displayName || user.email || "-")}</span></td>
       <td><span class="role-badge role-${escapeHtml(String(user.role || "").toLowerCase())}">${escapeHtml(user.role)}</span></td>
@@ -2315,13 +1493,17 @@ function renderAdminUsers() {
       <td>${formatDate(user.createdAt)}</td>
       <td>${formatDate(user.lastLoginAt)}</td>
     </tr>
-  `).join("") || `<tr><td colspan="5">${translate("Aucune donnee.")}</td></tr>`;
-  $$("#admin-users-table tr[data-id]").forEach((row) => row.addEventListener("click", () => editAdminUser(row.dataset.id)));
+  `,
+      )
+      .join("") || `<tr><td colspan="5">${translate("Aucune donnée.")}</td></tr>`;
+  $$("#admin-users-table tr[data-id]").forEach((row) =>
+    row.addEventListener("click", () => editAdminUser(row.dataset.id)),
+  );
 }
 
 async function loadAdminUsers() {
   if (!canPerformAction("USER_MANAGE")) return;
-  const data = await api("/admin/users");
+  const data = await inventoryApi.listAdminUsers();
   state.adminUsers = data.users || [];
   renderAdminUsers();
 }
@@ -2333,7 +1515,7 @@ function resetAdminUserForm() {
   form.elements.role.value = "VIEWER";
   form.elements.isActive.checked = true;
   form.elements.password.type = "password";
-  $("#admin-user-created-at").textContent = `${translate("Creation")}: -`;
+  $("#admin-user-created-at").textContent = `${translate("Création")} : -`;
   syncAdminUserActiveLabel();
   $("#delete-admin-user").classList.add("is-hidden");
 }
@@ -2350,9 +1532,77 @@ function editAdminUser(id) {
   form.elements.password.value = "";
   form.elements.password.type = "password";
   form.elements.isActive.checked = user.isActive !== false;
-  $("#admin-user-created-at").textContent = `${translate("Creation")}: ${formatDate(user.createdAt)}`;
+  $("#admin-user-created-at").textContent = `${translate("Création")} : ${formatDate(user.createdAt)}`;
   syncAdminUserActiveLabel();
   $("#delete-admin-user").classList.toggle("is-hidden", user.id === state.currentAdmin?.id);
+}
+
+function notificationMarkup(item, { compact = false } = {}) {
+  return `
+    <article class="notification-item ${compact ? "is-compact" : ""} ${item.is_read ? "is-read" : ""} severity-${String(item.severity || "INFO").toLowerCase()}" role="button" tabindex="0" data-id="${escapeHtml(item.id)}">
+      ${notificationIcon(item)}
+      <div class="notification-content">
+        <div class="notification-heading">
+          <span class="notification-severity">${compact ? translate("Non lue") : escapeHtml(item.severity || "INFO")}</span>
+          <strong>${escapeHtml(notificationTitle(item))}</strong>
+        </div>
+        <p>${escapeHtml(notificationMessage(item))}</p>
+        ${compact ? "" : notificationFacts(item)}
+        <small>${formatDate(item.created_at)}${compact ? "" : ` (${formatRelativeDate(item.created_at)}) - ${escapeHtml(notificationTypeLabel(item.type))}`}</small>
+      </div>
+      ${item.is_read ? "" : `<button class="secondary mark-notification-read" type="button" data-id="${item.id}">${translate("Marquer comme lue")}</button>`}
+    </article>
+  `;
+}
+
+function bindNotificationList(root, { closePanel = false } = {}) {
+  root.querySelectorAll(".notification-item[data-id]").forEach((item) => {
+    const activate = () => {
+      if (closePanel) closeNotificationPanel();
+      openNotificationTarget(item.dataset.id).catch((error) => toast(error.message, "error"));
+    };
+    item.addEventListener("click", (event) => {
+      if (event.target.closest("button")) return;
+      activate();
+    });
+    item.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      activate();
+    });
+  });
+  root.querySelectorAll(".mark-notification-read").forEach((button) => {
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
+        await inventoryApi.markNotificationRead(button.dataset.id);
+        await loadNotifications();
+      } catch (error) {
+        button.disabled = false;
+        toast(error.message, "error");
+      }
+    });
+  });
+}
+
+function renderNotificationPanel() {
+  const list = $("#notification-panel-list");
+  if (!list) return;
+  const snapshot = notificationDomain.notificationSnapshot(state.notifications, 5);
+  state.unreadNotifications = snapshot.unreadCount;
+  list.innerHTML = snapshot.latestUnread.map((item) => notificationMarkup(item, { compact: true })).join("");
+  list.classList.toggle("is-hidden", snapshot.latestUnread.length === 0);
+  $("#notification-panel-empty").classList.toggle("is-hidden", snapshot.latestUnread.length > 0);
+  bindNotificationList(list, { closePanel: true });
+
+  const count = $("#notification-count");
+  count.textContent = String(snapshot.unreadCount);
+  count.classList.toggle("is-hidden", snapshot.unreadCount === 0);
+}
+
+function closeNotificationPanel() {
+  $("#notification-panel")?.classList.add("is-hidden");
+  $("#notifications-bell")?.setAttribute("aria-expanded", "false");
 }
 
 function renderNotifications() {
@@ -2364,42 +1614,12 @@ function renderNotifications() {
     if (readFilter === "unread" && item.is_read) return false;
     return true;
   });
-  $("#notifications-list").innerHTML = notifications.map((item) => `
-    <article class="notification-item ${item.is_read ? "is-read" : ""} severity-${String(item.severity || "INFO").toLowerCase()}" role="button" tabindex="0" data-id="${escapeHtml(item.id)}">
-      ${notificationIcon(item)}
-      <div class="notification-content">
-        <div class="notification-heading">
-          <span class="notification-severity">${escapeHtml(item.severity || "INFO")}</span>
-          <strong>${escapeHtml(notificationTitle(item))}</strong>
-        </div>
-        <p>${escapeHtml(notificationMessage(item))}</p>
-        ${notificationFacts(item)}
-        <small>${formatDate(item.created_at)} (${formatRelativeDate(item.created_at)}) - ${escapeHtml(notificationTypeLabel(item.type))}</small>
-      </div>
-      ${item.is_read ? "" : `<button class="secondary mark-notification-read" type="button" data-id="${item.id}">${translate("Marquer lu")}</button>`}
-    </article>
-  `).join("") || `<p class="helper">${translate("Aucune donnee.")}</p>`;
-  $$(".notification-item[data-id]").forEach((item) => {
-    const activate = () => openNotificationTarget(item.dataset.id).catch((error) => toast(error.message, "error"));
-    item.addEventListener("click", (event) => {
-      if (event.target.closest("button")) return;
-      activate();
-    });
-    item.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter" && event.key !== " ") return;
-      event.preventDefault();
-      activate();
-    });
-  });
-  $$(".mark-notification-read").forEach((button) => {
-    button.addEventListener("click", async () => {
-      await api(`/admin/notifications/${button.dataset.id}/read`, { method: "POST", body: "{}" });
-      await loadNotifications();
-    });
-  });
-  const count = $("#notification-count");
-  count.textContent = String(state.unreadNotifications);
-  count.classList.toggle("is-hidden", state.unreadNotifications === 0);
+  const list = $("#notifications-list");
+  list.innerHTML =
+    notifications.map((item) => notificationMarkup(item)).join("") ||
+    `<p class="helper">${translate("Aucune notification")}</p>`;
+  bindNotificationList(list);
+  renderNotificationPanel();
 }
 
 function notificationTypeKey(type) {
@@ -2435,22 +1655,22 @@ function notificationTitle(item) {
   const device = notificationDevice(item);
   if (device) {
     const manufacturer = normalizeManufacturer(device.manufacturer, device.model);
-    const brand = manufacturer.manufacturerName === "Unknown" ? translate("Machine") : manufacturer.manufacturerName;
-    const machine = notificationDeviceLabel(device);
+    const brand = manufacturer.manufacturerName === "Unknown" ? translate("Poste") : manufacturer.manufacturerName;
+    const deviceLabel = notificationDeviceLabel(device);
     const user = notificationUserLabel(device);
     const type = String(item.type || "");
     const isEnglish = state.language === "en";
     if (type === "COLLECTOR_SUBMISSION_RECEIVED") {
-      return isEnglish ? `${brand} collection received` : `Collecte ${brand} recue`;
+      return isEnglish ? `${brand} collection received` : `Collecte ${brand} reçue`;
     }
     if (type === "DEVICE_REASSIGNED" || type === "DEVICE_OWNER_CHANGED") {
-      return isEnglish ? `${machine} assigned to ${user}` : `${machine} affecte a ${user}`;
+      return isEnglish ? `${deviceLabel} assigned to ${user}` : `${deviceLabel} affecté à ${user}`;
     }
     if (type === "DEVICE_RETIRED") {
-      return isEnglish ? `${machine} retired` : `${machine} sorti du parc`;
+      return isEnglish ? `${deviceLabel} retired` : `${deviceLabel} sorti du parc`;
     }
     if (type === "DEVICE_REACTIVATED") {
-      return isEnglish ? `${machine} reactivated` : `${machine} reactive`;
+      return isEnglish ? `${deviceLabel} reactivated` : `${deviceLabel} réactivé`;
     }
   }
   if (String(item.title || "").startsWith("notification.")) return translate(item.title);
@@ -2462,16 +1682,20 @@ function notificationMessage(item) {
   const device = notificationDevice(item);
   if (device) {
     const manufacturer = normalizeManufacturer(device.manufacturer, device.model);
-    const model = [manufacturer.manufacturerName === "Unknown" ? "" : manufacturer.manufacturerName, fullDeviceModel(device)]
-      .filter((value) => value && value !== "-")
-      .join(" ") || translate("Non renseigné");
+    const model =
+      [manufacturer.manufacturerName === "Unknown" ? "" : manufacturer.manufacturerName, fullDeviceModel(device)]
+        .filter((value) => value && value !== "-")
+        .join(" ") || translate("Non renseigné");
     const user = notificationUserLabel(device);
-    const team = displayWithAbbreviation(device.team_name || "", device.team_abbreviation) || translate("Non renseigné");
-    const site = displayWithAbbreviation(device.establishment_name || "", device.establishment_abbreviation) || translate("Non renseigné");
+    const team =
+      displayWithAbbreviation(device.team_name || "", device.team_abbreviation) || translate("Non renseigné");
+    const site =
+      displayWithAbbreviation(device.establishment_name || "", device.establishment_abbreviation) ||
+      translate("Non renseigné");
     if (state.language === "en") {
       return `${notificationDeviceLabel(device)} (${model}) is linked to ${user}. Team: ${team}. Location: ${site}.`;
     }
-    return `${notificationDeviceLabel(device)} (${model}) est lie a ${user}. Equipe : ${team}. Etablissement : ${site}.`;
+    return `${notificationDeviceLabel(device)} (${model}) est lié à ${user}. Équipe : ${team}. Établissement : ${site}.`;
   }
   if (String(item.message || "").startsWith("notification.")) return translate(item.message);
   const key = notificationTypeKey(item.type);
@@ -2488,7 +1712,7 @@ function notificationDevice(item) {
 }
 
 function notificationDeviceLabel(device = {}) {
-  return device.hostname || device.serial_number || translate("Machine");
+  return device.hostname || device.serial_number || translate("Poste");
 }
 
 function notificationUserLabel(device = {}) {
@@ -2501,7 +1725,9 @@ function notificationIcon(item) {
     const manufacturer = normalizeManufacturer(device.manufacturer, device.model);
     return `<span class="notification-icon notification-oem ${manufacturer.colorClass}" title="${escapeHtml(manufacturer.manufacturerName)}">${renderManufacturerLogo(manufacturer)}</span>`;
   }
-  const label = String(item.severity || "INFO").slice(0, 1).toUpperCase();
+  const label = String(item.severity || "INFO")
+    .slice(0, 1)
+    .toUpperCase();
   return `<span class="notification-icon notification-initial">${escapeHtml(label)}</span>`;
 }
 
@@ -2509,26 +1735,37 @@ function notificationFacts(item) {
   const device = notificationDevice(item);
   if (!device) return "";
   const manufacturer = normalizeManufacturer(device.manufacturer, device.model);
-  const model = [manufacturer.manufacturerName === "Unknown" ? "" : manufacturer.manufacturerName, fullDeviceModel(device)]
+  const model = [
+    manufacturer.manufacturerName === "Unknown" ? "" : manufacturer.manufacturerName,
+    fullDeviceModel(device),
+  ]
     .filter((value) => value && value !== "-")
     .join(" ");
   const facts = [
-    ["Machine", notificationDeviceLabel(device)],
+    ["Poste", notificationDeviceLabel(device)],
     ["Utilisateur", notificationUserLabel(device)],
     ["Équipe", displayWithAbbreviation(device.team_name || "", device.team_abbreviation) || translate("Non renseigné")],
-    ["Établissement", displayWithAbbreviation(device.establishment_name || "", device.establishment_abbreviation) || translate("Non renseigné")],
+    [
+      "Établissement",
+      displayWithAbbreviation(device.establishment_name || "", device.establishment_abbreviation) ||
+        translate("Non renseigné"),
+    ],
     ["Modèle", model || translate("Non renseigné")],
   ];
-  return `<div class="notification-facts">${facts.map(([label, value]) => `
+  return `<div class="notification-facts">${facts
+    .map(
+      ([label, value]) => `
     <span><strong>${escapeHtml(translate(label))}</strong>${escapeHtml(value)}</span>
-  `).join("")}</div>`;
+  `,
+    )
+    .join("")}</div>`;
 }
 
 async function openNotificationTarget(id) {
   const notification = state.notifications.find((item) => item.id === id);
   if (!notification) return;
   if (!notification.is_read) {
-    await api(`/admin/notifications/${id}/read`, { method: "POST", body: "{}" });
+    await inventoryApi.markNotificationRead(id);
   }
   const entityType = String(notification.related_entity_type || notification.relatedEntityType || "").toLowerCase();
   const entityId = notification.related_entity_id || notification.relatedEntityId || "";
@@ -2542,7 +1779,11 @@ async function openNotificationTarget(id) {
       return;
     }
     await selectDevice(entityId);
-    if (["DEVICE_RETIRED", "DEVICE_REACTIVATED", "DEVICE_REASSIGNED", "DEVICE_OWNER_CHANGED"].includes(String(notification.type || ""))) {
+    if (
+      ["DEVICE_RETIRED", "DEVICE_REACTIVATED", "DEVICE_REASSIGNED", "DEVICE_OWNER_CHANGED"].includes(
+        String(notification.type || ""),
+      )
+    ) {
       activateDetailTab("history");
     }
   } else if (entityType === "pending_change") {
@@ -2570,25 +1811,39 @@ function activateDetailTab(tabName) {
   const activeTab = availableTabs.includes(tabName) ? tabName : "overview";
   state.activeDetailTab = activeTab;
   $$(".detail-tab").forEach((tab) => tab.classList.toggle("is-active", tab.dataset.detailTab === activeTab));
-  $$(".detail-tab-panel").forEach((panel) => panel.classList.toggle("is-active", panel.dataset.detailPanel === activeTab));
+  $$(".detail-tab-panel").forEach((panel) =>
+    panel.classList.toggle("is-active", panel.dataset.detailPanel === activeTab),
+  );
 }
 
 async function loadNotifications() {
   if (!canPerformAction("NOTIFICATION_VIEW")) return;
-  const data = await api("/admin/notifications");
+  const data = await inventoryApi.listNotifications();
   state.notifications = data.notifications || [];
-  state.unreadNotifications = data.unread || 0;
+  state.unreadNotifications = notificationDomain.notificationSnapshot(state.notifications).unreadCount;
   renderNotifications();
 }
 
 function renderPendingChanges() {
-  const existingTeamOptions = state.teams.map((team) => `<option value="${escapeHtml(team.id)}">${escapeHtml(displayWithAbbreviation(team.name, team.abbreviation))}</option>`).join("");
-  const existingSiteOptions = state.establishments.map((site) => `<option value="${escapeHtml(site.id)}">${escapeHtml(displayWithAbbreviation(site.name, site.abbreviation))}</option>`).join("");
-  $("#pending-changes-list").innerHTML = state.pendingChanges.map((item) => {
-    const isTeam = item.type === "TEAM";
-    const options = isTeam ? existingTeamOptions : existingSiteOptions;
-    const disabled = item.status !== "PENDING";
-    return `
+  const existingTeamOptions = state.teams
+    .map(
+      (team) =>
+        `<option value="${escapeHtml(team.id)}">${escapeHtml(displayWithAbbreviation(team.name, team.abbreviation))}</option>`,
+    )
+    .join("");
+  const existingSiteOptions = state.establishments
+    .map(
+      (site) =>
+        `<option value="${escapeHtml(site.id)}">${escapeHtml(displayWithAbbreviation(site.name, site.abbreviation))}</option>`,
+    )
+    .join("");
+  $("#pending-changes-list").innerHTML =
+    state.pendingChanges
+      .map((item) => {
+        const isTeam = item.type === "TEAM";
+        const options = isTeam ? existingTeamOptions : existingSiteOptions;
+        const disabled = item.status !== "PENDING";
+        return `
       <article class="pending-change-item status-${escapeHtml(String(item.status || "").toLowerCase())}">
         <div>
           <span class="notification-severity">${escapeHtml(item.type)}</span>
@@ -2602,7 +1857,7 @@ function renderPendingChanges() {
             <input name="proposedValue" value="${escapeHtml(item.proposed_value)}" ${disabled ? "disabled" : ""} />
           </label>
           <label>
-            Lier a l'existant
+            Lier à l'existant
             <select name="linkedEntityId" ${disabled ? "disabled" : ""}>
               <option value="">Créer une nouvelle valeur</option>
               ${options}
@@ -2620,63 +1875,38 @@ function renderPendingChanges() {
         </form>
       </article>
     `;
-  }).join("") || `<p class="helper">${translate("Aucune donnee.")}</p>`;
+      })
+      .join("") || `<p class="helper">${translate("Aucune donnée.")}</p>`;
 
   $$(".pending-change-form").forEach((form) => {
     const submitDecision = async (decision) => {
       const values = Object.fromEntries(new FormData(form));
-      await api(`/admin/pending-changes/${form.dataset.id}/decision`, {
-        method: "POST",
-        body: JSON.stringify({ ...values, decision }),
-      });
+      await inventoryApi.decidePendingChange(form.dataset.id, { ...values, decision });
       toast("Proposition traitee.", "success");
       await Promise.all([loadPendingChanges(), loadOrganization(), loadNotifications()]);
     };
-    form.querySelector(".pending-approve")?.addEventListener("click", () => submitDecision("APPROVE").catch((error) => toast(error.message, "error")));
-    form.querySelector(".pending-modify")?.addEventListener("click", () => submitDecision("MODIFY").catch((error) => toast(error.message, "error")));
-    form.querySelector(".pending-reject")?.addEventListener("click", () => submitDecision("REJECT").catch((error) => toast(error.message, "error")));
+    form
+      .querySelector(".pending-approve")
+      ?.addEventListener("click", () => submitDecision("APPROVE").catch((error) => toast(error.message, "error")));
+    form
+      .querySelector(".pending-modify")
+      ?.addEventListener("click", () => submitDecision("MODIFY").catch((error) => toast(error.message, "error")));
+    form
+      .querySelector(".pending-reject")
+      ?.addEventListener("click", () => submitDecision("REJECT").catch((error) => toast(error.message, "error")));
   });
 }
 
 async function loadPendingChanges() {
   if (!canPerformAction("PENDING_CHANGE_APPROVE")) return;
-  const data = await api("/admin/pending-changes");
+  const data = await inventoryApi.listPendingChanges();
   state.pendingChanges = (data.pendingChanges || []).filter((item) => item.status === "PENDING");
   renderPendingChanges();
 }
 
-function getSearchBlob(device) {
-  return [
-    device.hostname,
-    device.serial_number,
-    device.mac_address,
-    device.first_name,
-    device.last_name,
-    device.email,
-    activeTeamName(device),
-    device.team_abbreviation,
-    device.establishment_name,
-    device.establishment_abbreviation,
-    device.model,
-    device.manufacturer,
-    device.os_name,
-    device.os_version,
-  ]
-    .map(normalize)
-    .join(" ");
-}
-
-function isDetachedInventoryStatus(status) {
-  return ["retired", "stock"].includes(status);
-}
-
-function activeTeamName(device) {
-  return isDetachedInventoryStatus(device.status) ? "" : device.team_name;
-}
-
-function normalizedDeviceOsFamily(device) {
-  return normalizeOsInfo([device.os_name, device.os_version].filter(Boolean).join(" ")).osFamily;
-}
+const isDetachedInventoryStatus = fleetDomain.isDetachedInventoryStatus;
+const activeTeamName = fleetDomain.activeTeamName;
+const normalizedDeviceOsFamily = fleetDomain.normalizedDeviceOsFamily;
 
 function applyFilters() {
   const search = normalize($("#global-search").value);
@@ -2690,42 +1920,27 @@ function applyFilters() {
   const cpuScore = $("#filter-cpu-score").value;
   const value = $("#filter-value").value;
 
-  state.filtered = state.devices.filter((device) => {
-    if (search && !getSearchBlob(device).includes(search)) return false;
-    if (team && activeTeamName(device) !== team) return false;
-    if (establishment && device.establishment_name !== establishment) return false;
-    if (os && normalizedDeviceOsFamily(device) !== os) return false;
-    if (model && device.model !== model) return false;
-    if (manufacturer && normalizeManufacturer(device.manufacturer, device.model).manufacturerName !== manufacturer) return false;
-    if (status && device.status !== status) return false;
-    if (age) {
-      const isDetached = isDetachedInventoryStatus(device.status);
-      if (isDetached && !status) return false;
-      if (ageBucket(device) !== age) return false;
-    }
-    if (cpuScore && cpuScoreBucket(device) !== cpuScore) return false;
-    if (value && valueBucket(device) !== value) return false;
-    return true;
-  });
   const sortBy = $("#sort-devices").value;
-  state.filtered.sort((left, right) => {
-    const statusOrder = compareDeviceStatus(left, right);
-    if (statusOrder !== 0) return statusOrder;
-    if (sortBy === "manufacturer") {
-      return normalizeManufacturer(left.manufacturer, left.model).manufacturerName.localeCompare(
-        normalizeManufacturer(right.manufacturer, right.model).manufacturerName,
-        state.language,
-      );
-    }
-    if (sortBy === "status") return statusOrder || new Date(right.last_seen_at || 0).getTime() - new Date(left.last_seen_at || 0).getTime();
-    if (sortBy === "hostname") return String(left.hostname || "").localeCompare(String(right.hostname || ""), state.language);
-    return new Date(right.last_seen_at || 0).getTime() - new Date(left.last_seen_at || 0).getTime();
-  });
+  state.filtered = fleetDomain.filterFleetDevices(
+    state.devices,
+    { search, team, establishment, os, model, manufacturer, status, age, cpuScore, value },
+    sortBy,
+    fleetEvaluationContext(),
+    state.language,
+  );
 
   renderDevices();
   renderMetrics();
   renderOemMetrics();
   renderValuation();
+}
+
+function scheduleApplyFilters() {
+  if (pendingFilterFrame !== null) return;
+  pendingFilterFrame = window.requestAnimationFrame(() => {
+    pendingFilterFrame = null;
+    applyFilters();
+  });
 }
 
 function clearFleetFilters() {
@@ -2755,7 +1970,10 @@ function renderOemMetrics() {
   const target = $("#oem-metrics");
   if (!target) return;
 
-  const counts = countBy(state.filtered, (device) => normalizeManufacturer(device.manufacturer, device.model).manufacturerName);
+  const counts = countBy(
+    state.filtered,
+    (device) => normalizeManufacturer(device.manufacturer, device.model).manufacturerName,
+  );
   const primary = ["Dell", "HP", "Lenovo", "Apple"];
   const other = Object.entries(counts)
     .filter(([name]) => !primary.includes(name))
@@ -2765,10 +1983,7 @@ function renderOemMetrics() {
     .join("");
 }
 
-function deviceAge(device) {
-  const releaseYear = Number(device.release_year || device.model_release_year || device.cpu_release_year || 0);
-  return releaseYear ? Math.max(0, new Date().getFullYear() - releaseYear) : null;
-}
+const deviceAge = inventoryDomain.deviceAge;
 
 function fleetLocale() {
   return state.language === "en" ? "en-US" : "fr-FR";
@@ -2788,181 +2003,109 @@ function fallbackText(value, fallback = "Non renseigné") {
   return text || translate(fallback);
 }
 
-function isActionableDevice(device) {
-  return !["retired", "stock", "lost"].includes(device.status);
-}
-
-function deviceCpuScore(device) {
-  return Number(device.cpu_benchmark_score || device.cpu_score || 0);
-}
-
-function isLowStorageDevice(device) {
-  const free = Number(device.storage_free_gb || 0);
-  return free > 0 && free < 30;
-}
-
-function isStaleDevice(device) {
-  return isActionableDevice(device) && daysSince(device.last_seen_at) > CONFIG.staleDays;
-}
-
-function isWindows10Device(device) {
-  return normalizedDeviceOsFamily(device) === "Windows 10";
-}
-
-function isReplacementSignal(device) {
-  const priority = Number(device.replacement_priority || device.obsolescence_index || 0);
-  return isActionableDevice(device) && (device.status === "replace" || ageSignalScore(device) >= 75 || priority >= 70);
-}
-
-function activeFleetDevices(items = state.filtered) {
-  return items.filter(isActionableDevice);
-}
+const deviceCpuScore = fleetDomain.deviceCpuScore;
+const activeFleetDevices = fleetDomain.activeFleetDevices;
 
 function computeFleetKpis(items = state.filtered) {
-  const activeItems = activeFleetDevices(items);
-  const ages = activeItems.map(deviceAge).filter((age) => age !== null);
-  const fleetValue = activeItems.reduce((sum, device) => sum + estimatedValue(device), 0);
-  const averageAge = ages.length ? ages.reduce((sum, age) => sum + age, 0) / ages.length : 0;
-  const stale = activeItems.filter(isStaleDevice).length;
-  const lowStorage = activeItems.filter(isLowStorageDevice).length;
-  const replace = activeItems.filter(isReplacementSignal).length;
-  const windows10 = activeItems.filter(isWindows10Device).length;
+  const snapshot = fleetDomain.fleetKpiSnapshot(items, fleetEvaluationContext());
   return [
     {
       id: "total",
-      label: "Total machines",
-      value: formatFleetNumber(items.length),
-      helper: `${formatFleetNumber(activeItems.length)} ${translate("Dossiers actifs uniquement")}`,
+      label: "Total des postes",
+      value: formatFleetNumber(snapshot.total),
+      helper: `${formatFleetNumber(snapshot.actionable)} ${translate("postes actuels, hors stock, perdus et sortis du parc")}`,
       level: "info",
     },
     {
       id: "active",
-      label: "Machines actives",
-      value: formatFleetNumber(activeItems.filter((device) => device.status === "active" || !device.status).length),
+      label: "Postes actifs",
+      value: formatFleetNumber(snapshot.active),
       helper: translate("Statut actif dans le parc"),
       level: "ok",
     },
     {
       id: "replace",
-      label: "Machines a remplacer",
-      value: formatFleetNumber(replace),
+      label: "Postes à remplacer en priorité",
+      value: formatFleetNumber(snapshot.replace),
       helper: translate("Statut, âge, CPU ou priorité élevée"),
-      level: replace ? "critical" : "ok",
+      level: snapshot.replace ? "critical" : "ok",
     },
     {
       id: "stale",
-      label: "Machines sans remontee",
-      value: formatFleetNumber(stale),
-      helper: `+${CONFIG.staleDays} ${state.language === "en" ? "days without report" : "jours sans remontée"}`,
-      level: stale ? "warning" : "ok",
+      label: `Postes sans remontée depuis plus de ${CONFIG.staleDays} jours`,
+      value: formatFleetNumber(snapshot.stale),
+      helper: translate("Postes actuels dont la dernière remontée dépasse le seuil configuré"),
+      level: snapshot.stale ? "warning" : "ok",
     },
     {
       id: "storage",
       label: "Stockage faible",
-      value: formatFleetNumber(lowStorage),
+      value: formatFleetNumber(snapshot.lowStorage),
       helper: translate("Moins de 30 Go libres"),
-      level: lowStorage ? "warning" : "ok",
+      level: snapshot.lowStorage ? "warning" : "ok",
     },
     {
       id: "windows10",
-      label: "Machines Windows 10",
-      value: formatFleetNumber(windows10),
-      helper: translate("OS obsolete"),
-      level: windows10 ? "warning" : "ok",
+      label: "Postes sous Windows 10",
+      value: formatFleetNumber(snapshot.windows10),
+      helper: translate("OS obsolète"),
+      level: snapshot.windows10 ? "warning" : "ok",
     },
     {
       id: "value",
-      label: "Valeur du parc",
-      value: money(fleetValue),
-      helper: translate("Estimation basee sur modele, CPU, RAM, GPU et age materiel"),
+      label: "Valeur actuelle estimée du parc",
+      value: money(snapshot.value),
+      helper: translate("Estimation basée sur le modèle, le CPU, la RAM, le GPU et l’âge du matériel"),
       level: "info",
     },
     {
       id: "age",
-      label: "Age moyen du parc",
-      value: ages.length ? `${formatFleetNumber(averageAge, 1)} ${state.language === "en" ? "yrs" : "ans"}` : "-",
-      helper: ages.length ? `${formatFleetNumber(ages.length)} ${translate("machines avec données d'âge")}` : translate("Non renseigné"),
-      level: averageAge >= 5 ? "warning" : "ok",
+      label: "Âge moyen du parc",
+      value: formattersDomain.formatAgeYears(snapshot.averageAge, state.language),
+      helper: formattersDomain.formatAgePopulation(snapshot.devicesWithAge, state.language),
+      level: snapshot.averageAge !== null && snapshot.averageAge >= 5 ? "warning" : "ok",
     },
   ];
 }
 
-function riskScoreForDevice(device) {
-  let score = 0;
-  if (device.status === "replace") score += 40;
-  if (isStaleDevice(device)) score += Math.min(30, Math.round(daysSince(device.last_seen_at) / 2));
-  if (isLowStorageDevice(device)) score += 18;
-  if (isWindows10Device(device)) score += 14;
-  const cpuScore = deviceCpuScore(device);
-  if (cpuScore > 0 && cpuScore < 7000) score += 24;
-  else if (cpuScore > 0 && cpuScore < 10000) score += 10;
-  const age = deviceAge(device);
-  if (age !== null && age >= 6) score += 20;
-  else if (age !== null && age >= 4) score += 10;
-  score = Math.max(score, Math.round(Number(device.replacement_priority || device.obsolescence_index || 0)));
-  return Math.min(100, score);
-}
+const riskScoreForDevice = (device) => fleetDomain.riskScoreForDevice(device, fleetEvaluationContext());
 
 function riskReasonsForDevice(device) {
-  const reasons = [];
-  if (device.status === "replace") reasons.push(translate("Statut remplacement"));
-  if (isStaleDevice(device)) reasons.push(`${daysSince(device.last_seen_at)} ${state.language === "en" ? "days without report" : "jours sans remontée"}`);
-  if (isLowStorageDevice(device)) reasons.push(translate("Stockage faible"));
-  if (isWindows10Device(device)) reasons.push(translate("OS obsolete"));
-  const cpuScore = deviceCpuScore(device);
-  if (cpuScore > 0 && cpuScore < 7000) reasons.push(translate("Score CPU faible"));
-  const age = deviceAge(device);
-  if (age !== null && age >= 5) reasons.push(translate("Materiel vieillissant"));
-  return reasons;
+  return fleetDomain.riskReasonCodes(device, fleetEvaluationContext()).map((reason) => {
+    if (reason === "status") return translate("Statut de remplacement");
+    if (reason === "stale")
+      return `${daysSince(device.last_seen_at)} ${state.language === "en" ? "days without report" : "jours sans remontée"}`;
+    if (reason === "storage") return translate("Stockage faible");
+    if (reason === "os") return translate("OS obsolète");
+    if (reason === "cpu") return translate("Score CPU faible");
+    return translate("Matériel vieillissant");
+  });
 }
 
 function computeReplacementCandidates(items = state.filtered, limit = 8) {
-  return activeFleetDevices(items)
-    .map((device) => ({
-      device,
-      score: riskScoreForDevice(device),
-      reasons: riskReasonsForDevice(device),
-    }))
-    .filter((item) => item.score >= 35 || item.reasons.length)
-    .sort((left, right) => right.score - left.score || daysSince(right.device.last_seen_at) - daysSince(left.device.last_seen_at))
-    .slice(0, limit);
+  return fleetDomain.replacementCandidates(items, fleetEvaluationContext(), limit).map(({ device, score }) => ({
+    device,
+    score,
+    reasons: riskReasonsForDevice(device),
+  }));
 }
 
 function countStats(items, getter, limit = 6) {
-  const total = Math.max(1, items.length);
-  return Object.entries(countBy(items, (item) => fallbackText(getter(item))))
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit)
-    .map(([label, value]) => ({ label, value, percent: (value / total) * 100 }));
+  return fleetDomain.countStats(items, (item) => String(getter(item) ?? ""), fallbackText(""), limit);
 }
 
 function averageStats(items, groupGetter, valueGetter, limit = 6) {
-  const groups = {};
-  items.forEach((item) => {
-    const value = Number(valueGetter(item) || 0);
-    if (!value) return;
-    const group = fallbackText(groupGetter(item));
-    groups[group] = groups[group] || { total: 0, count: 0 };
-    groups[group].total += value;
-    groups[group].count += 1;
-  });
-  return Object.entries(groups)
-    .map(([label, value]) => ({ label, value: Math.round((value.total / value.count) * 10) / 10, percent: 0 }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, limit);
-}
-
-function sumStats(items, groupGetter, valueGetter, limit = 6) {
-  const total = Math.max(1, items.reduce((sum, item) => sum + Number(valueGetter(item) || 0), 0));
-  const values = sumBy(items, (item) => fallbackText(groupGetter(item)), valueGetter);
-  return Object.entries(values)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit)
-    .map(([label, value]) => ({ label, value, percent: (value / total) * 100 }));
+  return fleetDomain.averageStats(
+    items,
+    (item) => String(groupGetter(item) ?? ""),
+    valueGetter,
+    fallbackText(""),
+    limit,
+  );
 }
 
 function computeLocationStats(items = state.filtered) {
-  return countStats(items, (device) => device.establishment_name);
+  return countStats(organizationDomain.currentDevicesByLocation(items), (device) => device.establishment_name);
 }
 
 function computeTeamStats(items = state.filtered) {
@@ -2974,73 +2117,40 @@ function computeOsStats(items = state.filtered) {
 }
 
 function computeValuationStats(items = state.filtered) {
-  const activeItems = activeFleetDevices(items);
-  const total = activeItems.reduce((sum, device) => sum + estimatedValue(device), 0);
-  const replaceItems = activeItems.filter(isReplacementSignal);
-  const replaceValue = replaceItems.reduce((sum, device) => sum + estimatedValue(device), 0);
-  return {
-    total,
-    average: activeItems.length ? total / activeItems.length : 0,
-    replaceValue,
-    byLocation: sumStats(activeItems, (device) => device.establishment_name, estimatedValue, 5),
-  };
+  return fleetDomain.fleetValuationSnapshot(items, fleetEvaluationContext(), fallbackText(""));
 }
 
 function computeFleetHealth(items = state.filtered) {
-  const activeItems = activeFleetDevices(items);
-  const total = Math.max(1, activeItems.length);
-  const stale = activeItems.filter(isStaleDevice).length;
-  const lowStorage = activeItems.filter(isLowStorageDevice).length;
-  const windows10 = activeItems.filter(isWindows10Device).length;
-  const lowCpu = activeItems.filter((device) => {
-    const score = deviceCpuScore(device);
-    return score > 0 && score < 7000;
-  }).length;
-  const replace = activeItems.filter(isReplacementSignal).length;
-  const ageBuckets = countBy(activeItems, ageBucket);
-  const penalty =
-    (stale / total) * 22 +
-    (lowStorage / total) * 16 +
-    (windows10 / total) * 16 +
-    (lowCpu / total) * 20 +
-    (replace / total) * 26;
-  const score = Math.max(0, Math.round(100 - penalty));
+  const snapshot = fleetDomain.fleetHealthSnapshot(items, fleetEvaluationContext());
   const reasons = [
-    stale ? `${stale} ${translate("Derniere remontee +30 jours")}` : "",
-    lowStorage ? `${lowStorage} ${translate("Stockage faible")}` : "",
-    windows10 ? `${windows10} ${translate("Machines Windows 10")}` : "",
-    lowCpu ? `${lowCpu} ${translate("Score CPU faible")}` : "",
-    replace ? `${replace} ${translate("Postes a remplacer en priorite")}` : "",
+    snapshot.stale ? `${snapshot.stale} ${translate("Dernière remontée depuis plus de 30 jours")}` : "",
+    snapshot.lowStorage ? `${snapshot.lowStorage} ${translate("Stockage faible")}` : "",
+    snapshot.windows10 ? `${snapshot.windows10} ${translate("Machines Windows 10")}` : "",
+    snapshot.lowCpu ? `${snapshot.lowCpu} ${translate("Score CPU faible")}` : "",
+    snapshot.replace ? `${snapshot.replace} ${translate("Postes à remplacer en priorité")}` : "",
   ].filter(Boolean);
   return {
-    score,
-    status: score >= 78 ? "Bon etat" : score >= 55 ? "A surveiller" : "Critique",
-    level: score >= 78 ? "ok" : score >= 55 ? "warning" : "critical",
+    ...snapshot,
+    status: snapshot.score >= 78 ? "Bon état" : snapshot.score >= 55 ? "À surveiller" : "Critique",
     reasons,
-    stale,
-    lowStorage,
-    windows10,
-    lowCpu,
-    replace,
-    signal: {
-      recent: ageBuckets.recent || 0,
-      aging: ageBuckets.aging || 0,
-      old: ageBuckets.old || 0,
-    },
   };
 }
 
 function renderFleetKpiCards(kpis) {
   const target = $("#fleet-kpis");
   if (!target) return;
-  target.innerHTML = kpis.map((kpi) => `
+  target.innerHTML = kpis
+    .map(
+      (kpi) => `
     <article class="fleet-kpi-card fleet-level-${kpi.level}" title="${escapeHtml(kpi.helper)}">
-      <span class="fleet-kpi-state">${translate(kpi.level === "ok" ? "Bon" : kpi.level === "critical" ? "Critique" : "A surveiller")}</span>
+      <span class="fleet-kpi-state">${translate(kpi.level === "ok" ? "Bon" : kpi.level === "critical" ? "Critique" : "À surveiller")}</span>
       <span class="fleet-kpi-label">${translate(kpi.label)}</span>
       <strong>${escapeHtml(kpi.value)}</strong>
       <small>${escapeHtml(kpi.helper)}</small>
     </article>
-  `).join("");
+  `,
+    )
+    .join("");
 }
 
 function renderFleetStatList(title, subtitle, rows, valueFormatter = (value) => formatFleetNumber(value)) {
@@ -3053,13 +2163,19 @@ function renderFleetStatList(title, subtitle, rows, valueFormatter = (value) => 
       </div>
     </div>
     <div class="fleet-stat-list">
-      ${rows.map((row) => `
+      ${
+        rows
+          .map(
+            (row) => `
         <div class="fleet-stat-row" title="${escapeHtml(row.label)}">
           <div class="fleet-stat-label"><span>${escapeHtml(row.label)}</span><strong>${escapeHtml(valueFormatter(row.value))}</strong></div>
           <div class="fleet-stat-track" aria-hidden="true"><span style="width:${Math.max(4, (Number(row.value || 0) / max) * 100)}%"></span></div>
           ${row.percent ? `<small>${formatFleetPercent(row.percent)}</small>` : ""}
         </div>
-      `).join("") || `<p class="helper">${translate("Aucune donnee.")}</p>`}
+      `,
+          )
+          .join("") || `<p class="helper">${translate("Aucune donnée.")}</p>`
+      }
     </div>
   `;
 }
@@ -3070,32 +2186,37 @@ function renderFleetPriority(items) {
   target.innerHTML = `
     <div class="fleet-card-head">
       <div>
-        <p class="eyebrow">${translate("A traiter en priorite")}</p>
-        <h3>${translate("Postes a remplacer en priorite")}</h3>
+        <p class="eyebrow">${translate("À traiter en priorité")}</p>
+        <h3>${translate("Postes à remplacer en priorité")}</h3>
       </div>
       <span class="fleet-card-note">${translate("Actions IT triees par score de risque")}</span>
     </div>
-    ${items.length ? `
+    ${
+      items.length
+        ? `
       <div class="fleet-priority-table-wrap">
         <table class="fleet-priority-table">
           <thead>
             <tr>
               <th>Hostname</th>
               <th>${translate("Utilisateur")}</th>
-              <th>${translate("Equipe")}</th>
-              <th>${translate("Etablissement")}</th>
+              <th>${translate("Équipe")}</th>
+              <th>${translate("Établissement")}</th>
               <th>${translate("Modèle")}</th>
               <th>OS</th>
-              <th>${translate("Derniere remontee")}</th>
+              <th>${translate("Dernière remontée")}</th>
               <th>${translate("Raison")}</th>
-              <th>${translate("Priorite")}</th>
+              <th>${translate("Priorité")}</th>
             </tr>
           </thead>
           <tbody>
-            ${items.map(({ device, score, reasons }) => {
-              const user = `${device.first_name || ""} ${device.last_name || ""}`.trim() || translate("Aucun utilisateur actuel");
-              const reason = reasons.join(" / ") || translate("A surveiller");
-              return `
+            ${items
+              .map(({ device, score, reasons }) => {
+                const user =
+                  `${device.first_name || ""} ${device.last_name || ""}`.trim() ||
+                  translate("Aucun utilisateur actuel");
+                const reason = reasons.join(" / ") || translate("À surveiller");
+                return `
                 <tr data-id="${escapeHtml(device.id)}">
                   <td><strong>${escapeHtml(device.hostname || "-")}</strong><small>${escapeHtml(device.serial_number || device.service_tag || "")}</small></td>
                   <td><strong>${escapeHtml(user)}</strong><small>${escapeHtml(device.email || "")}</small></td>
@@ -3108,16 +2229,19 @@ function renderFleetPriority(items) {
                   <td><span class="risk-pill ${score >= 75 ? "risk-critical" : score >= 50 ? "risk-warning" : "risk-info"}">${score}</span></td>
                 </tr>
               `;
-            }).join("")}
+              })
+              .join("")}
           </tbody>
         </table>
       </div>
-    ` : `
+    `
+        : `
       <div class="fleet-empty-state">
         <strong>${translate("Aucune action prioritaire")}</strong>
         <span>${translate("Le parc filtre ne remonte pas de risque majeur.")}</span>
       </div>
-    `}
+    `
+    }
   `;
   $$("#fleet-priority tr[data-id]").forEach((row) => {
     row.addEventListener("click", () => selectDevice(row.dataset.id));
@@ -3131,15 +2255,15 @@ function renderFleetDistribution(items) {
   target.innerHTML = `
     <div class="fleet-card-head">
       <div>
-        <p class="eyebrow">${translate("Repartition du parc")}</p>
-        <h3>${translate("Sites, equipes et OS")}</h3>
+        <p class="eyebrow">${translate("Répartition du parc")}</p>
+        <h3>${translate("Établissements, équipes et systèmes d’exploitation")}</h3>
       </div>
     </div>
     <div class="fleet-mini-grid">
-      <section>${renderFleetStatList("Etablissements", "Par etablissement", computeLocationStats(items), formatFleetNumber)}</section>
-      <section>${renderFleetStatList("Equipes", "Par equipe", computeTeamStats(items), formatFleetNumber)}</section>
-      <section>${renderFleetStatList("OS", "Par systeme", computeOsStats(items), formatFleetNumber)}</section>
-      <section>${renderFleetStatList("Modeles presents", "Modeles frequents", models, formatFleetNumber)}</section>
+      <section>${renderFleetStatList("Établissements", "Par établissement", computeLocationStats(items), formatFleetNumber)}</section>
+      <section>${renderFleetStatList("Équipes", "Par équipe", computeTeamStats(items), formatFleetNumber)}</section>
+      <section>${renderFleetStatList("OS", "Par système d’exploitation", computeOsStats(items), formatFleetNumber)}</section>
+      <section>${renderFleetStatList("Modèles présents", "Modèles fréquents", models, formatFleetNumber)}</section>
     </div>
   `;
 }
@@ -3150,14 +2274,26 @@ function renderFleetHealth(health, items) {
   const activeItems = activeFleetDevices(items);
   const ramRows = averageStats(activeItems, activeTeamName, (device) => device.ram_total_gb, 5);
   const signalRows = [
-    { label: translate("Signal recent"), value: health.signal.recent, percent: activeItems.length ? (health.signal.recent / activeItems.length) * 100 : 0 },
-    { label: translate("Signal a surveiller"), value: health.signal.aging, percent: activeItems.length ? (health.signal.aging / activeItems.length) * 100 : 0 },
-    { label: translate("Signal ancien"), value: health.signal.old, percent: activeItems.length ? (health.signal.old / activeItems.length) * 100 : 0 },
+    {
+      label: translate("Signal récent"),
+      value: health.signal.recent,
+      percent: activeItems.length ? (health.signal.recent / activeItems.length) * 100 : 0,
+    },
+    {
+      label: translate("Signal a surveiller"),
+      value: health.signal.aging,
+      percent: activeItems.length ? (health.signal.aging / activeItems.length) * 100 : 0,
+    },
+    {
+      label: translate("Signal ancien"),
+      value: health.signal.old,
+      percent: activeItems.length ? (health.signal.old / activeItems.length) * 100 : 0,
+    },
   ];
   target.innerHTML = `
     <div class="fleet-card-head">
       <div>
-        <p class="eyebrow">${translate("Sante du parc")}</p>
+        <p class="eyebrow">${translate("Santé du parc")}</p>
         <h3>${translate(health.status)}</h3>
       </div>
       <div class="health-score fleet-level-${health.level}" aria-label="${translate("Score global")}: ${health.score}/100">
@@ -3172,8 +2308,8 @@ function renderFleetHealth(health, items) {
           ${(health.reasons.length ? health.reasons : [translate("Aucun risque majeur")]).map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}
         </ul>
       </div>
-      <div>${renderFleetStatList("Signal du parc", "Recent / a surveiller / ancien", signalRows, formatFleetNumber)}</div>
-      <div>${renderFleetStatList("RAM moyenne par équipe", "Par equipe", ramRows, (value) => `${formatFleetNumber(value, 1)} Go`)}</div>
+      <div>${renderFleetStatList("Signal du parc", "Récent / à surveiller / ancien", signalRows, formatFleetNumber)}</div>
+      <div>${renderFleetStatList("RAM moyenne par équipe", "Par équipe", ramRows, (value) => `${formatFleetNumber(value, 1)} Go`)}</div>
     </div>
   `;
 }
@@ -3189,11 +2325,23 @@ function renderFleetValuation(stats) {
       </div>
     </div>
     <div class="fleet-value-grid">
-      <article><span>${translate("Valeur du parc")}</span><strong>${money(stats.total)}</strong></article>
-      <article><span>${translate("Valeur moyenne par machine")}</span><strong>${money(stats.average)}</strong></article>
-      <article><span>${translate("Valeur des remplacements")}</span><strong>${money(stats.replaceValue)}</strong></article>
+      <article title="${translate("Somme des valeurs estimées des postes actuels")}">
+        <span>${translate("Valeur actuelle estimée du parc")}</span>
+        <strong>${money(stats.total)}</strong>
+        <small>${translate("Somme des valeurs estimées des postes actuels")}</small>
+      </article>
+      <article title="${translate("Valeur estimée moyenne par poste actuel")}">
+        <span>${translate("Valeur moyenne par poste")}</span>
+        <strong>${money(stats.average)}</strong>
+        <small>${translate("Valeur estimée moyenne par poste actuel")}</small>
+      </article>
+      <article title="${translate("Somme des valeurs estimées des candidats au remplacement")}">
+        <span>${translate("Valeur des postes à remplacer")}</span>
+        <strong>${money(stats.replaceValue)}</strong>
+        <small>${translate("Somme des valeurs estimées des candidats au remplacement")}</small>
+      </article>
     </div>
-    ${renderFleetStatList("Valeur par établissement", "Top etablissements", stats.byLocation, money)}
+    ${renderFleetStatList("Valeur par établissement", "Principaux établissements", stats.byLocation, money)}
   `;
 }
 
@@ -3201,15 +2349,20 @@ function renderFleetAgeCpu(items) {
   const target = $("#fleet-age-cpu");
   if (!target) return;
   const points = activeFleetDevices(items)
-    .map((device) => ({ device, age: deviceAge(device), cpu: deviceCpuScore(device), score: riskScoreForDevice(device) }))
+    .map((device) => ({
+      device,
+      age: deviceAge(device),
+      cpu: deviceCpuScore(device),
+      score: riskScoreForDevice(device),
+    }))
     .filter((point) => point.age !== null && point.cpu > 0)
     .slice(0, 160);
   if (!points.length) {
     target.innerHTML = `
       <div class="fleet-card-head">
-        <div><p class="eyebrow">${translate("Age materiel vs CPU")}</p><h3>${translate("Score CPU")}</h3></div>
+        <div><p class="eyebrow">${translate("Âge du matériel et score CPU")}</p><h3>${translate("Score CPU")}</h3></div>
       </div>
-      <p class="helper">${translate("Enrichissement requis pour afficher le nuage age CPU.")}</p>
+      <p class="helper">${translate("Un enrichissement est requis pour afficher le graphique âge et CPU.")}</p>
     `;
     return;
   }
@@ -3234,12 +2387,12 @@ function renderFleetAgeCpu(items) {
   target.innerHTML = `
     <div class="fleet-card-head">
       <div>
-        <p class="eyebrow">${translate("Age materiel vs CPU")}</p>
-        <h3>${translate("Machines avec donnees CPU et age disponibles")}</h3>
+        <p class="eyebrow">${translate("Âge du matériel et score CPU")}</p>
+        <h3>${translate("Postes disposant de données sur le processeur et l’âge")}</h3>
       </div>
-      <span class="fleet-card-note">${translate("Points par machine avec couleur de criticite")}</span>
+      <span class="fleet-card-note">${translate("Chaque point représente un poste et sa couleur indique sa criticité")}</span>
     </div>
-    <div class="age-cpu-chart" role="img" aria-label="${translate("Age materiel vs CPU")}">
+    <div class="age-cpu-chart" role="img" aria-label="${translate("Âge du matériel et score CPU")}">
       <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">
         <rect class="chart-frame" x="${pad.left}" y="${pad.top}" width="${plotWidth}" height="${plotHeight}"></rect>
         <rect class="zone zone-good" x="${pad.left}" y="${pad.top}" width="${plotWidth * 0.45}" height="${plotHeight}"></rect>
@@ -3250,23 +2403,25 @@ function renderFleetAgeCpu(items) {
         <line class="threshold-line" x1="${pad.left}" x2="${pad.left + plotWidth}" y1="${y(7000)}" y2="${y(7000)}"></line>
         <line class="axis-line" x1="${pad.left}" x2="${pad.left + plotWidth}" y1="${pad.top + plotHeight}" y2="${pad.top + plotHeight}"></line>
         <line class="axis-line" x1="${pad.left}" x2="${pad.left}" y1="${pad.top}" y2="${pad.top + plotHeight}"></line>
-        <text class="zone-label" x="${pad.left + 18}" y="${pad.top + 26}">${translate("Recent / correct")}</text>
+        <text class="zone-label" x="${pad.left + 18}" y="${pad.top + 26}">${translate("Récent / correct")}</text>
         <text class="zone-label" x="${pad.left + plotWidth * 0.49}" y="${pad.top + 26}">${translate("Vieillissant")}</text>
-        <text class="zone-label" x="${pad.left + plotWidth * 0.79}" y="${pad.top + 26}">${translate("A remplacer")}</text>
-        <text class="axis-title axis-title-x" x="${pad.left + plotWidth / 2}" y="${height - 10}">${translate("Age materiel")}</text>
+        <text class="zone-label" x="${pad.left + plotWidth * 0.79}" y="${pad.top + 26}">${translate("À remplacer")}</text>
+        <text class="axis-title axis-title-x" x="${pad.left + plotWidth / 2}" y="${height - 10}">${translate("Âge du matériel")}</text>
         <text class="axis-title axis-title-y" x="18" y="${pad.top + plotHeight / 2}" transform="rotate(-90 18 ${pad.top + plotHeight / 2})">${translate("Score CPU")}</text>
-        ${points.map((point) => {
-          const className = point.score >= 75 ? "replace" : point.score >= 50 ? "watch" : "ok";
-          const title = `${point.device.hostname || point.device.model || "Machine"} - ${point.age} ${state.language === "en" ? "yrs" : "ans"} - CPU ${point.cpu}`;
-          const cx = clamp(x(point.age) + pointJitter(point.device, "x") * 9, pad.left + 6, pad.left + plotWidth - 6);
-          const cy = clamp(y(point.cpu) + pointJitter(point.device, "y") * 7, pad.top + 6, pad.top + plotHeight - 6);
-          return `<circle class="age-point ${className}" cx="${cx}" cy="${cy}" r="5.8"><title>${escapeHtml(title)}</title></circle>`;
-        }).join("")}
+        ${points
+          .map((point) => {
+            const className = point.score >= 75 ? "replace" : point.score >= 50 ? "watch" : "ok";
+            const title = `${point.device.hostname || point.device.model || translate("Poste")} - ${point.age} ${state.language === "en" ? "yrs" : "ans"} - CPU ${point.cpu}`;
+            const cx = clamp(x(point.age) + pointJitter(point.device, "x") * 9, pad.left + 6, pad.left + plotWidth - 6);
+            const cy = clamp(y(point.cpu) + pointJitter(point.device, "y") * 7, pad.top + 6, pad.top + plotHeight - 6);
+            return `<circle class="age-point ${className}" cx="${cx}" cy="${cy}" r="5.8"><title>${escapeHtml(title)}</title></circle>`;
+          })
+          .join("")}
       </svg>
       <div class="age-cpu-legend">
-        <span><i class="legend-ok"></i>${translate("Recent / correct")}</span>
-        <span><i class="legend-watch"></i>${translate("A surveiller")}</span>
-        <span><i class="legend-replace"></i>${translate("A remplacer")}</span>
+        <span><i class="legend-ok"></i>${translate("Récent / correct")}</span>
+        <span><i class="legend-watch"></i>${translate("À surveiller")}</span>
+        <span><i class="legend-replace"></i>${translate("À remplacer")}</span>
       </div>
     </div>
   `;
@@ -3290,29 +2445,83 @@ function renderFleetDashboard() {
 function renderValuation() {
   const metricsTarget = $("#valuation-metrics");
   if (!metricsTarget) return;
-  const devices = state.filtered;
+  const devices = activeFleetDevices(state.filtered);
   const launchValue = devices.reduce((sum, device) => sum + Number(device.estimated_launch_price || 0), 0);
   const currentValue = devices.reduce((sum, device) => sum + estimatedValue(device), 0);
   const depreciation = launchValue > 0 ? Math.round((1 - currentValue / launchValue) * 100) : 0;
-  const ages = devices.map(deviceAge).filter((age) => age !== null);
-  const averageAge = ages.length ? Math.round((ages.reduce((sum, age) => sum + age, 0) / ages.length) * 10) / 10 : 0;
-  const olderThanFour = ages.filter((age) => age > 4).length;
-  const lowCpu = devices.filter((device) => Number(device.cpu_benchmark_score || device.cpu_score || 0) > 0 && Number(device.cpu_benchmark_score || device.cpu_score || 0) < 8000).length;
-  const highPriority = devices.filter((device) => Number(device.replacement_priority || device.obsolescence_index || 0) >= 70).length;
+  const ageSnapshot = fleetDomain.fleetKpiSnapshot(devices, fleetEvaluationContext());
+  const ages = inventoryDomain.fleetDeviceAges(devices);
+  const averageAge = ageSnapshot.averageAge;
+  const olderThanFour = ageSnapshot.olderThanFour;
+  const lowCpu = devices.filter(
+    (device) =>
+      Number(device.cpu_benchmark_score || device.cpu_score || 0) > 0 &&
+      Number(device.cpu_benchmark_score || device.cpu_score || 0) < 8000,
+  ).length;
+  const highPriority = devices.filter(
+    (device) => Number(device.replacement_priority || device.obsolescence_index || 0) >= 70,
+  ).length;
   const marketObserved = devices.filter((device) => Number(device.market_observation_count || 0) > 0).length;
-  const highConfidence = devices.filter((device) => ["A", "B"].includes(String(device.valuation_confidence_label || ""))).length;
+  const highConfidence = devices.filter((device) =>
+    ["A", "B"].includes(String(device.valuation_confidence_label || "")),
+  ).length;
 
   metricsTarget.innerHTML = [
-    ["Valeur de lancement totale", money(launchValue)],
-    ["Valeur actuelle totale", money(currentValue)],
-    ["Depreciation moyenne", `${depreciation}%`],
-    ["Age moyen", `${averageAge} ${state.language === "en" ? "years" : "ans"}`],
-    ["Plus de 4 ans", olderThanFour],
-    ["CPU faible", lowCpu],
-    ["Priorite elevee", highPriority],
-    ["Prix marche observes", marketObserved],
-    ["Confiance A-B", highConfidence],
-  ].map(([label, value]) => `<article class="metric"><span>${translate(label)}</span><strong>${value}</strong></article>`).join("");
+    {
+      label: "Valeur de lancement totale",
+      value: money(launchValue),
+      helper: "Somme des prix de lancement estimés pour les postes filtrés",
+    },
+    {
+      label: "Valeur actuelle estimée du parc",
+      value: money(currentValue),
+      helper: "Somme des dernières valeurs estimées pour les postes filtrés",
+    },
+    {
+      label: "Dépréciation moyenne estimée",
+      value: `${depreciation}%`,
+      helper: "Écart entre la valeur de lancement totale et la valeur actuelle estimée",
+    },
+    {
+      label: "Âge moyen du parc",
+      value: formattersDomain.formatAgeYears(averageAge, state.language),
+      helper: formattersDomain.formatAgePopulation(ageSnapshot.devicesWithAge, state.language),
+    },
+    {
+      label: "Postes de plus de quatre ans",
+      value: formatFleetNumber(olderThanFour),
+      helper: "Postes actuels avec une date de sortie exploitable et un âge strictement supérieur à quatre ans",
+    },
+    {
+      label: "Postes avec un processeur peu performant",
+      value: formatFleetNumber(lowCpu),
+      helper: "Postes dont le score processeur connu est inférieur à 8 000",
+    },
+    {
+      label: "Postes à remplacer en priorité",
+      value: formatFleetNumber(highPriority),
+      helper: "Postes dont la priorité de remplacement calculée est supérieure ou égale à 70",
+    },
+    {
+      label: "Prix de marché observés",
+      value: formatFleetNumber(marketObserved),
+      helper: "Postes disposant d’au moins une observation de prix externe",
+    },
+    {
+      label: "Niveau de confiance A–B",
+      value: formatFleetNumber(highConfidence),
+      helper: "Postes dont l’estimation atteint un niveau de confiance A ou B",
+    },
+  ]
+    .map(
+      ({ label, value, helper }) => `
+        <article class="metric" title="${escapeHtml(translate(helper))}">
+          <span>${translate(label)}</span>
+          <strong>${value}</strong>
+          <small>${escapeHtml(translate(helper))}</small>
+        </article>`,
+    )
+    .join("");
 
   const ageDistribution = { "0-1": 0, "2-3": 0, "4-5": 0, "6+": 0 };
   ages.forEach((age) => {
@@ -3321,45 +2530,55 @@ function renderValuation() {
     else if (age <= 5) ageDistribution["4-5"] += 1;
     else ageDistribution["6+"] += 1;
   });
-  const performance = { Low: 0, Medium: 0, Good: 0 };
+  const performance = { Faible: 0, Moyen: 0, Bon: 0 };
   devices.forEach((device) => {
     const score = Number(device.cpu_benchmark_score || device.cpu_score || 0);
     if (!score) return;
-    if (score < 8000) performance.Low += 1;
-    else if (score < 14000) performance.Medium += 1;
-    else performance.Good += 1;
+    if (score < 8000) performance.Faible += 1;
+    else if (score < 14000) performance.Moyen += 1;
+    else performance.Bon += 1;
   });
-  const priorities = { Low: 0, Medium: 0, High: 0 };
+  const priorities = { Faible: 0, Moyen: 0, Élevée: 0 };
   devices.forEach((device) => {
     const priority = Number(device.replacement_priority || device.obsolescence_index || 0);
-    if (priority >= 70) priorities.High += 1;
-    else if (priority >= 45) priorities.Medium += 1;
-    else priorities.Low += 1;
+    if (priority >= 70) priorities.Élevée += 1;
+    else if (priority >= 45) priorities.Moyen += 1;
+    else priorities.Faible += 1;
   });
 
-  renderBarChart('[data-valuation-chart="value-team"]', translate("Valeur par équipe"), sumBy(devices, activeTeamName, estimatedValue), " EUR");
-  renderBarChart('[data-valuation-chart="age"]', translate("Distribution des ages"), ageDistribution);
+  renderBarChart(
+    '[data-valuation-chart="value-team"]',
+    translate("Valeur par équipe"),
+    sumBy(devices, activeTeamName, estimatedValue),
+    " EUR",
+  );
+  renderBarChart('[data-valuation-chart="age"]', translate("Distribution des âges"), ageDistribution);
   renderBarChart('[data-valuation-chart="performance"]', translate("Distribution des performances"), performance);
-  renderBarChart('[data-valuation-chart="priority"]', translate("Priorite de remplacement"), priorities);
+  renderBarChart('[data-valuation-chart="priority"]', translate("Priorité de remplacement"), priorities);
 
   if (state.cpuBenchmarkStats) {
     $("#cpu-benchmark-status").textContent =
       `${translate("Benchmarks importés")}: ${state.cpuBenchmarkStats.importedCount} / ${translate("Jeu intégré")}: ${state.cpuBenchmarkStats.bundledCount}`;
   }
+  const latestEnrichment = inventoryDomain.latestEnrichmentAt(state.devices);
+  $("#last-enrichment-label").textContent = latestEnrichment
+    ? `${translate("Dernier enrichissement")}: ${formatDate(latestEnrichment)}`
+    : translate("Aucun enrichissement terminé");
 }
 
 function renderDevices() {
-  $("#result-count").textContent = state.language === "en"
-    ? `${state.filtered.length} result${state.filtered.length === 1 ? "" : "s"}`
-    : `${state.filtered.length} resultat${state.filtered.length === 1 ? "" : "s"}`;
+  $("#result-count").textContent =
+    state.language === "en"
+      ? `${state.filtered.length} result${state.filtered.length === 1 ? "" : "s"}`
+      : `${formatFleetNumber(state.filtered.length)} résultat${state.filtered.length === 1 ? "" : "s"}`;
   const labels = currentStatusLabels();
   $("#devices-table").innerHTML = state.filtered
     .map((device) => {
       const unassignedStatus = isDetachedInventoryStatus(device.status);
       const userName = unassignedStatus
         ? translate("Aucun utilisateur actuel")
-        : (`${device.first_name || ""} ${device.last_name || ""}`.trim() || "-");
-      const userEmail = unassignedStatus ? (labels[device.status] || translate("Sorti du parc")) : (device.email || "");
+        : `${device.first_name || ""} ${device.last_name || ""}`.trim() || "-";
+      const userEmail = unassignedStatus ? labels[device.status] || translate("Sorti du parc") : device.email || "";
       return `
         <tr data-id="${device.id}" class="${deviceRowStatusClass(device.status)} ${device.id === state.selectedDeviceId ? "is-selected" : ""}">
           <td>
@@ -3391,11 +2610,19 @@ async function selectDevice(id) {
   renderDevices();
   const device = state.devices.find((item) => item.id === id);
   if (!device) return;
-  $("#detail-title").textContent = device.hostname || "Machine";
+  $("#detail-title").textContent = device.hostname || translate("Poste");
   $("#device-detail").innerHTML = `<p class="helper">Chargement de l'historique...</p>`;
   try {
-    const detail = await api(`/admin/devices/${id}`);
-    renderDetail({ ...detail.device, priceHistory: detail.priceHistory || [], invoices: detail.invoices || detail.device?.invoices || [] }, detail.scans || [], detail.history || []);
+    const detail = await inventoryApi.getDevice(id);
+    renderDetail(
+      {
+        ...detail.device,
+        priceHistory: detail.priceHistory || [],
+        invoices: detail.invoices || detail.device?.invoices || [],
+      },
+      detail.scans || [],
+      detail.history || [],
+    );
   } catch (error) {
     toast(error.message);
     renderDetail(device, [], []);
@@ -3404,10 +2631,10 @@ async function selectDevice(id) {
 
 function historyLabel(event) {
   const labels = {
-    DEVICE_CREATED: "Machine créée",
-    DEVICE_UPDATED: "Machine mise à jour",
-    DEVICE_RETIRED: "Machine sortie du parc",
-    DEVICE_REACTIVATED: "Machine réactivée",
+    DEVICE_CREATED: "Poste créé",
+    DEVICE_UPDATED: "Poste mis à jour",
+    DEVICE_RETIRED: "Poste sorti du parc",
+    DEVICE_REACTIVATED: "Poste réactivé",
     USER_ASSIGNED: "Utilisateur affecté",
     USER_REASSIGNED: "Utilisateur réaffecté",
     USER_REMOVED: "Utilisateur retiré",
@@ -3420,28 +2647,28 @@ function historyLabel(event) {
     DEVICE_RESET: "Réinitialisation détectée",
     MANUAL_EDIT: "Note administrateur",
     IMPORT_UPDATE: "Import mis à jour",
-    INVOICE_ADDED: "Facture ajoutee",
-    INVOICE_DELETED: "Facture supprimee",
-    GROUPED_UPDATE: "Modification groupee",
+    INVOICE_ADDED: "Facture ajoutée",
+    INVOICE_DELETED: "Facture supprimée",
+    GROUPED_UPDATE: "Modification groupée",
   };
   return labels[event.event_type] || event.event_type;
 }
 
 function historyFieldLabel(fieldName) {
   const labels = {
-    hostname: "Nom d'hote",
+    hostname: "Nom d’hôte",
     os_name: "OS",
     os_version: "Version OS",
     manufacturer: "Fabricant",
     model: "Modèle",
     model_number: "Numéro modèle / SKU",
-    service_tag: "Etiquette service",
+    service_tag: "Étiquette du service",
     serial_number: "Numéro de série",
     cpu: "CPU",
     gpu: "GPU",
     ram_total_gb: "RAM totale",
     storage_total_gb: "Stockage total",
-    storage_type: "Type stockage",
+    storage_type: "Type de stockage",
     windows_user: "Utilisateur OS",
     team_id: "Équipe",
     establishment_id: "Établissement",
@@ -3454,43 +2681,8 @@ function historyFieldLabel(fieldName) {
   return translate(labels[fieldName] || fieldName);
 }
 
-function cleanImportedText(value) {
-  let text = String(value ?? "").trim();
-  if (!text) return "";
-  const replacements = {
-    "�": "è",
-    "ï¿½": "è",
-    "Â·": "·",
-    "Â ": " ",
-    "Ã©": "é",
-    "Ã¨": "è",
-    "Ãª": "ê",
-    "Ã«": "ë",
-    "Ã ": "à",
-    "Ã¢": "â",
-    "Ã§": "ç",
-    "Ã®": "î",
-    "Ã¯": "ï",
-    "Ã´": "ô",
-    "Ã¹": "ù",
-    "Ã»": "û",
-    "Ã‰": "É",
-  };
-  Object.entries(replacements).forEach(([bad, good]) => {
-    text = text.replaceAll(bad, good);
-  });
-  return text;
-}
-
-function parseHistoryJson(value) {
-  if (!value) return null;
-  try {
-    const parsed = JSON.parse(value);
-    return parsed && typeof parsed === "object" ? parsed : null;
-  } catch {
-    return null;
-  }
-}
+const cleanImportedText = historyDomain.cleanImportedText;
+const parseHistoryJson = historyDomain.parseHistoryJson;
 
 function legacyHistorySummary(value) {
   const data = parseHistoryJson(value);
@@ -3511,92 +2703,28 @@ function historyValueDisplay(event, side) {
   return cleanImportedText(value || "-");
 }
 
-function historyTimeBucket(value) {
-  const time = new Date(value || 0).getTime();
-  return Number.isFinite(time) ? Math.floor(time / 60000) : String(value || "");
-}
-
-function historyGroupFamily(event) {
-  if (event.field_name === "legacy_google_sheets_history" || event.event_type === "MANUAL_EDIT") {
-    return `single:${event.id || event.changed_at || ""}`;
-  }
-
-  const source = String(event.source || "").toUpperCase();
-  const type = String(event.event_type || "");
-  const field = String(event.field_name || "");
-  const collectionFields = new Set([
-    "hostname", "os_name", "os_version", "manufacturer", "model", "model_number",
-    "service_tag", "serial_number", "cpu", "gpu", "ram_total_gb", "storage_total_gb",
-    "storage_type", "windows_user",
-  ]);
-  const assignmentFields = new Set(["assigned_user_id", "team_id", "establishment_id", "owner_email", "status"]);
-  const collectionTypes = new Set(["DEVICE_CREATED", "DEVICE_UPDATED", "DEVICE_RESET", "COLLECTOR_UPDATE", "IMPORT_UPDATE", "OS_CHANGED", "HARDWARE_CHANGED"]);
-  const assignmentTypes = new Set(["USER_ASSIGNED", "USER_REASSIGNED", "USER_REMOVED", "TEAM_CHANGED", "LOCATION_CHANGED", "STATUS_CHANGED", "DEVICE_RETIRED", "DEVICE_REACTIVATED"]);
-
-  if ((source.includes("COLLECTOR") || source.includes("IMPORT")) && (collectionTypes.has(type) || assignmentTypes.has(type) || collectionFields.has(field) || assignmentFields.has(field))) {
-    return "collection";
-  }
-  if (assignmentTypes.has(type) || assignmentFields.has(field)) return "assignment";
-  if (collectionTypes.has(type) || collectionFields.has(field)) return "hardware-system";
-  if (type === "INVOICE_ADDED" || type === "INVOICE_DELETED" || field === "invoice") return "invoice";
-  return `single:${event.id || `${type}:${field}:${event.changed_at}`}`;
-}
-
-function historyGroupKey(event) {
-  const family = historyGroupFamily(event);
-  if (family.startsWith("single:")) return family;
-  return [
-    family,
-    historyTimeBucket(event.changed_at),
-    event.changed_by || "",
-    event.source || "",
-  ].join("|");
-}
-
-function groupHistoryEvents(history = []) {
-  const groupedByKey = new Map();
-  history.forEach((event) => {
-    const key = historyGroupKey(event);
-    if (groupedByKey.has(key)) {
-      groupedByKey.get(key).events.push(event);
-    } else {
-      groupedByKey.set(key, { key, events: [event] });
-    }
-  });
-  return Array.from(groupedByKey.values());
-}
-
-function historyGroupLabel(events) {
-  const types = new Set(events.map((event) => event.event_type));
-  if (events.some((event) => event.event_type === "MANUAL_EDIT")) return "MANUAL_EDIT";
-  if (events.some((event) => ["DEVICE_RETIRED", "DEVICE_REACTIVATED"].includes(event.event_type))) {
-    return events.find((event) => ["DEVICE_RETIRED", "DEVICE_REACTIVATED"].includes(event.event_type))?.event_type || "STATUS_CHANGED";
-  }
-  if (events.some((event) => ["USER_ASSIGNED", "USER_REASSIGNED", "USER_REMOVED", "TEAM_CHANGED", "LOCATION_CHANGED", "STATUS_CHANGED"].includes(event.event_type))) {
-    return events.some((event) => event.event_type === "USER_REMOVED") ? "USER_REMOVED" : "USER_REASSIGNED";
-  }
-  if (events.some((event) => ["HARDWARE_CHANGED", "OS_CHANGED", "DEVICE_RESET", "IMPORT_UPDATE", "DEVICE_UPDATED", "DEVICE_CREATED"].includes(event.event_type))) {
-    return "COLLECTOR_UPDATE";
-  }
-  return types.size > 1 ? "GROUPED_UPDATE" : (events[0]?.event_type || "");
-}
+const groupHistoryEvents = historyDomain.groupHistoryEvents;
+const historyGroupLabel = historyDomain.historyGroupLabel;
 
 function renderHistoryNotes(events) {
   const seen = new Set();
-  return events.map((event) => {
-    const note = cleanImportedText(event.notes);
-    if (!note) return "";
-    const key = `${event.event_type || ""}:${note.toLowerCase()}`;
-    if (seen.has(key)) return "";
-    seen.add(key);
-    const isAdminNote = event.event_type === "MANUAL_EDIT" || String(event.source || "").toLowerCase() === "manual-note";
-    return `
+  return events
+    .map((event) => {
+      const note = cleanImportedText(event.notes);
+      if (!note) return "";
+      const key = `${event.event_type || ""}:${note.toLowerCase()}`;
+      if (seen.has(key)) return "";
+      seen.add(key);
+      const isAdminNote =
+        event.event_type === "MANUAL_EDIT" || String(event.source || "").toLowerCase() === "manual-note";
+      return `
       <p class="${isAdminNote ? "history-admin-note" : "history-event-note"}">
         ${isAdminNote ? `<span>${escapeHtml(translate("Note administrateur"))}</span>` : ""}
         ${escapeHtml(note)}
       </p>
     `;
-  }).join("");
+    })
+    .join("");
 }
 
 function renderHistoryChanges(events) {
@@ -3613,26 +2741,37 @@ function renderHistoryChanges(events) {
   }
   return `
     <ul class="history-change-list">
-      ${changes.map((event) => `
+      ${changes
+        .map(
+          (event) => `
         <li>
           <strong>${escapeHtml(historyFieldLabel(event.field_name))}</strong>
           <span>${translate("De")}: ${escapeHtml(historyValueDisplay(event, "old"))}</span>
           <span>${translate("Vers")}: ${escapeHtml(historyValueDisplay(event, "new"))}</span>
         </li>
-      `).join("")}
+      `,
+        )
+        .join("")}
     </ul>
   `;
 }
 
 function renderHistoryTimeline(history) {
-  return groupHistoryEvents(history).map((group) => {
-    const event = group.events[0];
-    const groupLabel = historyGroupLabel(group.events);
-    const changedFields = new Set(group.events.filter((item) => item.field_name).map((item) => historyFieldLabel(item.field_name)));
-    const fieldSummary = changedFields.size > 1
-      ? `${changedFields.size} ${state.language === "en" ? "fields updated" : "champs mis à jour"}`
-      : (event.field_name ? historyFieldLabel(event.field_name) : "");
-    return `
+  return (
+    groupHistoryEvents(history)
+      .map((group) => {
+        const event = group.events[0];
+        const groupLabel = historyGroupLabel(group.events);
+        const changedFields = new Set(
+          group.events.filter((item) => item.field_name).map((item) => historyFieldLabel(item.field_name)),
+        );
+        const fieldSummary =
+          changedFields.size > 1
+            ? `${changedFields.size} ${state.language === "en" ? "fields updated" : "champs mis à jour"}`
+            : event.field_name
+              ? historyFieldLabel(event.field_name)
+              : "";
+        return `
     <article class="history-event">
       <span class="history-marker"></span>
       <div>
@@ -3649,149 +2788,34 @@ function renderHistoryTimeline(history) {
       </div>
     </article>
     `;
-  }).join("") || `<p class="helper">${translate("Aucun historique.")}</p>`;
+      })
+      .join("") || `<p class="helper">${translate("Aucun historique.")}</p>`
+  );
 }
 
 function sourceLabel(source) {
-  const normalized = String(source || "SYSTEM").toUpperCase().replace(/[^A-Z0-9_]+/g, "_");
+  const normalized = String(source || "SYSTEM")
+    .toUpperCase()
+    .replace(/[^A-Z0-9_]+/g, "_");
   if (normalized === "MANUAL") return translate("MANUAL_ADMIN");
   return translate(normalized);
 }
 
-function legacyAssignmentUser(data) {
-  return [data?.firstName, data?.lastName].map(cleanImportedText).filter(Boolean).join(" ");
-}
-
-function sameLegacyAssignment(left, right) {
-  return ["user_name", "team_name", "establishment_name"].every((field) =>
-    cleanImportedText(left?.[field]).toLowerCase() === cleanImportedText(right?.[field]).toLowerCase());
-}
-
-function sameAssignmentPeriodUser(left, right) {
-  const leftId = cleanImportedText(left?.user_id).toLowerCase();
-  const rightId = cleanImportedText(right?.user_id).toLowerCase();
-  if (leftId && rightId && leftId === rightId) return true;
-  const leftEmail = cleanImportedText(left?.user_email).toLowerCase();
-  const rightEmail = cleanImportedText(right?.user_email).toLowerCase();
-  if (leftEmail && rightEmail && leftEmail === rightEmail) return true;
-  const leftName = cleanImportedText(left?.user_name).toLowerCase();
-  const rightName = cleanImportedText(right?.user_name).toLowerCase();
-  return Boolean(leftName && rightName && leftName === rightName);
-}
-
-function mergeSameUserAssignmentPeriods(periods = []) {
-  const sorted = periods
-    .filter(Boolean)
-    .slice()
-    .sort((left, right) => new Date(left.started_at || 0).getTime() - new Date(right.started_at || 0).getTime());
-  const merged = [];
-  sorted.forEach((period) => {
-    const previous = merged[merged.length - 1];
-    if (previous && sameAssignmentPeriodUser(previous, period)) {
-      const previousEnd = previous.ended_at ? new Date(previous.ended_at).getTime() : Infinity;
-      const periodEnd = period.ended_at ? new Date(period.ended_at).getTime() : Infinity;
-      previous.ended_at = previousEnd === Infinity || periodEnd === Infinity
-        ? null
-        : new Date(Math.max(previousEnd, periodEnd)).toISOString();
-      previous.unassigned_by = previous.ended_at ? (period.unassigned_by || previous.unassigned_by || "") : "";
-      previous.team_id = period.team_id || previous.team_id || null;
-      previous.team_name = period.team_name || previous.team_name || "";
-      previous.establishment_id = period.establishment_id || previous.establishment_id || null;
-      previous.establishment_name = period.establishment_name || previous.establishment_name || "";
-      previous.source = period.source || previous.source;
-      previous.reason = period.reason || previous.reason;
-      return;
-    }
-    merged.push({ ...period });
-  });
-  return merged.sort((left, right) => new Date(right.started_at || 0).getTime() - new Date(left.started_at || 0).getTime());
-}
-
-function detachedStatusChangeEvent(history = [], afterTime = 0) {
-  const event = history
-    .filter((item) => {
-      if (item.field_name !== "status" || !item.changed_at) return false;
-      const changedAt = new Date(item.changed_at).getTime();
-      return changedAt > afterTime && isDetachedInventoryStatus(cleanImportedText(item.new_value));
-    })
-    .sort((left, right) => new Date(left.changed_at).getTime() - new Date(right.changed_at).getTime())[0];
-  return event || null;
-}
-
-function closedFallbackPeriodEndDate(fallbackPeriods = [], afterTime = 0) {
-  const period = fallbackPeriods
-    .filter((item) => {
-      const endedAt = item?.ended_at ? new Date(item.ended_at).getTime() : 0;
-      return endedAt > afterTime;
-    })
-    .sort((left, right) => new Date(left.ended_at).getTime() - new Date(right.ended_at).getTime())[0];
-  return period?.ended_at || null;
-}
-
 function assignmentPeriodsFromLegacyHistory(history = [], fallbackPeriods = []) {
-  const legacyEvents = history
-    .filter((event) => event.field_name === "legacy_google_sheets_history" && event.new_value && event.changed_at)
-    .map((event) => ({ event, data: parseHistoryJson(event.new_value) }))
-    .filter(({ data }) => legacyAssignmentUser(data))
-    .sort((left, right) => new Date(left.event.changed_at).getTime() - new Date(right.event.changed_at).getTime());
-
-  if (legacyEvents.length === 0) return mergeSameUserAssignmentPeriods(fallbackPeriods);
-
-  const periods = [];
-  legacyEvents.forEach(({ event, data }) => {
-    const period = {
-      user_name: legacyAssignmentUser(data),
-      user_email: "",
-      team_name: cleanImportedText(data.team),
-      establishment_name: cleanImportedText(data.establishment),
-      started_at: event.changed_at,
-      ended_at: null,
-      assigned_by: event.changed_by || "import",
-      unassigned_by: "",
-      source: "IMPORT",
-      reason: state.language === "en"
-        ? "Usage period reconstructed from the imported Google Sheets history."
-        : "Periode d'utilisation reconstruite depuis l'historique Google Sheets importe.",
-    };
-    const previous = periods[periods.length - 1];
-    if (sameLegacyAssignment(previous, period)) return;
-    if (previous) {
-      previous.ended_at = event.changed_at;
-      previous.unassigned_by = event.changed_by || "import";
-    }
-    periods.push(period);
-  });
-
-  const lastLegacyDate = new Date(periods[periods.length - 1]?.started_at || 0).getTime();
-  const laterManualPeriods = fallbackPeriods.filter((period) => {
-    const startedAt = new Date(period.started_at).getTime();
-    const source = String(period.source || "").toUpperCase();
-    return startedAt > lastLegacyDate && source !== "SYSTEM";
-  }).sort((left, right) => new Date(right.started_at).getTime() - new Date(left.started_at).getTime());
-
-  if (laterManualPeriods.length > 0) {
-    const firstManual = laterManualPeriods
-      .slice()
-      .sort((left, right) => new Date(left.started_at).getTime() - new Date(right.started_at).getTime())[0];
-    periods[periods.length - 1].ended_at = firstManual.started_at;
-    periods[periods.length - 1].unassigned_by = firstManual.assigned_by || "admin";
-  } else {
-    const detachEvent = detachedStatusChangeEvent(history, lastLegacyDate);
-    const detachDate = detachEvent?.changed_at || closedFallbackPeriodEndDate(fallbackPeriods, lastLegacyDate);
-    if (detachDate) {
-      periods[periods.length - 1].ended_at = detachDate;
-      periods[periods.length - 1].unassigned_by = detachEvent?.changed_by || "admin";
-    }
-  }
-
-  return mergeSameUserAssignmentPeriods([...laterManualPeriods, ...periods.slice().reverse()]);
+  const importedReason =
+    state.language === "en"
+      ? "Usage period reconstructed from the imported Google Sheets history."
+      : "Période d’utilisation reconstruite depuis l’historique Google Sheets importé.";
+  return historyDomain.assignmentPeriodsFromLegacyHistory(history, fallbackPeriods, importedReason);
 }
 
 function renderAssignmentPeriods(periods = []) {
-  return periods.map((period) => {
-    const user = period.user_name || period.user_email || translate("Aucun utilisateur actuel");
-    const endLabel = period.ended_at ? formatDate(period.ended_at) : translate("a aujourd'hui");
-    return `
+  return (
+    periods
+      .map((period) => {
+        const user = period.user_name || period.user_email || translate("Aucun utilisateur actuel");
+        const endLabel = period.ended_at ? formatDate(period.ended_at) : translate("a aujourd'hui");
+        return `
       <article class="assignment-period">
         <strong>${escapeHtml(user)}</strong>
         <small>${escapeHtml([period.team_name, period.establishment_name].filter(Boolean).join(" - ") || "-")}</small>
@@ -3802,14 +2826,17 @@ function renderAssignmentPeriods(periods = []) {
         ${period.reason ? `<p>${translate("Pourquoi")}: ${escapeHtml(period.reason)}</p>` : ""}
       </article>
     `;
-  }).join("") || `<p class="helper">${translate("Aucune donnee.")}</p>`;
+      })
+      .join("") || `<p class="helper">${translate("Aucune donnée.")}</p>`
+  );
 }
 
 function promptRetirementNote(device) {
   return new Promise((resolve) => {
     pendingRetirement = { resolve };
-    $("#retire-dialog-title").textContent = translate("Sortir la machine du parc");
-    $("#retire-dialog-message").textContent = `${translate("Ajoutez une note avant de confirmer la sortie du parc.")} ${device.hostname || ""}`.trim();
+    $("#retire-dialog-title").textContent = translate("Sortir le poste du parc");
+    $("#retire-dialog-message").textContent =
+      `${translate("Ajoutez une note avant de confirmer la sortie du parc.")} ${device.hostname || ""}`.trim();
     $("#retire-note").value = "";
     $("#retire-dialog").showModal();
     $("#retire-note").focus();
@@ -3824,9 +2851,7 @@ const invoiceTypeLabels = {
   other: "Autre facture",
 };
 
-function invoiceTypeValue(invoice) {
-  return String(invoice?.invoice_type || "purchase").trim() || "purchase";
-}
+const invoiceTypeValue = invoiceDomain.invoiceTypeValue;
 
 function invoiceTypeLabel(invoice) {
   return invoiceTypeLabels[invoiceTypeValue(invoice)] || invoiceTypeLabels.other;
@@ -3834,16 +2859,23 @@ function invoiceTypeLabel(invoice) {
 
 function invoiceDetailRows(invoice) {
   const rows = [
-    invoice.invoice_number ? ["Numero facture", invoice.invoice_number] : null,
-    invoice.invoice_date ? ["Date facture", formatDateOnly(invoice.invoice_date)] : null,
-    invoice.purchase_price ? ["Montant facture", moneyWithCurrency(invoice.purchase_price, invoice.currency)] : null,
+    invoice.invoice_number ? ["Numéro de facture", invoice.invoice_number] : null,
+    invoice.invoice_date ? ["Date de facture", formatDateOnly(invoice.invoice_date)] : null,
+    invoice.purchase_price
+      ? ["Montant de la facture", moneyWithCurrency(invoice.purchase_price, invoice.currency)]
+      : null,
   ];
   if (invoiceTypeValue(invoice) === "warranty_extension") {
     rows.push(
       invoice.warranty_provider ? ["Garantie fournisseur", invoice.warranty_provider] : null,
-      invoice.warranty_start_date ? ["Debut garantie", formatDateOnly(invoice.warranty_start_date)] : null,
-      invoice.warranty_end_date ? ["Fin garantie", formatDateOnly(invoice.warranty_end_date)] : null,
-      invoice.warranty_duration_months ? ["Duree garantie mois", `${invoice.warranty_duration_months} ${state.language === "en" ? "months" : "mois"}`] : null,
+      invoice.warranty_start_date ? ["Début de garantie", formatDateOnly(invoice.warranty_start_date)] : null,
+      invoice.warranty_end_date ? ["Fin de garantie", formatDateOnly(invoice.warranty_end_date)] : null,
+      invoice.warranty_duration_months
+        ? [
+            "Durée de garantie en mois",
+            `${invoice.warranty_duration_months} ${state.language === "en" ? "months" : "mois"}`,
+          ]
+        : null,
     );
   }
   return rows.filter(Boolean);
@@ -3854,68 +2886,60 @@ function renderInvoiceDetails(invoice) {
   if (!rows.length) return "";
   return [
     `<dl class="invoice-data-grid">`,
-    ...rows.map(([label, value]) => `
+    ...rows.map(
+      ([label, value]) => `
       <div>
         <dt>${escapeHtml(translate(label))}</dt>
         <dd>${escapeHtml(value)}</dd>
       </div>
-    `),
+    `,
+    ),
     `</dl>`,
   ].join("");
 }
 
 function warrantyStatusInfo(invoice) {
-  if (invoiceTypeValue(invoice) !== "warranty_extension") return null;
-  const activeLabel = invoice.is_estimated_warranty ? translate("Garantie constructeur estimee") : translate("Garantie active");
-  if (!invoice.warranty_end_date) {
+  const snapshot = invoiceDomain.warrantyStatusSnapshot(invoice);
+  if (!snapshot) return null;
+  const activeLabel = snapshot.isEstimated ? translate("Garantie constructeur estimee") : translate("Garantie active");
+  if (snapshot.status === "unknown") {
     return {
       status: "unknown",
-      label: translate("Garantie incomplete"),
-      helper: translate("Fin garantie"),
+      label: translate("Garantie incomplète"),
+      helper: translate("Fin de garantie"),
       progress: 0,
     };
   }
-  const today = new Date();
-  const todayUtc = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
-  const endText = String(invoice.warranty_end_date);
-  const end = /^\d{4}-\d{2}-\d{2}$/.test(endText) ? new Date(`${endText}T00:00:00`) : new Date(invoice.warranty_end_date);
-  const endUtc = Date.UTC(end.getFullYear(), end.getMonth(), end.getDate());
-  const daysLeft = Math.ceil((endUtc - todayUtc) / 86400000);
-  const startText = String(invoice.warranty_start_date || "");
-  const start = /^\d{4}-\d{2}-\d{2}$/.test(startText) ? new Date(`${startText}T00:00:00`) : null;
-  const startUtc = start ? Date.UTC(start.getFullYear(), start.getMonth(), start.getDate()) : null;
-  const totalDays = startUtc !== null ? Math.max(1, Math.ceil((endUtc - startUtc) / 86400000)) : Math.max(365, daysLeft);
-  const progress = Math.max(0, Math.min(100, Math.round((Math.max(0, daysLeft) / totalDays) * 100)));
-  if (daysLeft < 0) {
-    const days = Math.abs(daysLeft);
+  if (snapshot.status === "expired") {
+    const days = Math.abs(snapshot.daysLeft);
     return {
       status: "expired",
       label: translate("Garantie expiree"),
-      helper: `${translate("Expiree depuis")} ${days} ${translate(days > 1 ? "jours" : "jour")}`,
+      helper: `${translate("Expirée depuis")} ${days} ${translate(days > 1 ? "jours" : "jour")}`,
       progress: 0,
     };
   }
-  if (daysLeft === 0) {
+  if (snapshot.daysLeft === 0) {
     return {
       status: "warning",
       label: translate("Garantie bientot expiree"),
       helper: translate("Expire aujourd'hui"),
-      progress,
+      progress: snapshot.progress,
     };
   }
-  if (daysLeft <= 60) {
+  if (snapshot.status === "warning") {
     return {
       status: "warning",
       label: translate("Garantie bientot expiree"),
-      helper: `${translate("Expire dans")} ${daysLeft} ${translate(daysLeft > 1 ? "jours" : "jour")}`,
-      progress,
+      helper: `${translate("Expire dans")} ${snapshot.daysLeft} ${translate(snapshot.daysLeft > 1 ? "jours" : "jour")}`,
+      progress: snapshot.progress,
     };
   }
   return {
     status: "active",
     label: activeLabel,
-    helper: `${translate("Expire dans")} ${daysLeft} ${translate(daysLeft > 1 ? "jours" : "jour")}`,
-    progress,
+    helper: `${translate("Expire dans")} ${snapshot.daysLeft} ${translate(snapshot.daysLeft > 1 ? "jours" : "jour")}`,
+    progress: snapshot.progress,
   };
 }
 
@@ -3935,42 +2959,20 @@ function renderWarrantyStatusBar(invoice) {
   `;
 }
 
-function latestWarrantyInvoice(invoices = []) {
-  return invoices
-    .filter((invoice) => invoiceTypeValue(invoice) === "warranty_extension")
-    .slice()
-    .sort((a, b) => String(b.warranty_end_date || b.invoice_date || b.created_at || "").localeCompare(String(a.warranty_end_date || a.invoice_date || a.created_at || "")))[0] || null;
-}
-
-function latestDatedPurchaseInvoice(invoices = []) {
-  return invoices
-    .filter((invoice) => invoiceTypeValue(invoice) === "purchase" && invoice.invoice_date)
-    .slice()
-    .sort((a, b) => String(b.invoice_date || b.created_at || "").localeCompare(String(a.invoice_date || a.created_at || "")))[0] || null;
-}
+const latestWarrantyInvoice = invoiceDomain.latestWarrantyInvoice;
+const latestDatedPurchaseInvoice = invoiceDomain.latestDatedPurchaseInvoice;
 
 function standardWarrantyInvoiceFromPurchase(purchaseInvoice) {
-  if (!purchaseInvoice?.invoice_date) return null;
-  const warrantyEndDate = addMonthsToDateOnly(purchaseInvoice.invoice_date, 12);
-  if (!warrantyEndDate) return null;
-  return {
-    ...purchaseInvoice,
-    id: `standard-warranty-${purchaseInvoice.id || purchaseInvoice.invoice_date}`,
-    invoice_type: "warranty_extension",
-    supplier: purchaseInvoice.supplier || translate("Garantie standard 1 an"),
-    warranty_provider: translate("Garantie standard 1 an"),
-    warranty_start_date: purchaseInvoice.invoice_date,
-    warranty_end_date: warrantyEndDate,
-    warranty_duration_months: 12,
-    is_estimated_warranty: true,
-  };
+  return invoiceDomain.standardWarrantyInvoiceFromPurchase(purchaseInvoice, translate("Garantie standard 1 an"));
 }
 
 function renderInvoiceList(invoices = [], canEditDevice = false) {
   if (!invoices.length) return `<p class="helper">${translate("Aucune facture.")}</p>`;
   return `
     <div class="invoice-list">
-      ${invoices.map((invoice) => `
+      ${invoices
+        .map(
+          (invoice) => `
         <article class="invoice-item">
           <div class="invoice-content">
             <div class="invoice-title">
@@ -3987,14 +2989,14 @@ function renderInvoiceList(invoices = [], canEditDevice = false) {
             ${canEditDevice ? `<button class="danger-button invoice-delete" type="button" data-invoice-id="${escapeHtml(invoice.id)}">${translate("Supprimer la facture")}</button>` : ""}
           </div>
         </article>
-      `).join("")}
+      `,
+        )
+        .join("")}
     </div>
   `;
 }
 
-function latestPurchaseInvoice(invoices = []) {
-  return invoices.find((invoice) => invoiceTypeValue(invoice) === "purchase" && Number(invoice.purchase_price || 0) > 0) || null;
-}
+const latestPurchaseInvoice = invoiceDomain.latestPurchaseInvoice;
 
 const maxInvoiceUploadBytes = 10 * 1024 * 1024;
 
@@ -4022,7 +3024,9 @@ async function invoiceFormPayload(form) {
     invoiceNumber: String(values.invoiceNumber || "").trim(),
     invoiceDate: normalizeDateInputValue(values.invoiceDate),
     purchasePrice: String(values.purchasePrice || "").trim(),
-    currency: String(values.currency || "EUR").trim().toUpperCase(),
+    currency: String(values.currency || "EUR")
+      .trim()
+      .toUpperCase(),
     warrantyProvider: String(values.warrantyProvider || "").trim(),
     warrantyStartDate: normalizeDateInputValue(values.warrantyStartDate),
     warrantyEndDate: normalizeDateInputValue(values.warrantyEndDate),
@@ -4070,8 +3074,10 @@ function renderDetail(device, scans, history = []) {
   const unassignedStatus = isDetachedInventoryStatus(device.status);
   const currentUserLabel = unassignedStatus
     ? translate("Aucun utilisateur actuel")
-    : (`${device.first_name || ""} ${device.last_name || ""}`.trim() || device.email || translate("Non renseigné"));
-  const currentTeamLabel = unassignedStatus ? "" : displayWithAbbreviation(device.team_name || "", device.team_abbreviation);
+    : `${device.first_name || ""} ${device.last_name || ""}`.trim() || device.email || translate("Non renseigné");
+  const currentTeamLabel = unassignedStatus
+    ? ""
+    : displayWithAbbreviation(device.team_name || "", device.team_abbreviation);
   const currentTeamBadge = unassignedStatus ? "" : renderTeamBadge(device.team_name, device.team_id, device.team_color);
   const payload = latestScanPayload(scans);
   const memoryDetails = memorySummary(payload);
@@ -4083,44 +3089,68 @@ function renderDetail(device, scans, history = []) {
   const warrantySummaryStatus = warrantySummaryInvoice ? warrantyStatusInfo(warrantySummaryInvoice) : null;
   const warrantyDisplay = warrantySummaryInvoice
     ? [
-      warrantySummaryInvoice.warranty_provider || "",
-      warrantySummaryStatus?.label || "",
-      warrantySummaryInvoice.warranty_end_date ? `${translate("Fin garantie")} ${formatDateOnly(warrantySummaryInvoice.warranty_end_date)}` : "",
-      warrantySummaryInvoice.is_estimated_warranty ? translate("Depuis facture achat") : "",
-    ].filter(Boolean).join(" - ")
+        warrantySummaryInvoice.warranty_provider || "",
+        warrantySummaryStatus?.label || "",
+        warrantySummaryInvoice.warranty_end_date
+          ? `${translate("Fin de garantie")} ${formatDateOnly(warrantySummaryInvoice.warranty_end_date)}`
+          : "",
+        warrantySummaryInvoice.is_estimated_warranty ? translate("Depuis la facture d’achat") : "",
+      ]
+        .filter(Boolean)
+        .join(" - ")
     : "";
   const actualPurchaseRaw = purchaseInvoice?.purchase_price ?? device.actual_purchase_price;
   const actualPurchaseCurrency = purchaseInvoice?.currency ?? device.actual_purchase_currency;
-  const actualPurchasePrice = Number(actualPurchaseRaw || 0) > 0 ? moneyWithCurrency(actualPurchaseRaw, actualPurchaseCurrency) : "";
+  const actualPurchasePrice =
+    Number(actualPurchaseRaw || 0) > 0 ? moneyWithCurrency(actualPurchaseRaw, actualPurchaseCurrency) : "";
   const launchPriceNumber = Number(device.estimated_launch_price || 0);
   const purchasePriceNumber = Number(actualPurchaseRaw || 0);
-  const launchLooksLikeInvoice = device.valuation_method === "invoice_backed"
-    && launchPriceNumber > 0
-    && purchasePriceNumber > 0
-    && Math.round(launchPriceNumber * 100) === Math.round(purchasePriceNumber * 100);
+  const launchLooksLikeInvoice =
+    device.valuation_method === "invoice_backed" &&
+    launchPriceNumber > 0 &&
+    purchasePriceNumber > 0 &&
+    Math.round(launchPriceNumber * 100) === Math.round(purchasePriceNumber * 100);
   const launchPriceDisplay = launchLooksLikeInvoice ? "" : money(device.estimated_launch_price);
-  const cpuBenchmarkSourceUrl = /^https?:\/\//i.test(String(device.cpu_benchmark_source_url || "")) ? String(device.cpu_benchmark_source_url) : "";
+  const cpuBenchmarkSourceUrl = /^https?:\/\//i.test(String(device.cpu_benchmark_source_url || ""))
+    ? String(device.cpu_benchmark_source_url)
+    : "";
   const cpuBenchmarkSourceLink = cpuBenchmarkSourceUrl
-    ? { html: `<a href="${escapeHtml(cpuBenchmarkSourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(translate("Voir la source"))}</a>` }
+    ? {
+        html: `<a href="${escapeHtml(cpuBenchmarkSourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(translate("Voir la source"))}</a>`,
+      }
     : "";
   const effectiveTeamId = unassignedStatus ? "" : device.team_id;
   const effectiveUserId = unassignedStatus ? "" : device.assigned_user_id;
-  const teamOptions = state.teams.map((team) =>
-    `<option value="${team.id}" ${effectiveTeamId === team.id ? "selected" : ""}>${escapeHtml(displayWithAbbreviation(team.name, team.abbreviation))}</option>`).join("");
-  const establishmentOptions = state.establishments.map((site) =>
-    `<option value="${site.id}" ${device.establishment_id === site.id ? "selected" : ""}>${escapeHtml(displayWithAbbreviation(site.name, site.abbreviation))}</option>`).join("");
-  const userOptions = state.users.map((user) => {
-    const name = `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.email;
-    return `<option value="${user.id}" ${effectiveUserId === user.id ? "selected" : ""}>${escapeHtml(name)} (${escapeHtml(user.email)})</option>`;
-  }).join("");
+  const teamOptions = state.teams
+    .map(
+      (team) =>
+        `<option value="${team.id}" ${effectiveTeamId === team.id ? "selected" : ""}>${escapeHtml(displayWithAbbreviation(team.name, team.abbreviation))}</option>`,
+    )
+    .join("");
+  const establishmentOptions = state.establishments
+    .map(
+      (site) =>
+        `<option value="${site.id}" ${device.establishment_id === site.id ? "selected" : ""}>${escapeHtml(displayWithAbbreviation(site.name, site.abbreviation))}</option>`,
+    )
+    .join("");
+  const userOptions = state.users
+    .map((user) => {
+      const name = `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.email;
+      return `<option value="${user.id}" ${effectiveUserId === user.id ? "selected" : ""}>${escapeHtml(name)} (${escapeHtml(user.email)})</option>`;
+    })
+    .join("");
   const detailValueHtml = (value) => {
     if (value && typeof value === "object" && Object.hasOwn(value, "html")) return value.html;
-    return escapeHtml(value === 0 ? 0 : (value || "-"));
+    return escapeHtml(value === 0 ? 0 : value || "-");
   };
-  const detailRows = (rows) => `<dl class="detail-list">${rows.map(([key, value]) => `<div><dt>${escapeHtml(translate(key))}</dt><dd>${detailValueHtml(value)}</dd></div>`).join("")}</dl>`;
+  const detailRows = (rows) =>
+    `<dl class="detail-list">${rows.map(([key, value]) => `<div><dt>${escapeHtml(translate(key))}</dt><dd>${detailValueHtml(value)}</dd></div>`).join("")}</dl>`;
   const priceRows = (device.priceHistory || [])
     .slice(0, 8)
-    .map((row) => `<li>${formatDate(row.collected_at)} - ${row.source} - ${money(row.price)} - ${row.condition || "-"}</li>`)
+    .map(
+      (row) =>
+        `<li>${formatDate(row.collected_at)} - ${row.source} - ${money(row.price)} - ${escapeHtml(localizedMarketCondition(row.condition))}</li>`,
+    )
     .join("");
   const scanRows = scans
     .slice(0, 8)
@@ -4136,8 +3166,8 @@ function renderDetail(device, scans, history = []) {
       </span>
     </div>
     ${warrantySummaryInvoice ? `<div class="detail-warranty-summary">${renderWarrantyStatusBar(warrantySummaryInvoice)}</div>` : ""}
-    <nav class="detail-tabs" aria-label="${escapeHtml(translate("Sections machine"))}">
-      <button class="detail-tab is-active" type="button" data-detail-tab="overview">${translate("Vue generale")}</button>
+    <nav class="detail-tabs" aria-label="${escapeHtml(translate("Sections du poste"))}">
+      <button class="detail-tab is-active" type="button" data-detail-tab="overview">${translate("Vue générale")}</button>
       <button class="detail-tab" type="button" data-detail-tab="hardware">${translate("Matériel")}</button>
       <button class="detail-tab" type="button" data-detail-tab="os">${translate("OS")}</button>
       <button class="detail-tab" type="button" data-detail-tab="network">${translate("Réseau")}</button>
@@ -4153,53 +3183,92 @@ function renderDetail(device, scans, history = []) {
         ["Famille", family],
         ["Modèle", device.model],
         ["Numéro modèle / SKU", device.model_number],
-        ["Etiquette service", device.service_tag],
+        ["Étiquette du service", device.service_tag],
         ["Dernière remontée", formatDate(device.last_seen_at)],
         ["Utilisateur", currentUserLabel],
         ["Équipe", currentTeamLabel],
         ["Établissement", displayWithAbbreviation(device.establishment_name || "", device.establishment_abbreviation)],
       ])}
-      ${canEditDevice ? `<form id="status-form" class="form-grid one scan-history">
-        <label>${translate("Statut")}<select name="status">${Object.entries(labels).map(([value, label]) => `<option value="${value}" ${device.status === value ? "selected" : ""}>${label}</option>`).join("")}</select></label>
-        <button type="submit" class="primary">${translate("Mettre a jour")}</button>
-      </form>` : ""}
-      ${canEditDevice || canDeleteDevice ? `<div class="detail-actions">
-        ${canEditDevice ? `<button id="enrich-device" class="secondary detail-enrich-button" type="button">${translate("Enrichir cette machine")}</button>` : ""}
-        ${canDeleteDevice ? `<button id="delete-device" class="danger-button" type="button">${translate("Supprimer cette machine")}</button>` : ""}
-      </div>` : ""}
+      ${
+        canEditDevice
+          ? `<form id="status-form" class="form-grid one scan-history">
+        <label>${translate("Statut")}<select name="status">${Object.entries(labels)
+          .map(
+            ([value, label]) =>
+              `<option value="${value}" ${device.status === value ? "selected" : ""}>${label}</option>`,
+          )
+          .join("")}</select></label>
+        <button type="submit" class="primary">${translate("Mettre à jour")}</button>
+      </form>`
+          : ""
+      }
+      ${
+        canEditDevice || canDeleteDevice
+          ? `<div class="detail-actions">
+        ${canEditDevice ? `<button id="enrich-device" class="secondary detail-enrich-button" type="button">${translate("Enrichir ce poste")}</button>` : ""}
+        ${canDeleteDevice ? `<button id="delete-device" class="danger-button" type="button">${translate("Supprimer ce poste")}</button>` : ""}
+      </div>`
+          : ""
+      }
     </section>
     <section class="detail-tab-panel" data-detail-panel="hardware">
       ${detailRows([
-        ["Serial", device.serial_number], ["Etiquette service", device.service_tag], ["Numéro modèle / SKU", device.model_number],
-        ["CPU", device.cpu], ["Plateforme CPU", cpuPlatformLabel(device.cpu)], ["GPU", device.gpu],
+        ["Numéro de série", device.serial_number],
+        ["Étiquette du service", device.service_tag],
+        ["Numéro modèle / SKU", device.model_number],
+        ["CPU", device.cpu],
+        ["Plateforme CPU", cpuPlatformLabel(device.cpu)],
+        ["GPU", device.gpu],
         ["RAM", device.ram_total_gb ? formatCapacityGb(device.ram_total_gb) : ""],
         ["Mémoire", memoryDetails],
         ["Stockage", formatStorageSummary(device.storage_total_gb, device.storage_free_gb)],
-        ["Type stockage", device.storage_type], ["Score CPU", device.cpu_benchmark_score || device.cpu_score],
-        ...(cpuBenchmarkSourceLink ? [["Source score CPU", cpuBenchmarkSourceLink]] : []),
-        ["Génération CPU", device.cpu_generation], ["Annee modèle", device.release_year || device.model_release_year],
-        ["Prix achat reel", actualPurchasePrice],
+        ["Type de stockage", device.storage_type],
+        ["Score CPU", device.cpu_benchmark_score || device.cpu_score],
+        ...(cpuBenchmarkSourceLink ? [["Source du score CPU", cpuBenchmarkSourceLink]] : []),
+        ["Génération du processeur", device.cpu_generation],
+        ["Année du modèle", device.release_year || device.model_release_year],
+        ["Prix d’achat réel", actualPurchasePrice],
         ["Garantie", warrantyDisplay],
-        ["Prix lancement", launchPriceDisplay],
-        ["Valeur actuelle estimée", money(device.resale_value || device.estimated_current_value || device.current_market_price_avg)],
+        ["Prix de lancement", launchPriceDisplay],
+        [
+          "Valeur actuelle estimée",
+          money(device.resale_value || device.estimated_current_value || device.current_market_price_avg),
+        ],
         ["Valeur revente", money(device.resale_value || device.estimated_current_value)],
-        ["Cout remplacement", money(device.replacement_cost)],
+        ["Coût de remplacement", money(device.replacement_cost)],
         ["Valeur comptable", money(device.book_value)],
-        ["Methode valuation", localizedEnrichmentValue(device.valuation_method)],
-        ["Confiance valuation", device.valuation_confidence_label ? `${device.valuation_confidence_label} (${device.price_confidence_score || device.confidence_score || 0}/100)` : ""],
-        ["Observations marche", device.market_observation_count],
-        ["Raisons valuation", valuationReasonsDisplay(device)],
+        ["Méthode de valorisation", localizedEnrichmentValue(device.valuation_method)],
+        [
+          "Confiance de la valorisation",
+          device.valuation_confidence_label
+            ? `${device.valuation_confidence_label} (${device.price_confidence_score || device.confidence_score || 0}/100)`
+            : "",
+        ],
+        ["Observations du marché", device.market_observation_count],
+        ["Raisons de la valorisation", valuationReasonsDisplay(device)],
       ])}
     </section>
     <section class="detail-tab-panel" data-detail-panel="network">
-      ${detailRows([["MAC", device.mac_address], ["IP locale", device.local_ip], ["Utilisateur OS", device.windows_user], ["Script", device.script_version]])}
+      ${detailRows([
+        ["MAC", device.mac_address],
+        ["IP locale", device.local_ip],
+        ["Utilisateur OS", device.windows_user],
+        ["Script", device.script_version],
+      ])}
     </section>
     <section class="detail-tab-panel" data-detail-panel="os">
-      ${detailRows([["OS", device.os_name], ["Version OS", device.os_version], ["Dernière remontée", formatDate(device.last_seen_at)], ["Script", device.script_version]])}
+      ${detailRows([
+        ["OS", device.os_name],
+        ["Version OS", device.os_version],
+        ["Dernière remontée", formatDate(device.last_seen_at)],
+        ["Script", device.script_version],
+      ])}
     </section>
     <section class="detail-tab-panel" data-detail-panel="assignment">
       <div class="assignment-summary">${currentTeamBadge} ${renderLocationBadge(device)}</div>
-      ${canEditDevice ? `<form id="assignment-form" class="form-grid one assignment-form">
+      ${
+        canEditDevice
+          ? `<form id="assignment-form" class="form-grid one assignment-form">
         <label>${translate("Équipe")}<select name="teamId"><option value="">${translate("Non renseigné")}</option>${teamOptions}</select></label>
         <label>${translate("Établissement")}<select name="establishmentId"><option value="">${translate("Non renseigné")}</option>${establishmentOptions}</select></label>
         <label>${translate("Propriétaire")}<select name="assignedUserId"><option value="">${translate("Non renseigné")}</option>${userOptions}</select></label>
@@ -4207,29 +3276,35 @@ function renderDetail(device, scans, history = []) {
         <label>${translate("Nom propriétaire")}<input name="ownerLastName" value="${escapeHtml(device.last_name || "")}" maxlength="120" /></label>
         <label>${translate("Email propriétaire")}<input name="ownerEmail" type="email" value="${escapeHtml(device.email || "")}" maxlength="255" /></label>
         <button type="submit" class="primary">${translate("Enregistrer les affectations")}</button>
-      </form>` : ""}
+      </form>`
+          : ""
+      }
     </section>
     <section class="detail-tab-panel" data-detail-panel="invoices">
       ${renderInvoiceList(invoices, canEditDevice)}
-      ${canEditDevice ? `<form id="invoice-form" class="form-grid invoice-form">
-        <label>${translate("Type facture")}<select name="invoiceType">
-          <option value="purchase">${translate("Facture achat")}</option>
-          <option value="warranty_extension">${translate("Extension garantie")}</option>
-          <option value="repair">${translate("Reparation")}</option>
+      ${
+        canEditDevice
+          ? `<form id="invoice-form" class="form-grid invoice-form">
+        <label>${translate("Type de facture")}<select name="invoiceType">
+          <option value="purchase">${translate("Facture d’achat")}</option>
+          <option value="warranty_extension">${translate("Extension de garantie")}</option>
+          <option value="repair">${translate("Réparation")}</option>
           <option value="accessory">${translate("Accessoire")}</option>
           <option value="other">${translate("Autre facture")}</option>
         </select></label>
         <label>${translate("Fournisseur")}<input name="supplier" maxlength="160" placeholder="Apple, Dell, LDLC..." /></label>
-        <label>${translate("Numero facture")}<input name="invoiceNumber" maxlength="120" /></label>
-        <label>${translate("Date facture")}<input name="invoiceDate" inputmode="numeric" autocomplete="off" placeholder="${dateInputPlaceholder()}" pattern="\\d{1,2}[\\/\\-\\s.]\\d{1,2}[\\/\\-\\s.]\\d{4}" /></label>
-        <label>${translate("Montant facture")}<input name="purchasePrice" type="number" min="0" step="0.01" /></label>
+        <label>${translate("Numéro de facture")}<input name="invoiceNumber" maxlength="120" /></label>
+        <label>${translate("Date de facture")}<input name="invoiceDate" inputmode="numeric" autocomplete="off" placeholder="${dateInputPlaceholder()}" pattern="\\d{1,2}[\\/\\-\\s.]\\d{1,2}[\\/\\-\\s.]\\d{4}" /></label>
+        <label>${translate("Montant de la facture")}<input name="purchasePrice" type="number" min="0" step="0.01" /></label>
         <label>${translate("Devise")}<input name="currency" maxlength="3" value="EUR" /></label>
         <label class="invoice-warranty-field">${translate("Garantie fournisseur")}<input name="warrantyProvider" maxlength="160" placeholder="Dell, AppleCare, assureur..." /></label>
-        <label class="invoice-warranty-field">${translate("Debut garantie")}<input name="warrantyStartDate" inputmode="numeric" autocomplete="off" placeholder="${dateInputPlaceholder()}" pattern="\\d{1,2}[\\/\\-\\s.]\\d{1,2}[\\/\\-\\s.]\\d{4}" /></label>
-        <label class="invoice-warranty-field">${translate("Fin garantie")}<input name="warrantyEndDate" inputmode="numeric" autocomplete="off" placeholder="${dateInputPlaceholder()}" pattern="\\d{1,2}[\\/\\-\\s.]\\d{1,2}[\\/\\-\\s.]\\d{4}" /></label>
-        <label class="invoice-warranty-field">${translate("Duree garantie mois")}<input name="warrantyDurationMonths" type="number" min="0" step="1" /></label>
-        ${purchaseDateInvoice?.invoice_date ? `<div class="invoice-warranty-preset wide">
-          <label>${translate("Duree constructeur")}
+        <label class="invoice-warranty-field">${translate("Début de garantie")}<input name="warrantyStartDate" inputmode="numeric" autocomplete="off" placeholder="${dateInputPlaceholder()}" pattern="\\d{1,2}[\\/\\-\\s.]\\d{1,2}[\\/\\-\\s.]\\d{4}" /></label>
+        <label class="invoice-warranty-field">${translate("Fin de garantie")}<input name="warrantyEndDate" inputmode="numeric" autocomplete="off" placeholder="${dateInputPlaceholder()}" pattern="\\d{1,2}[\\/\\-\\s.]\\d{1,2}[\\/\\-\\s.]\\d{4}" /></label>
+        <label class="invoice-warranty-field">${translate("Durée de garantie en mois")}<input name="warrantyDurationMonths" type="number" min="0" step="1" /></label>
+        ${
+          purchaseDateInvoice?.invoice_date
+            ? `<div class="invoice-warranty-preset wide">
+          <label>${translate("Durée constructeur")}
             <select class="invoice-warranty-preset-duration">
               <option value="12">12 ${translate("mois")}</option>
               <option value="24">24 ${translate("mois")}</option>
@@ -4238,40 +3313,50 @@ function renderDetail(device, scans, history = []) {
               <option value="60">60 ${translate("mois")}</option>
             </select>
           </label>
-          <button class="secondary invoice-warranty-preset-button" type="button" data-purchase-date="${escapeHtml(purchaseDateInvoice.invoice_date)}">${translate("Pre-remplir garantie")}</button>
-          <small>${escapeHtml(translate("Depuis facture achat"))}: ${escapeHtml(formatDateOnly(purchaseDateInvoice.invoice_date))}</small>
-        </div>` : ""}
+          <button class="secondary invoice-warranty-preset-button" type="button" data-purchase-date="${escapeHtml(purchaseDateInvoice.invoice_date)}">${translate("Préremplir la garantie")}</button>
+          <small>${escapeHtml(translate("Depuis la facture d’achat"))} : ${escapeHtml(formatDateOnly(purchaseDateInvoice.invoice_date))}</small>
+        </div>`
+            : ""
+        }
         <label>${translate("Nom fichier")}<input name="fileName" maxlength="255" placeholder="facture-macbook.pdf" /></label>
         <label>${translate("Fichier facture")}<input name="invoiceFile" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,image/*,application/pdf" /></label>
         <label class="wide">${translate("Lien facture")}<input name="fileUrl" type="url" maxlength="2000" placeholder="https://..." /></label>
         <label class="wide">${translate("Notes facture")}<textarea name="notes" rows="3" maxlength="1000"></textarea></label>
         <button type="submit" class="primary">${translate("Ajouter une facture")}</button>
-      </form>` : ""}
+      </form>`
+          : ""
+      }
     </section>
     <section class="detail-tab-panel" data-detail-panel="history">
       <form id="history-note-form" class="history-note-form">
-        <textarea name="notes" rows="3" maxlength="2000" placeholder="${escapeHtml(translate("Ajouter une note a l'historique..."))}" required></textarea>
+        <textarea name="notes" rows="3" maxlength="2000" placeholder="${escapeHtml(translate("Ajouter une note à l’historique..."))}" required></textarea>
         <button class="secondary" type="submit">${translate("Ajouter la note")}</button>
       </form>
       <div class="history-timeline">${renderHistoryTimeline(history)}</div>
       <div class="scan-history"><h3>${translate("Chronologie utilisateurs")}</h3>${renderAssignmentPeriods(assignmentPeriodsFromLegacyHistory(history, device.assignmentPeriods || []))}</div>
-      <div class="scan-history"><h3>${translate("Scans")}</h3><ul>${scanRows || `<li>${translate("Aucun scan detaille.")}</li>`}</ul></div>
-      <div class="scan-history"><h3>${translate("Prix marché")}</h3><ul>${priceRows || `<li>${translate("Aucun prix externe collecte.")}</li>`}</ul></div>
+      <div class="scan-history"><h3>${translate("Scans")}</h3><ul>${scanRows || `<li>${translate("Aucun scan détaillé.")}</li>`}</ul></div>
+      <div class="scan-history"><h3>${translate("Prix du marché")}</h3><ul>${priceRows || `<li>${translate("Aucun prix externe collecté.")}</li>`}</ul></div>
     </section>
     <section class="detail-tab-panel" data-detail-panel="lifecycle">
       ${detailRows([
         ["Statut", labels[device.status] || device.status],
-        ["Score age", `${device.hardware_age_score || 0}/100`],
-        ["Priorite remplacement", priorityValue !== null && priorityValue !== undefined ? `${priorityValue}/100` : ""],
-        ["Reco", localizedEnrichmentValue(device.recommendation)],
+        ["Score d’âge", `${device.hardware_age_score || 0}/100`],
+        [
+          "Priorité de remplacement",
+          priorityValue !== null && priorityValue !== undefined ? `${priorityValue}/100` : "",
+        ],
+        ["Recommandation", localizedEnrichmentValue(device.recommendation)],
         ["Dernier enrichissement", formatDate(device.last_enriched_at)],
-        ["Confiance prix", device.price_confidence_score ? `${device.price_confidence_score}/100` : ""],
-        ["Prix achat reel", actualPurchasePrice],
+        ["Confiance du prix", device.price_confidence_score ? `${device.price_confidence_score}/100` : ""],
+        ["Prix d’achat réel", actualPurchasePrice],
         ["Garantie", warrantyDisplay],
-        ["Valeur actuelle estimée", money(device.resale_value || device.estimated_current_value || device.current_market_price_avg)],
-        ["Cout remplacement", money(device.replacement_cost)],
-        ["Methode valuation", localizedEnrichmentValue(device.valuation_method)],
-        ["Confiance valuation", device.valuation_confidence_label || ""],
+        [
+          "Valeur actuelle estimée",
+          money(device.resale_value || device.estimated_current_value || device.current_market_price_avg),
+        ],
+        ["Coût de remplacement", money(device.replacement_cost)],
+        ["Méthode de valorisation", localizedEnrichmentValue(device.valuation_method)],
+        ["Confiance de la valorisation", device.valuation_confidence_label || ""],
       ])}
     </section>
   `;
@@ -4283,26 +3368,24 @@ function renderDetail(device, scans, history = []) {
   });
   activateDetailTab(state.activeDetailTab);
 
-  if ($("#assignment-form")) $("#assignment-form").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const values = Object.fromEntries(new FormData(event.currentTarget));
-    const ownerEmail = String(values.ownerEmail || "").trim();
-    if (ownerEmail && !event.currentTarget.elements.ownerEmail.checkValidity()) {
-      toast("Email propriétaire invalide.", "error");
-      return;
-    }
-    try {
-      await api(`/admin/devices/${device.id}/assignment`, {
-        method: "POST",
-        body: JSON.stringify(values),
-      });
-      await loadAdminData();
-      await selectDevice(device.id);
-      toast("Affectations mises a jour.");
-    } catch (error) {
-      toast(error.message, "error");
-    }
-  });
+  if ($("#assignment-form"))
+    $("#assignment-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const values = Object.fromEntries(new FormData(event.currentTarget));
+      const ownerEmail = String(values.ownerEmail || "").trim();
+      if (ownerEmail && !event.currentTarget.elements.ownerEmail.checkValidity()) {
+        toast("Email propriétaire invalide.", "error");
+        return;
+      }
+      try {
+        await inventoryApi.updateDeviceAssignment(device.id, values);
+        await loadAdminData();
+        await selectDevice(device.id);
+        toast("Affectations mises à jour.");
+      } catch (error) {
+        toast(error.message, "error");
+      }
+    });
 
   const invoiceForm = $("#invoice-form");
   if (invoiceForm) {
@@ -4320,16 +3403,20 @@ function renderDetail(device, scans, history = []) {
       const warrantyEnd = addMonthsToDateOnly(purchaseDate, durationMonths);
       if (invoiceTypeSelect) invoiceTypeSelect.value = "warranty_extension";
       invoiceForm.elements.supplier.value = invoiceForm.elements.supplier.value || translate("Garantie constructeur");
-      invoiceForm.elements.invoiceDate.value = invoiceForm.elements.invoiceDate.value || formatDateForInput(purchaseDate);
-      invoiceForm.elements.warrantyProvider.value = invoiceForm.elements.warrantyProvider.value || translate("Garantie constructeur");
+      invoiceForm.elements.invoiceDate.value =
+        invoiceForm.elements.invoiceDate.value || formatDateForInput(purchaseDate);
+      invoiceForm.elements.warrantyProvider.value =
+        invoiceForm.elements.warrantyProvider.value || translate("Garantie constructeur");
       invoiceForm.elements.warrantyStartDate.value = formatDateForInput(purchaseDate);
       invoiceForm.elements.warrantyEndDate.value = formatDateForInput(warrantyEnd);
       invoiceForm.elements.warrantyDurationMonths.value = String(durationMonths);
-      invoiceForm.elements.notes.value = invoiceForm.elements.notes.value || translate("Depuis facture achat");
+      invoiceForm.elements.notes.value = invoiceForm.elements.notes.value || translate("Depuis la facture d’achat");
       syncInvoiceType();
     });
     invoiceForm.elements.warrantyStartDate?.addEventListener("change", () => syncWarrantyEndFromDuration(invoiceForm));
-    invoiceForm.elements.warrantyDurationMonths?.addEventListener("change", () => syncWarrantyEndFromDuration(invoiceForm));
+    invoiceForm.elements.warrantyDurationMonths?.addEventListener("change", () =>
+      syncWarrantyEndFromDuration(invoiceForm),
+    );
     invoiceForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const button = event.currentTarget.querySelector("button[type='submit']");
@@ -4338,14 +3425,11 @@ function renderDetail(device, scans, history = []) {
       try {
         button.textContent = translate("Lecture du fichier...");
         const payload = await invoiceFormPayload(event.currentTarget);
-        await api(`/admin/devices/${device.id}/invoices`, {
-          method: "POST",
-          body: JSON.stringify(payload),
-        });
+        await inventoryApi.addDeviceInvoice(device.id, payload);
         await loadAdminData();
         await selectDevice(device.id);
         activateDetailTab("invoices");
-        toast("Facture ajoutee.", "success");
+        toast("Facture ajoutée.", "success");
       } catch (error) {
         toast(error.message, "error");
       } finally {
@@ -4365,11 +3449,11 @@ function renderDetail(device, scans, history = []) {
       if (!confirmed) return;
       button.disabled = true;
       try {
-        await api(`/admin/devices/${device.id}/invoices/${button.dataset.invoiceId}`, { method: "DELETE" });
+        await inventoryApi.deleteDeviceInvoice(device.id, button.dataset.invoiceId);
         await loadAdminData();
         await selectDevice(device.id);
         activateDetailTab("invoices");
-        toast("Facture supprimee.", "success");
+        toast("Facture supprimée.", "success");
       } catch (error) {
         toast(error.message, "error");
       } finally {
@@ -4382,103 +3466,111 @@ function renderDetail(device, scans, history = []) {
     event.preventDefault();
     const notes = new FormData(event.currentTarget).get("notes");
     try {
-      await api(`/admin/devices/${device.id}/history-note`, { method: "POST", body: JSON.stringify({ notes }) });
+      await inventoryApi.addDeviceHistoryNote(device.id, { notes });
       await selectDevice(device.id);
-      toast("Note ajoutee.", "success");
+      toast("Note ajoutée.", "success");
     } catch (error) {
       toast(error.message, "error");
     }
   });
 
-  if ($("#status-form")) $("#status-form").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const status = new FormData(event.currentTarget).get("status");
-    let note = "";
-    if (status === "retired" && device.status !== "retired") {
-      note = await promptRetirementNote(device);
-      if (!note) {
-        event.currentTarget.elements.status.value = device.status;
-        return;
+  if ($("#status-form"))
+    $("#status-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const status = new FormData(event.currentTarget).get("status");
+      let note = "";
+      if (status === "retired" && device.status !== "retired") {
+        note = await promptRetirementNote(device);
+        if (!note) {
+          event.currentTarget.elements.status.value = device.status;
+          return;
+        }
       }
-    }
-    try {
-      const result = await api(`/admin/devices/${device.id}/status`, {
-        method: "POST",
-        body: JSON.stringify({ status, note }),
-      });
-      const index = state.devices.findIndex((item) => item.id === device.id);
-      if (index >= 0) {
-        state.devices[index] = {
-          ...state.devices[index],
-          status: result.device.status,
-          assigned_user_id: isDetachedInventoryStatus(result.device.status) ? null : state.devices[index].assigned_user_id,
-          first_name: isDetachedInventoryStatus(result.device.status) ? "" : state.devices[index].first_name,
-          last_name: isDetachedInventoryStatus(result.device.status) ? "" : state.devices[index].last_name,
-          email: isDetachedInventoryStatus(result.device.status) ? "" : state.devices[index].email,
-          team_id: isDetachedInventoryStatus(result.device.status) ? null : state.devices[index].team_id,
-          team_name: isDetachedInventoryStatus(result.device.status) ? "" : state.devices[index].team_name,
-          team_abbreviation: isDetachedInventoryStatus(result.device.status) ? "" : state.devices[index].team_abbreviation,
-          team_color: isDetachedInventoryStatus(result.device.status) ? "" : state.devices[index].team_color,
-        };
+      try {
+        const result = await inventoryApi.updateDeviceStatus(device.id, { status, note });
+        const index = state.devices.findIndex((item) => item.id === device.id);
+        if (index >= 0) {
+          state.devices[index] = {
+            ...state.devices[index],
+            status: result.device.status,
+            assigned_user_id: isDetachedInventoryStatus(result.device.status)
+              ? null
+              : state.devices[index].assigned_user_id,
+            first_name: isDetachedInventoryStatus(result.device.status) ? "" : state.devices[index].first_name,
+            last_name: isDetachedInventoryStatus(result.device.status) ? "" : state.devices[index].last_name,
+            email: isDetachedInventoryStatus(result.device.status) ? "" : state.devices[index].email,
+            team_id: isDetachedInventoryStatus(result.device.status) ? null : state.devices[index].team_id,
+            team_name: isDetachedInventoryStatus(result.device.status) ? "" : state.devices[index].team_name,
+            team_abbreviation: isDetachedInventoryStatus(result.device.status)
+              ? ""
+              : state.devices[index].team_abbreviation,
+            team_color: isDetachedInventoryStatus(result.device.status) ? "" : state.devices[index].team_color,
+          };
+        }
+        await loadAdminData();
+        await selectDevice(device.id);
+        toast("Statut mis à jour.");
+      } catch (error) {
+        toast(error.message);
       }
-      await loadAdminData();
-      await selectDevice(device.id);
-      toast("Statut mis a jour.");
-    } catch (error) {
-      toast(error.message);
-    }
-  });
-
-  if ($("#enrich-device")) $("#enrich-device").addEventListener("click", async () => {
-    const button = $("#enrich-device");
-    button.disabled = true;
-    button.textContent = translate("Enrichissement...");
-    try {
-      const result = await api("/admin/enrich", {
-        method: "POST",
-        body: JSON.stringify({ deviceId: device.id, limit: 1, force: true, mode: "refresh", useExternal: true }),
-      });
-      toast(result.failed ? "Erreur serveur." : enrichmentResultMessage(result));
-      await loadAdminData();
-      await selectDevice(device.id);
-    } catch (error) {
-      toast(error.message);
-    } finally {
-      button.disabled = false;
-      button.textContent = translate("Enrichir cette machine");
-    }
-  });
-
-  if ($("#delete-device")) $("#delete-device").addEventListener("click", async () => {
-    const label = device.hostname || device.serial_number || device.service_tag || device.id;
-    const confirmed = await confirmAction({
-      title: "Confirmer la suppression",
-      message: state.language === "en"
-        ? `Permanently delete "${label}" and its scan history? This action cannot be undone.`
-        : `Supprimer definitivement "${label}" et son historique de scan ? Cette action est irreversible.`,
-      confirmLabel: "Supprimer",
     });
-    if (!confirmed) return;
-    const button = $("#delete-device");
-    button.disabled = true;
-    try {
-      await api(`/admin/devices/${device.id}`, { method: "DELETE" });
-      state.devices = state.devices.filter((item) => item.id !== device.id);
-      state.filtered = state.filtered.filter((item) => item.id !== device.id);
-      state.selectedDeviceId = "";
-      state.selectedDetail = null;
-      state.selectedScans = [];
-      state.selectedHistory = [];
-      $("#detail-title").textContent = translate("Selectionnez une machine");
-      $("#device-detail").textContent = translate("Aucune machine selectionnee.");
-      applyFilters();
-      toast("Machine supprimée.", "success");
-    } catch (error) {
-      toast(error.message, "error");
-    } finally {
-      button.disabled = false;
-    }
-  });
+
+  if ($("#enrich-device"))
+    $("#enrich-device").addEventListener("click", async () => {
+      const button = $("#enrich-device");
+      button.disabled = true;
+      button.textContent = translate("Enrichissement...");
+      try {
+        const result = await inventoryApi.enrichDevices({
+          deviceId: device.id,
+          limit: 1,
+          force: true,
+          mode: "refresh",
+          useExternal: true,
+        });
+        toast(result.failed ? "Erreur serveur." : enrichmentResultMessage(result));
+        await loadAdminData();
+        await selectDevice(device.id);
+      } catch (error) {
+        toast(error.message);
+      } finally {
+        button.disabled = false;
+        button.textContent = translate("Enrichir ce poste");
+      }
+    });
+
+  if ($("#delete-device"))
+    $("#delete-device").addEventListener("click", async () => {
+      const label = device.hostname || device.serial_number || device.service_tag || device.id;
+      const confirmed = await confirmAction({
+        title: "Confirmer la suppression",
+        message:
+          state.language === "en"
+            ? `Permanently delete "${label}" and its scan history? This action cannot be undone.`
+            : `Supprimer définitivement "${label}" et son historique de scan ? Cette action est irréversible.`,
+        confirmLabel: "Supprimer",
+      });
+      if (!confirmed) return;
+      const button = $("#delete-device");
+      button.disabled = true;
+      try {
+        await inventoryApi.deleteDevice(device.id);
+        state.devices = state.devices.filter((item) => item.id !== device.id);
+        state.filtered = state.filtered.filter((item) => item.id !== device.id);
+        state.selectedDeviceId = "";
+        state.selectedDetail = null;
+        state.selectedScans = [];
+        state.selectedHistory = [];
+        $("#detail-title").textContent = translate("Sélectionnez un poste");
+        $("#device-detail").textContent = translate("Aucun poste sélectionné");
+        applyFilters();
+        toast("Poste supprimé.", "success");
+      } catch (error) {
+        toast(error.message, "error");
+      } finally {
+        button.disabled = false;
+      }
+    });
 }
 
 function countBy(items, getter) {
@@ -4487,19 +3579,6 @@ function countBy(items, getter) {
     acc[key] = (acc[key] || 0) + 1;
     return acc;
   }, {});
-}
-
-function averageBy(items, groupGetter, valueGetter) {
-  const groups = {};
-  items.forEach((item) => {
-    const group = groupGetter(item) || "Non renseigné";
-    const value = Number(valueGetter(item) || 0);
-    if (!value) return;
-    groups[group] = groups[group] || { total: 0, count: 0 };
-    groups[group].total += value;
-    groups[group].count += 1;
-  });
-  return Object.fromEntries(Object.entries(groups).map(([key, value]) => [key, Math.round(value.total / value.count)]));
 }
 
 function renderBarChart(selector, title, data, suffix = "") {
@@ -4516,63 +3595,15 @@ function renderBarChart(selector, title, data, suffix = "") {
         .map(
           ([key, value]) => `
           <div class="bar-row">
-            <span title="${key}">${key}</span>
+            <span title="${escapeHtml(translate(key))}">${escapeHtml(translate(key))}</span>
             <span class="bar-track"><span class="bar-fill" style="width:${(value / max) * 100}%"></span></span>
             <strong>${value}${suffix}</strong>
           </div>
-        `
+        `,
         )
-        .join("") || "<p class='helper'>Aucune donnee.</p>"
+        .join("") || `<p class="helper">${translate("Aucune donnée.")}</p>`
     }
   `;
-}
-
-function renderCharts() {
-  renderBarChart('[data-chart="establishments"]', "Machines par établissement", countBy(state.filtered, (d) => d.establishment_name));
-  renderBarChart('[data-chart="teams"]', "Machines par équipe", countBy(state.filtered, activeTeamName));
-  renderBarChart('[data-chart="os"]', "OS", countBy(state.filtered, normalizedDeviceOsFamily));
-  renderBarChart('[data-chart="stale"]', "Non mises a jour", {
-    [`+${CONFIG.staleDays} jours`]: state.filtered.filter((d) => daysSince(d.last_seen_at) > CONFIG.staleDays).length,
-    "A jour": state.filtered.filter((d) => daysSince(d.last_seen_at) <= CONFIG.staleDays).length,
-  });
-  renderBarChart('[data-chart="age"]', "Signal du parc", countBy(state.filtered, ageBucket));
-  renderBarChart('[data-chart="models"]', "Modeles presents", countBy(state.filtered, (d) => d.model));
-  renderBarChart('[data-chart="ram"]', "RAM moyenne par équipe", averageBy(state.filtered, activeTeamName, (d) => d.ram_total_gb), " Go");
-  renderBarChart('[data-chart="storage"]', "Stockage faible", {
-    "< 15 Go": state.filtered.filter((d) => Number(d.storage_free_gb || 0) < 15).length,
-    "15-30 Go": state.filtered.filter((d) => Number(d.storage_free_gb || 0) >= 15 && Number(d.storage_free_gb || 0) < 30).length,
-    "> 30 Go": state.filtered.filter((d) => Number(d.storage_free_gb || 0) >= 30).length,
-  });
-  renderBarChart('[data-chart="fleet-value"]', "Valeur actuelle estimée", {
-    "Parc": Math.round(state.filtered.reduce((sum, d) => sum + estimatedValue(d), 0)),
-  }, " EUR");
-  renderBarChart('[data-chart="value-by-site"]', "Valeur par établissement", sumBy(state.filtered, (d) => d.establishment_name, estimatedValue), " EUR");
-  renderBarChart('[data-chart="replace-top"]', "Top machines a remplacer", topReplaceCandidates(state.filtered));
-  renderScatter('[data-chart="age-performance"]', "Age matériel vs CPU", state.filtered);
-  renderBarChart(
-    '[data-chart="manufacturers"]',
-    translate("Machines par fabricant"),
-    countBy(state.filtered, (device) => normalizeManufacturer(device.manufacturer, device.model).manufacturerName),
-  );
-  renderBarChart(
-    '[data-chart="manufacturer-os"]',
-    translate("Fabricant et OS"),
-    countBy(state.filtered, (device) => {
-      const manufacturer = normalizeManufacturer(device.manufacturer, device.model).manufacturerName;
-      const os = normalizedDeviceOsFamily(device);
-      return `${manufacturer} / ${os}`;
-    }),
-  );
-  renderBarChart(
-    '[data-chart="manufacturer-age"]',
-    translate("Age moyen par fabricant"),
-    averageBy(
-      state.filtered,
-      (device) => normalizeManufacturer(device.manufacturer, device.model).manufacturerName,
-      (device) => deviceAge(device),
-    ),
-    state.language === "en" ? " yrs" : " ans",
-  );
 }
 
 function sumBy(items, groupGetter, valueGetter) {
@@ -4581,32 +3612,6 @@ function sumBy(items, groupGetter, valueGetter) {
     acc[group] = Math.round((acc[group] || 0) + Number(valueGetter(item) || 0));
     return acc;
   }, {});
-}
-
-function topReplaceCandidates(items) {
-  const candidates = items
-    .filter((item) => item.recommendation === "replace" || Number(item.obsolescence_index || 0) >= 70 || Number(item.cpu_score || 0) < 7000)
-    .sort((a, b) => Number(b.obsolescence_index || 0) - Number(a.obsolescence_index || 0))
-    .slice(0, 8);
-  return Object.fromEntries(candidates.map((item) => [item.hostname || item.serial_number || item.model, Number(item.obsolescence_index || 0)]));
-}
-
-function renderScatter(selector, title, items) {
-  const target = document.querySelector(selector);
-  if (!target) return;
-  const points = items
-    .filter((item) => item.model_release_year && item.cpu_score)
-    .slice(0, 80)
-    .map((item) => {
-      const age = Math.max(0, new Date().getFullYear() - Number(item.model_release_year));
-      const cpu = Math.min(100, Math.round((Number(item.cpu_score) / 18000) * 100));
-      return `<span class="point ${item.recommendation || ""}" title="${item.hostname || item.model}: ${age} ans / CPU ${item.cpu_score}" style="left:${Math.min(age * 12, 96)}%;bottom:${Math.min(cpu, 96)}%"></span>`;
-    })
-    .join("");
-  target.innerHTML = `
-    <h3>${title}</h3>
-    <div class="scatter">${points || "<p class='helper'>Enrichissement requis.</p>"}</div>
-  `;
 }
 
 function csvEscape(value) {
@@ -4665,7 +3670,10 @@ function exportCsv(enrichedExport = false) {
     "confidence_score",
     "last_enriched_at",
   ];
-  const csv = [columns.join(","), ...state.filtered.map((row) => columns.map((column) => csvEscape(row[column])).join(","))].join("\n");
+  const csv = [
+    columns.join(","),
+    ...state.filtered.map((row) => columns.map((column) => csvEscape(row[column])).join(",")),
+  ].join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
@@ -4674,28 +3682,10 @@ function exportCsv(enrichedExport = false) {
   URL.revokeObjectURL(link.href);
 }
 
-function buildCommand(collectionToken) {
-  const apiUrl = CONFIG.apiBaseUrl.replace(/"/g, "");
-  const scriptUrl = CONFIG.scriptUrl.replace(/"/g, "");
-  return `powershell -ExecutionPolicy Bypass -NoProfile -Command "iwr '${scriptUrl}' -OutFile $env:TEMP\\collect-windows.ps1; & $env:TEMP\\collect-windows.ps1 -ApiUrl '${apiUrl}' -CollectionToken '${collectionToken}'"`;
-}
-
-function detectClientPlatform() {
-  const uaPlatform = navigator.userAgentData?.platform || navigator.platform || "";
-  const ua = navigator.userAgent || "";
-  const text = `${uaPlatform} ${ua}`.toLowerCase();
-  if (text.includes("win")) return "windows";
-  if (text.includes("mac")) return "macos";
-  if (text.includes("linux") || text.includes("x11")) return "linux";
-  return "unknown";
-}
-
 async function loadCollectorReleases() {
-  state.detectedPlatform = detectClientPlatform();
+  state.detectedPlatform = collectorDomain.detectClientPlatform(navigator);
   try {
-    const response = await fetch(CONFIG.collectorReleaseConfigUrl, { cache: "no-store" });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    state.collectorReleases = await response.json();
+    state.collectorReleases = await publicResources.getJson(CONFIG.collectorReleaseConfigUrl, { cache: "no-store" });
   } catch {
     state.collectorReleases = {
       fallbackReleasePageUrl: "https://github.com/badr-spacefoot/pc_inventory_2.0/releases",
@@ -4717,20 +3707,20 @@ function hasKnownCompatibleCollector(asset = collectorAsset()) {
   if (state.detectedPlatform !== "windows") return false;
   const saved = state.collectorInstallState || {};
   return Boolean(
-    asset
-    && saved.platform === state.detectedPlatform
-    && saved.version
-    && saved.version === expectedCollectorVersion(asset),
+    asset &&
+    saved.platform === state.detectedPlatform &&
+    saved.version &&
+    saved.version === expectedCollectorVersion(asset),
   );
 }
 
 function hasDownloadedExpectedCollector(asset = collectorAsset()) {
   const saved = state.collectorDownloadState || {};
   return Boolean(
-    asset
-    && saved.platform === state.detectedPlatform
-    && saved.version
-    && saved.version === expectedCollectorVersion(asset),
+    asset &&
+    saved.platform === state.detectedPlatform &&
+    saved.version &&
+    saved.version === expectedCollectorVersion(asset),
   );
 }
 
@@ -4756,47 +3746,13 @@ function rememberCollectorLaunch(asset = collectorAsset()) {
   localStorage.setItem(COLLECTOR_INSTALL_STATE_KEY, JSON.stringify(state.collectorInstallState));
 }
 
-function platformLabel(platform) {
-  return { windows: "Windows", macos: "macOS", linux: "Linux" }[platform] || "";
-}
-
-function downloadLabel(platform) {
-  if (platform === "windows") return translate("Télécharger le collecteur Windows");
-  if (platform === "macos") return translate("Télécharger le collecteur macOS");
-  if (platform === "linux") return translate("Télécharger le collecteur Linux");
-  return translate("Télécharger le collecteur");
-}
-
-function ubuntuInstallCommand(asset = collectorAsset("linux")) {
-  const fileName = asset?.fileName || "spacefoot-it-collector-linux.deb";
-  return [
-    'downloads="$(xdg-user-dir DOWNLOAD 2>/dev/null || echo "$HOME/Téléchargements")"',
-    'cd "$downloads" || cd "$HOME/Downloads"',
-    `sudo apt install ./${fileName}`,
-  ].join("\n");
-}
-
 function updateUbuntuInstallGuide() {
   const guide = $("#ubuntu-install-guide");
   const code = $("#ubuntu-install-command");
   if (!guide || !code) return;
   const shouldShow = state.detectedPlatform === "linux" && Boolean(collectorAsset("linux"));
   guide.classList.toggle("is-hidden", !shouldShow);
-  code.textContent = ubuntuInstallCommand();
-}
-
-function macosInstallCommand(asset = collectorAsset("macos")) {
-  const fileName = asset?.fileName || "spacefoot-it-collector-macos.app.zip";
-  const version = String(asset?.version || "").replace(/^collector-v/i, "");
-  const appName = version ? `spacefoot-it-collector-macos-${version}.app` : fileName.replace(/\.zip$/i, "");
-  return [
-    `app="$HOME/Applications/${appName}"`,
-    `if [ ! -d "$app" ]; then app="$HOME/Downloads/${appName}"; fi`,
-    'if [ ! -d "$app" ]; then app="/Applications/spacefoot-it-collector-macos.app"; fi',
-    'if [ ! -d "$app" ]; then app="$HOME/Downloads/spacefoot-it-collector-macos.app"; fi',
-    'xattr -dr com.apple.quarantine "$app"',
-    'open "$app"',
-  ].join("\n");
+  code.textContent = ubuntuInstallCommand(collectorAsset("linux"));
 }
 
 function updateMacosInstallGuide() {
@@ -4805,20 +3761,7 @@ function updateMacosInstallGuide() {
   if (!guide || !code) return;
   const shouldShow = state.detectedPlatform === "macos" && Boolean(collectorAsset("macos"));
   guide.classList.toggle("is-hidden", !shouldShow);
-  code.textContent = macosInstallCommand();
-}
-
-function osIconSvg(platform) {
-  if (platform === "windows") {
-    return `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1"></rect><rect x="13" y="3" width="8" height="8" rx="1"></rect><rect x="3" y="13" width="8" height="8" rx="1"></rect><rect x="13" y="13" width="8" height="8" rx="1"></rect></svg>`;
-  }
-  if (platform === "macos") {
-    return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.6 13.1c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.7-1.8-3.2-1.8-1.4-.1-2.7.8-3.4.8-.7 0-1.8-.8-3-.8-1.5 0-3 .9-3.8 2.2-1.6 2.8-.4 7 1.1 9.3.8 1.1 1.7 2.4 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7c1.3 0 2.1-1.1 2.8-2.2.9-1.3 1.2-2.5 1.3-2.6 0 0-2.7-1-2.7-3.7ZM15.5 6.2c.6-.8 1.1-1.8.9-2.9-.9 0-2 .6-2.7 1.4-.6.7-1.1 1.8-.9 2.8 1 .1 2-.5 2.7-1.3Z"></path></svg>`;
-  }
-  if (platform === "linux") {
-    return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c-2.4 0-4 2-4 5.2 0 1.2-.4 2.2-1.1 3.3L4.4 15c-.9 1.6-.2 3.6 1.5 4.3 1 .4 2.1.2 2.9-.4.8.7 2 1.1 3.2 1.1s2.4-.4 3.2-1.1c.8.6 1.9.8 2.9.4 1.7-.7 2.4-2.7 1.5-4.3l-2.5-4.5C16.4 9.4 16 8.4 16 7.2 16 4 14.4 2 12 2Zm-1.4 6.1c-.5 0-.9-.5-.9-1.1s.4-1.1.9-1.1.9.5.9 1.1-.4 1.1-.9 1.1Zm2.8 0c-.5 0-.9-.5-.9-1.1s.4-1.1.9-1.1.9.5.9 1.1-.4 1.1-.9 1.1Z"></path></svg>`;
-  }
-  return `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"></rect><path d="M8 22h8M12 18v4"></path></svg>`;
+  code.textContent = macosInstallCommand(collectorAsset("macos"));
 }
 
 function downloadPrefillFile(options = {}) {
@@ -4846,7 +3789,7 @@ function downloadPrefillFile(options = {}) {
     link.remove();
   }, options.revokeDelayMs || 2500);
   if (options.silent) return true;
-  toast("Fichier de pre-remplissage telecharge. Ouvrez le collecteur: il le detectera automatiquement.", "success");
+  toast("Fichier de pré-remplissage téléchargé. Ouvrez le collecteur : il le détectera automatiquement.", "success");
   return true;
 }
 
@@ -4856,10 +3799,12 @@ function updateCollectorDownloadUi() {
   const openApp = $("#collector-open-app");
   const launcher = primary?.closest(".launcher-downloads");
   if (!primary || !releases) return;
-  const releasePage = state.collectorReleases?.releasePageUrl
-    || state.collectorReleases?.fallbackReleasePageUrl
-    || "https://github.com/badr-spacefoot/pc_inventory_2.0/releases";
-  releases.href = state.collectorReleases?.fallbackReleasePageUrl || "https://github.com/badr-spacefoot/pc_inventory_2.0/releases";
+  const releasePage =
+    state.collectorReleases?.releasePageUrl ||
+    state.collectorReleases?.fallbackReleasePageUrl ||
+    "https://github.com/badr-spacefoot/pc_inventory_2.0/releases";
+  releases.href =
+    state.collectorReleases?.fallbackReleasePageUrl || "https://github.com/badr-spacefoot/pc_inventory_2.0/releases";
   const detected = state.detectedPlatform;
   const asset = collectorAsset(detected);
   const canLaunch = Boolean(state.collectorLaunchUrl);
@@ -4870,40 +3815,44 @@ function updateCollectorDownloadUi() {
     primary.href = asset.downloadUrl;
     primary.setAttribute("download", asset.fileName || "");
     primary.querySelector("span:not(.collector-os-icon)").textContent = downloadedExpectedCollector
-      ? (state.language === "en" ? "Download again" : "Telecharger a nouveau")
-      : downloadLabel(detected);
+      ? state.language === "en"
+        ? "Download again"
+        : "Telecharger a nouveau"
+      : downloadLabel(detected, translate);
     $("#collector-os-icon").innerHTML = osIconSvg(detected);
     $("#collector-platform-copy").textContent = compatibleCollectorKnown
-      ? (state.language === "en"
+      ? state.language === "en"
         ? `Collector ${asset.version || ""} already opened from this browser. Launch it to load the profile.`
-        : `Collecteur ${asset.version || ""} déjà lancé depuis ce navigateur. Ouvrez-le pour charger le profil.`)
+        : `Collecteur ${asset.version || ""} déjà lancé depuis ce navigateur. Ouvrez-le pour charger le profil.`
       : `${translate("Collecteur detecte pour")} ${platformLabel(detected)} (${asset.version || ""}).`;
     if (!compatibleCollectorKnown) {
       $("#collector-platform-copy").textContent = downloadedExpectedCollector
-        ? (state.language === "en"
+        ? state.language === "en"
           ? "Installer finished? Click Open collector here to load the prefilled profile."
-          : "Installation terminee ? Cliquez sur Ouvrir le collecteur ici pour charger le profil pre-rempli.")
-        : (state.language === "en"
+          : "Installation terminée ? Cliquez sur Ouvrir le collecteur ici pour charger le profil pré-rempli."
+        : state.language === "en"
           ? `Step 1: download and install the ${platformLabel(detected)} collector. Then return here for step 2.`
-          : `Etape 1 : telechargez et installez le collecteur ${platformLabel(detected)}. Revenez ensuite ici pour l'etape 2.`);
+          : `Etape 1 : telechargez et installez le collecteur ${platformLabel(detected)}. Revenez ensuite ici pour l'etape 2.`;
     }
   } else {
     primary.href = releasePage;
     primary.removeAttribute("download");
     primary.querySelector("span:not(.collector-os-icon)").textContent = translate("Télécharger le collecteur");
     $("#collector-os-icon").innerHTML = osIconSvg("unknown");
-    $("#collector-platform-copy").textContent = detected === "unknown"
-      ? translate("Choisissez votre plateforme ci-dessous.")
-      : translate("Aucun asset collecteur disponible pour cette plateforme.");
+    $("#collector-platform-copy").textContent =
+      detected === "unknown"
+        ? translate("Choisissez votre plateforme ci-dessous.")
+        : translate("Aucun asset collecteur disponible pour cette plateforme.");
   }
   if (openApp) {
     openApp.disabled = !canLaunch;
     openApp.classList.toggle("is-disabled", !canLaunch);
     openApp.classList.toggle("primary", shouldPrioritizeOpen);
     openApp.classList.toggle("secondary", !shouldPrioritizeOpen);
-    openApp.textContent = shouldPrioritizeOpen && state.language !== "en"
-      ? "Ouvrir le collecteur pre-rempli"
-      : translate("Ouvrir le collecteur");
+    openApp.textContent =
+      shouldPrioritizeOpen && state.language !== "en"
+        ? "Ouvrir le collecteur prérempli"
+        : translate("Ouvrir le collecteur");
     primary.classList.toggle("primary", !shouldPrioritizeOpen);
     primary.classList.toggle("secondary", shouldPrioritizeOpen);
     launcher?.classList.toggle("is-ready-to-open", shouldPrioritizeOpen);
@@ -4921,12 +3870,11 @@ function updateCollectorDownloadUi() {
 
 async function loadScriptPreview() {
   try {
-    const response = await fetch(CONFIG.scriptUrl, { cache: "no-store" });
-    if (!response.ok) throw new Error("Script indisponible.");
-    state.scriptPreviewText = await response.text();
+    state.scriptPreviewText = await publicResources.getText(CONFIG.scriptUrl, { cache: "no-store" });
     $("#script-preview").textContent = state.scriptPreviewText;
-  } catch (error) {
-    state.scriptPreviewText = "# Apercu indisponible. Utilisez le lien de telechargement ou le fichier scripts/collect-windows.ps1 du depot.";
+  } catch {
+    state.scriptPreviewText =
+      "# Apercu indisponible. Utilisez le lien de telechargement ou le fichier scripts/collect-windows.ps1 du depot.";
     $("#script-preview").textContent = state.scriptPreviewText;
   }
 }
@@ -4948,20 +3896,6 @@ const establishmentTypeLabels = {
   remote: "Teletravail",
   other: "Autre",
 };
-
-function establishmentIcon(type) {
-  const icons = {
-    warehouse: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-6 9 6v12M7 21v-8h10v8M7 17h10"></path></svg>`,
-    store: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9l2-6h14l2 6M5 13v8h14v-8M9 21v-6h6v6"></path><path d="M3 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"></path></svg>`,
-    headquarters: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21h16M6 21V5h8v16M14 9h4v12M9 8h2M9 12h2M9 16h2"></path></svg>`,
-    research: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3M8 15h8"></path></svg>`,
-    accounting: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="2" width="16" height="20" rx="2"></rect><path d="M8 6h8M8 10h2M14 10h2M8 14h2M14 14h2M8 18h2M14 18h2"></path></svg>`,
-    office: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M9 8h1M14 8h1M9 12h1M14 12h1M9 16h1M14 16h1"></path></svg>`,
-    remote: locationIcon("remote"),
-    other: organizationIcon("site"),
-  };
-  return icons[type] || icons.other;
-}
 
 function countryCodeFromName(country) {
   const codes = {
@@ -5037,7 +3971,9 @@ function restoreRoute({ updateUrl = true, replace = true } = {}) {
 function setAdminView(view, { updateUrl = true } = {}) {
   const nextView = validAdminView(view);
   state.currentAdminView = nextView;
-  $$(".admin-nav-button").forEach((button) => button.classList.toggle("is-active", button.dataset.adminView === nextView));
+  $$(".admin-nav-button").forEach((button) =>
+    button.classList.toggle("is-active", button.dataset.adminView === nextView),
+  );
   $$(".admin-section-view").forEach((section) => {
     section.classList.toggle("is-hidden", !section.classList.contains(`section-${nextView}`));
   });
@@ -5051,10 +3987,13 @@ function updateOrganizationDatalists() {
   if (teamSelect) {
     const selected = teamSelect.value || state.collectionDraft.team || "";
     teamSelect.innerHTML = [
-      `<option value="">${translate("Selectionnez une equipe")}</option>`,
+      `<option value="">${translate("Sélectionnez une équipe")}</option>`,
       ...state.teams
         .filter((team) => team.active !== false)
-        .map((team) => `<option value="${escapeHtml(team.name)}">${escapeHtml(displayWithAbbreviation(team.name, team.abbreviation))}</option>`),
+        .map(
+          (team) =>
+            `<option value="${escapeHtml(team.name)}">${escapeHtml(displayWithAbbreviation(team.name, team.abbreviation))}</option>`,
+        ),
       `<option value="__other__">${translate("Autre")}</option>`,
     ].join("");
     teamSelect.value = [...teamSelect.options].some((option) => option.value === selected) ? selected : "";
@@ -5062,13 +4001,18 @@ function updateOrganizationDatalists() {
   if (establishmentSelect) {
     const selected = establishmentSelect.value || state.collectionDraft.establishment || "";
     establishmentSelect.innerHTML = [
-      `<option value="">${translate("Selectionnez un etablissement")}</option>`,
+      `<option value="">${translate("Sélectionnez un établissement")}</option>`,
       ...state.establishments
         .filter((site) => site.active !== false)
-        .map((site) => `<option value="${escapeHtml(site.name)}">${escapeHtml(displayWithAbbreviation(site.name, site.abbreviation))}</option>`),
+        .map(
+          (site) =>
+            `<option value="${escapeHtml(site.name)}">${escapeHtml(displayWithAbbreviation(site.name, site.abbreviation))}</option>`,
+        ),
       `<option value="__other__">${translate("Autre")}</option>`,
     ].join("");
-    establishmentSelect.value = [...establishmentSelect.options].some((option) => option.value === selected) ? selected : "";
+    establishmentSelect.value = [...establishmentSelect.options].some((option) => option.value === selected)
+      ? selected
+      : "";
   }
   if (inviteForm?.elements.team) {
     const selected = inviteForm.elements.team.value || "";
@@ -5076,9 +4020,14 @@ function updateOrganizationDatalists() {
       `<option value="">${translate("Optionnel")}</option>`,
       ...state.teams
         .filter((team) => team.active !== false)
-        .map((team) => `<option value="${escapeHtml(team.name)}">${escapeHtml(displayWithAbbreviation(team.name, team.abbreviation))}</option>`),
+        .map(
+          (team) =>
+            `<option value="${escapeHtml(team.name)}">${escapeHtml(displayWithAbbreviation(team.name, team.abbreviation))}</option>`,
+        ),
     ].join("");
-    inviteForm.elements.team.value = [...inviteForm.elements.team.options].some((option) => option.value === selected) ? selected : "";
+    inviteForm.elements.team.value = [...inviteForm.elements.team.options].some((option) => option.value === selected)
+      ? selected
+      : "";
   }
   if (inviteForm?.elements.establishment) {
     const selected = inviteForm.elements.establishment.value || "";
@@ -5086,60 +4035,188 @@ function updateOrganizationDatalists() {
       `<option value="">${translate("Optionnel")}</option>`,
       ...state.establishments
         .filter((site) => site.active !== false)
-        .map((site) => `<option value="${escapeHtml(site.name)}">${escapeHtml(displayWithAbbreviation(site.name, site.abbreviation))}</option>`),
+        .map(
+          (site) =>
+            `<option value="${escapeHtml(site.name)}">${escapeHtml(displayWithAbbreviation(site.name, site.abbreviation))}</option>`,
+        ),
     ].join("");
-    inviteForm.elements.establishment.value = [...inviteForm.elements.establishment.options].some((option) => option.value === selected) ? selected : "";
+    inviteForm.elements.establishment.value = [...inviteForm.elements.establishment.options].some(
+      (option) => option.value === selected,
+    )
+      ? selected
+      : "";
   }
   toggleProposalFields();
+}
+
+function organizationBreakdown(record, field) {
+  if (state.devices.length > 0) {
+    return organizationDomain.organizationDeviceBreakdown(state.devices, field, record.id, record.name);
+  }
+  if (Object.prototype.hasOwnProperty.call(record, "assigned_device_count")) {
+    return {
+      total: Number(record.device_count || 0),
+      assigned: Number(record.assigned_device_count || 0),
+      stock: Number(record.stock_device_count || 0),
+      unassigned: Number(record.unassigned_device_count || 0),
+      userCount: Number(record.active_user_count ?? record.user_count ?? 0),
+    };
+  }
+  return {
+    total: Number(record.device_count || 0),
+    assigned: Number(record.device_count || 0),
+    stock: 0,
+    unassigned: 0,
+    userCount: Number(record.user_count || 0),
+  };
+}
+
+function organizationCountSummary(record, field) {
+  const breakdown = organizationBreakdown(record, field);
+  const tooltip = translate(
+    "Le total inclut les postes attribués, en stock et non attribués. Les postes perdus ou sortis du parc sont exclus.",
+  );
+  const metrics = [
+    { type: "devices", value: breakdown.total, label: "Postes actuels" },
+    { type: "users", value: breakdown.userCount, label: "Utilisateurs attribués" },
+    ...(breakdown.stock ? [{ type: "stock", value: breakdown.stock, label: "Postes en stock" }] : []),
+    ...(breakdown.unassigned
+      ? [{ type: "unassigned", value: breakdown.unassigned, label: "Postes non attribués" }]
+      : []),
+  ];
+  return `
+    <span class="organization-counts" title="${escapeHtml(tooltip)}">
+      ${metrics
+        .map(
+          (metric) => `
+            <span class="organization-count-chip type-${metric.type}" title="${escapeHtml(translate(metric.label))}" aria-label="${escapeHtml(`${translate(metric.label)}: ${formatFleetNumber(metric.value)}`)}">
+              ${organizationMetricIcon(metric.type)}
+              <strong>${formatFleetNumber(metric.value)}</strong>
+            </span>
+          `,
+        )
+        .join("")}
+    </span>
+  `;
+}
+
+function organizationMetricIcon(type) {
+  if (type === "users") {
+    return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M19 8v6M22 11h-6"></path></svg>`;
+  }
+  if (type === "stock") {
+    return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 8-9 5-9-5 9-5 9 5Z"></path><path d="m3 8 9 5 9-5v8l-9 5-9-5V8Z"></path></svg>`;
+  }
+  if (type === "unassigned") {
+    return `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4M9 9h6"></path></svg>`;
+  }
+  return `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path></svg>`;
+}
+
+function organizationUnusedGroup(label, rows) {
+  if (!rows.length) return "";
+  return `
+    <details class="organization-unused">
+      <summary>
+        <span>${translate(label)}</span>
+        <strong>${formatFleetNumber(rows.length)}</strong>
+      </summary>
+      <div class="organization-unused-list">${rows.join("")}</div>
+    </details>
+  `;
+}
+
+function organizationRows(records, field) {
+  return records.map((record, index) => ({
+    record,
+    index,
+    hasData: (() => {
+      const breakdown = organizationBreakdown(record, field);
+      return breakdown.total > 0 || breakdown.userCount > 0;
+    })(),
+  }));
+}
+
+function renderTeamOrganizationRow(team, index, canManageTeams) {
+  return `
+    <div class="organization-sort-row ${team.active ? "" : "is-inactive"}" draggable="${canManageTeams}" data-entity="team" data-id="${team.id}">
+      ${canManageTeams ? `<button class="drag-handle" type="button" aria-label="Déplacer ${escapeHtml(team.name)}" title="Glisser pour réordonner">&#8942;&#8942;</button>` : ""}
+      <button class="organization-item edit-team" type="button" data-id="${team.id}">
+        <span class="organization-icon" style="--item-color:${escapeHtml(team.color || "#16735f")}">${teamIcon(normalizeTeamInfo(team.name, team.abbreviation).iconType)}</span>
+        <span>
+          <strong>${escapeHtml(displayWithAbbreviation(team.name, team.abbreviation))}</strong>
+          <small class="organization-meta">
+            ${organizationCountSummary(team, "team_id")}
+            ${team.description ? `<span>${escapeHtml(team.description)}</span>` : ""}
+          </small>
+        </span>
+        <span class="organization-chevron">&rsaquo;</span>
+      </button>
+      ${
+        canManageTeams
+          ? `<span class="sort-buttons">
+        <button type="button" class="sort-step" data-direction="-1" data-entity="team" data-id="${team.id}" ${index === 0 ? "disabled" : ""} aria-label="Monter">&#8593;</button>
+        <button type="button" class="sort-step" data-direction="1" data-entity="team" data-id="${team.id}" ${index === state.teams.length - 1 ? "disabled" : ""} aria-label="Descendre">&#8595;</button>
+      </span>`
+          : ""
+      }
+    </div>
+  `;
+}
+
+function renderEstablishmentOrganizationRow(site, index, canManageLocations) {
+  const location = [site.city, site.country].filter(Boolean).join(", ");
+  return `
+    <div class="organization-sort-row ${site.active ? "" : "is-inactive"}" draggable="${canManageLocations}" data-entity="establishment" data-id="${site.id}">
+      ${canManageLocations ? `<button class="drag-handle" type="button" aria-label="Déplacer ${escapeHtml(site.name)}" title="Glisser pour réordonner">&#8942;&#8942;</button>` : ""}
+      <button class="organization-item edit-establishment" type="button" data-id="${site.id}">
+        <span class="organization-icon site type-${escapeHtml(site.discipline || site.establishment_type || "office")}" style="--item-color:${escapeHtml(site.color || "#64748b")}">${locationIcon(site.discipline || site.establishment_type || "office")}</span>
+        <span>
+          <strong>${escapeHtml(displayWithAbbreviation(site.name, site.abbreviation))}</strong>
+          <small class="organization-meta">
+            <span>${translate(establishmentTypeLabels[site.establishment_type] || establishmentTypeLabels.office)}${location ? ` · ${escapeHtml(location)}` : ""}</span>
+            ${organizationCountSummary(site, "establishment_id")}
+          </small>
+        </span>
+        <span class="organization-chevron">&rsaquo;</span>
+      </button>
+      ${
+        canManageLocations
+          ? `<span class="sort-buttons">
+        <button type="button" class="sort-step" data-direction="-1" data-entity="establishment" data-id="${site.id}" ${index === 0 ? "disabled" : ""} aria-label="Monter">&#8593;</button>
+        <button type="button" class="sort-step" data-direction="1" data-entity="establishment" data-id="${site.id}" ${index === state.establishments.length - 1 ? "disabled" : ""} aria-label="Descendre">&#8595;</button>
+      </span>`
+          : ""
+      }
+    </div>
+  `;
 }
 
 function renderOrganization() {
   const canManageTeams = canPerformAction("TEAM_MANAGE");
   const canManageLocations = canPerformAction("LOCATION_MANAGE");
-  $("#teams-manager-list").innerHTML = state.teams
-    .map(
-      (team, index) => `
-        <div class="organization-sort-row ${team.active ? "" : "is-inactive"}" draggable="${canManageTeams}" data-entity="team" data-id="${team.id}">
-          ${canManageTeams ? `<button class="drag-handle" type="button" aria-label="Deplacer ${escapeHtml(team.name)}" title="Glisser pour reordonner">&#8942;&#8942;</button>` : ""}
-          <button class="organization-item edit-team" type="button" data-id="${team.id}">
-            <span class="organization-icon" style="--item-color:${escapeHtml(team.color || "#16735f")}">${teamIcon(normalizeTeamInfo(team.name, team.abbreviation).iconType)}</span>
-            <span>
-              <strong>${escapeHtml(displayWithAbbreviation(team.name, team.abbreviation))}</strong>
-              <small>${state.language === "en" ? `${team.device_count} current computer(s), ${team.user_count || 0} current user(s)` : `${team.device_count} machine(s) actuelle(s), ${team.user_count || 0} utilisateur(s) actuel(s)`}${team.description ? ` - ${escapeHtml(team.description)}` : ""}</small>
-            </span>
-            <span class="organization-chevron">&rsaquo;</span>
-          </button>
-          ${canManageTeams ? `<span class="sort-buttons">
-            <button type="button" class="sort-step" data-direction="-1" data-entity="team" data-id="${team.id}" ${index === 0 ? "disabled" : ""} aria-label="Monter">&#8593;</button>
-            <button type="button" class="sort-step" data-direction="1" data-entity="team" data-id="${team.id}" ${index === state.teams.length - 1 ? "disabled" : ""} aria-label="Descendre">&#8595;</button>
-          </span>` : ""}
-        </div>
-      `,
-    )
-    .join("") || `<p class="helper">Aucune équipe.</p>`;
+  const teamRows = organizationRows(state.teams, "team_id");
+  const populatedTeams = teamRows
+    .filter((row) => row.hasData)
+    .map(({ record, index }) => renderTeamOrganizationRow(record, index, canManageTeams));
+  const unusedTeams = teamRows
+    .filter((row) => !row.hasData)
+    .map(({ record, index }) => renderTeamOrganizationRow(record, index, canManageTeams));
+  $("#teams-manager-list").innerHTML =
+    populatedTeams.join("") + organizationUnusedGroup("Équipes sans poste ni utilisateur", unusedTeams) ||
+    `<p class="helper">Aucune équipe.</p>`;
 
-  $("#establishments-manager-list").innerHTML = state.establishments
-    .map((site, index) => {
-      const location = [site.city, site.country].filter(Boolean).join(", ");
-      return `
-        <div class="organization-sort-row ${site.active ? "" : "is-inactive"}" draggable="${canManageLocations}" data-entity="establishment" data-id="${site.id}">
-          ${canManageLocations ? `<button class="drag-handle" type="button" aria-label="Deplacer ${escapeHtml(site.name)}" title="Glisser pour reordonner">&#8942;&#8942;</button>` : ""}
-          <button class="organization-item edit-establishment" type="button" data-id="${site.id}">
-            <span class="organization-icon site type-${escapeHtml(site.discipline || site.establishment_type || "office")}" style="--item-color:${escapeHtml(site.color || "#64748b")}">${locationIcon(site.discipline || site.establishment_type || "office")}</span>
-            <span>
-              <strong>${escapeHtml(displayWithAbbreviation(site.name, site.abbreviation))}</strong>
-              <small>${translate(establishmentTypeLabels[site.establishment_type] || establishmentTypeLabels.office)} - ${state.language === "en" ? `${site.device_count} current computer(s), ${site.user_count || 0} current user(s)` : `${site.device_count} machine(s) actuelle(s), ${site.user_count || 0} utilisateur(s) actuel(s)`}${location ? ` - ${escapeHtml(location)}` : ""}</small>
-            </span>
-            <span class="organization-chevron">&rsaquo;</span>
-          </button>
-          ${canManageLocations ? `<span class="sort-buttons">
-            <button type="button" class="sort-step" data-direction="-1" data-entity="establishment" data-id="${site.id}" ${index === 0 ? "disabled" : ""} aria-label="Monter">&#8593;</button>
-            <button type="button" class="sort-step" data-direction="1" data-entity="establishment" data-id="${site.id}" ${index === state.establishments.length - 1 ? "disabled" : ""} aria-label="Descendre">&#8595;</button>
-          </span>` : ""}
-        </div>
-      `;
-    })
-    .join("") || `<p class="helper">Aucun établissement.</p>`;
+  const establishmentRows = organizationRows(state.establishments, "establishment_id");
+  const populatedEstablishments = establishmentRows
+    .filter((row) => row.hasData)
+    .map(({ record, index }) => renderEstablishmentOrganizationRow(record, index, canManageLocations));
+  const unusedEstablishments = establishmentRows
+    .filter((row) => !row.hasData)
+    .map(({ record, index }) => renderEstablishmentOrganizationRow(record, index, canManageLocations));
+  $("#establishments-manager-list").innerHTML =
+    populatedEstablishments.join("") +
+      organizationUnusedGroup("Établissements sans poste ni utilisateur", unusedEstablishments) ||
+    `<p class="helper">Aucun établissement.</p>`;
 
   $$(".edit-team").forEach((button) => button.addEventListener("click", () => editTeam(button.dataset.id)));
   $$(".edit-establishment").forEach((button) =>
@@ -5150,10 +4227,7 @@ function renderOrganization() {
 
 async function saveOrganizationOrder(entityType) {
   const items = entityType === "team" ? state.teams : state.establishments;
-  await api("/admin/organization/reorder", {
-    method: "POST",
-    body: JSON.stringify({ entityType, ids: items.map((item) => item.id) }),
-  });
+  await inventoryApi.reorderOrganization({ entityType, ids: items.map((item) => item.id) });
 }
 
 async function moveOrganizationItem(entityType, id, targetIndex) {
@@ -5168,7 +4242,7 @@ async function moveOrganizationItem(entityType, id, targetIndex) {
   updateOrganizationDatalists();
   try {
     await saveOrganizationOrder(entityType);
-    toast("Ordre enregistre.", "success");
+    toast("Ordre enregistré.", "success");
   } catch (error) {
     toast(error.message, "error");
     await loadOrganization();
@@ -5253,7 +4327,8 @@ function renderTeamPreview() {
   const form = $("#team-form");
   const name = form.elements.name.value || translate("Nouvelle équipe");
   const info = normalizeTeamInfo(name, form.elements.abbreviation.value);
-  $("#team-badge-preview").innerHTML = `<span class="${info.badgeClass}" ${badgeStyle(form.elements.color.value)}>${teamIcon(info.iconType)}<span>${escapeHtml(info.displayLabel)}</span></span>`;
+  $("#team-badge-preview").innerHTML =
+    `<span class="${info.badgeClass}" ${badgeStyle(form.elements.color.value)}>${teamIcon(info.iconType)}<span>${escapeHtml(info.displayLabel)}</span></span>`;
 }
 
 function resetEstablishmentForm() {
@@ -5284,7 +4359,8 @@ function editEstablishment(id) {
   form.elements.abbreviation.value = site.abbreviation || "";
   form.elements.establishmentType.value = site.establishment_type || "office";
   form.elements.discipline.value = site.discipline || "general";
-  form.elements.color.value = site.color || defaultOrganizationColor(state.establishments.findIndex((item) => item.id === id));
+  form.elements.color.value =
+    site.color || defaultOrganizationColor(state.establishments.findIndex((item) => item.id === id));
   form.elements.address.value = site.address || "";
   form.elements.postalCode.value = site.postal_code || "";
   form.elements.city.value = site.city || "";
@@ -5301,15 +4377,26 @@ function editEstablishment(id) {
 function renderEstablishmentPreview() {
   const form = $("#establishment-form");
   const name = form.elements.name.value || translate("Nouvel établissement");
-  const info = locationInfo(form.elements.establishmentType.value, name, form.elements.discipline.value, form.elements.abbreviation.value);
-  $("#establishment-badge-preview").innerHTML = `<span class="${info.badgeClass}" ${badgeStyle(form.elements.color.value)}>${locationIcon(info.iconType)}<span>${escapeHtml(info.displayLabel)}</span></span>`;
+  const info = locationInfo(
+    form.elements.establishmentType.value,
+    name,
+    form.elements.discipline.value,
+    form.elements.abbreviation.value,
+  );
+  $("#establishment-badge-preview").innerHTML =
+    `<span class="${info.badgeClass}" ${badgeStyle(form.elements.color.value)}>${locationIcon(info.iconType)}<span>${escapeHtml(info.displayLabel)}</span></span>`;
 }
 
 function renderEstablishmentMap() {
   const form = $("#establishment-form");
   const latitude = Number(form.elements.latitude.value);
   const longitude = Number(form.elements.longitude.value);
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !form.elements.latitude.value || !form.elements.longitude.value) {
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    !form.elements.latitude.value ||
+    !form.elements.longitude.value
+  ) {
     $("#establishment-map").innerHTML = `
       <div class="map-empty">
         ${organizationIcon("site")}
@@ -5340,7 +4427,7 @@ function renderEstablishmentMap() {
 }
 
 async function loadOrganization() {
-  const data = await api("/admin/organization");
+  const data = await inventoryApi.getAdminOrganization();
   state.teams = data.teams || [];
   state.establishments = data.establishments || [];
   state.users = data.users || [];
@@ -5351,7 +4438,7 @@ async function loadOrganization() {
 }
 
 async function loadPublicOrganization() {
-  const data = await api("/organization");
+  const data = await inventoryApi.getPublicOrganization();
   state.teams = data.teams || [];
   state.establishments = data.establishments || [];
   updateOrganizationDatalists();
@@ -5360,7 +4447,7 @@ async function loadPublicOrganization() {
 }
 
 async function loadCpuBenchmarkStats() {
-  const data = await api("/admin/cpu-benchmarks");
+  const data = await inventoryApi.getCpuBenchmarkStats();
   state.cpuBenchmarkStats = data;
   renderValuation();
 }
@@ -5390,7 +4477,7 @@ async function searchAddresses() {
     language: state.language,
   });
   try {
-    const data = await api(`/admin/address/autocomplete?${params}`, { signal: addressSearchController.signal });
+    const data = await inventoryApi.autocompleteAddress(params.toString(), addressSearchController.signal);
     const suggestions = data.suggestions || [];
     $("#address-search-status").textContent = suggestions.length ? "" : translate("Aucune adresse trouvee.");
     $("#address-suggestions").innerHTML = suggestions
@@ -5416,11 +4503,11 @@ async function searchAddresses() {
 
 async function selectAddressSuggestion(placeId) {
   const form = $("#establishment-form");
-  $("#address-search-status").textContent = translate("Selection de l'adresse...");
+  $("#address-search-status").textContent = translate("Sélection de l’adresse...");
   hideAddressSuggestions();
   try {
     const params = new URLSearchParams({ placeId, language: state.language });
-    const address = await api(`/admin/address/details?${params}`);
+    const address = await inventoryApi.getAddressDetails(params.toString());
     form.elements.address.value = address.address || "";
     form.elements.postalCode.value = address.postalCode || "";
     form.elements.city.value = address.city || "";
@@ -5438,7 +4525,7 @@ async function selectAddressSuggestion(placeId) {
 
 async function loadAdminData() {
   applyPermissions();
-  const data = await api("/admin/devices");
+  const data = await inventoryApi.listDevices();
   loadAccessTokens().catch((error) => {
     state.accessTokens = [];
     renderAccessTokens();
@@ -5452,7 +4539,9 @@ async function loadAdminData() {
   loadAdminUsers().catch((error) => toast(`Module utilisateurs indisponible: ${error.message}`, "error"));
   loadNotifications().catch((error) => toast(`Module notifications indisponible: ${error.message}`, "error"));
   loadPendingChanges().catch((error) => toast(`Module validations indisponible: ${error.message}`, "error"));
-  const organizationPromise = loadOrganization().catch((error) => toast(`Module organisation indisponible: ${error.message}`, "error"));
+  const organizationPromise = loadOrganization().catch((error) =>
+    toast(`Module organisation indisponible: ${error.message}`, "error"),
+  );
   loadCpuBenchmarkStats().catch(() => {
     state.cpuBenchmarkStats = null;
   });
@@ -5461,8 +4550,11 @@ async function loadAdminData() {
   const establishments = [...new Set(state.devices.map((d) => d.establishment_name))];
   const os = [...new Set(state.devices.map(normalizedDeviceOsFamily))];
   const models = [...new Set(state.devices.map((d) => d.model))];
-  const manufacturers = [...new Set(state.devices.map((device) =>
-    normalizeManufacturer(device.manufacturer, device.model).manufacturerName))];
+  const manufacturers = [
+    ...new Set(
+      state.devices.map((device) => normalizeManufacturer(device.manufacturer, device.model).manufacturerName),
+    ),
+  ];
   setOptions($("#filter-team"), teams, "Toutes");
   setOptions($("#filter-establishment"), establishments, "Tous");
   setOptions($("#filter-os"), os, "Tous");
@@ -5470,8 +4562,18 @@ async function loadAdminData() {
   setOptions($("#filter-manufacturer"), manufacturers, "Tous");
   applyFilters();
   await organizationPromise;
-  setOptions($("#filter-team"), state.teams.map((team) => team.name), "Toutes", true);
-  setOptions($("#filter-establishment"), state.establishments.map((site) => site.name), "Tous", true);
+  setOptions(
+    $("#filter-team"),
+    state.teams.map((team) => team.name),
+    "Toutes",
+    true,
+  );
+  setOptions(
+    $("#filter-establishment"),
+    state.establishments.map((site) => site.name),
+    "Tous",
+    true,
+  );
   applyFilters();
   resumeActiveEnrichmentJob().catch(() => {});
 }
@@ -5490,19 +4592,13 @@ async function runEnrichment({ mode = "refresh", deviceId = "", button = null } 
       return result;
     }
 
-    const result = await api("/admin/enrich", {
-      method: "POST",
-      body: JSON.stringify({
-        deviceId: deviceId || undefined,
-        limit: deviceId ? 1 : 100,
-        force: true,
-        mode,
-        useExternal: mode !== "recalculate",
-      }),
+    const result = await inventoryApi.enrichDevices({
+      ...(deviceId ? { deviceId } : {}),
+      limit: deviceId ? 1 : 100,
+      force: true,
+      mode,
+      useExternal: mode !== "recalculate",
     });
-    const message = state.language === "en"
-      ? `${result.enriched} enriched, ${result.skipped} skipped, ${result.failed || 0} failed.`
-      : `${result.enriched} enrichie(s), ${result.skipped} ignoree(s), ${result.failed || 0} en échec.`;
     toast(enrichmentResultMessage(result));
     await loadAdminData();
     return result;
@@ -5514,18 +4610,15 @@ async function runEnrichment({ mode = "refresh", deviceId = "", button = null } 
   }
 }
 
-async function runEnrichmentBatches({ mode = "refresh", button = null } = {}) {
+async function runEnrichmentBatches({ mode = "refresh", button = null, onProgress = null } = {}) {
   if (activeEnrichmentRun) return activeEnrichmentRun;
   activeEnrichmentRun = (async () => {
-    const started = await api("/admin/enrichment-jobs", {
-      method: "POST",
-      body: JSON.stringify({
-        force: true,
-        mode,
-        useExternal: mode !== "recalculate",
-      }),
+    const started = await inventoryApi.startEnrichmentJob({
+      force: true,
+      mode,
+      useExternal: mode !== "recalculate",
     });
-    return await continueEnrichmentJob(started.job, { button });
+    return await continueEnrichmentJob(started.job, { button, onProgress });
   })();
   try {
     return await activeEnrichmentRun;
@@ -5535,10 +4628,11 @@ async function runEnrichmentBatches({ mode = "refresh", button = null } = {}) {
 }
 
 function updateEnrichmentButtonProgress(button, job) {
-  if (!button || !job) return;
+  if (!job) return;
   const total = Math.max(Number(job.totalCount || 0), 1);
   const processed = Math.min(Number(job.processedCount || 0), total);
-  button.textContent = `${translate("Enrichissement...")} ${processed}/${total}`;
+  if (button) button.textContent = `${translate("Enrichissement...")} ${processed}/${total}`;
+  updateEnrichmentWorkflowJobProgress(job);
 }
 
 function enrichmentJobResult(job, results = []) {
@@ -5556,24 +4650,26 @@ function enrichmentJobResult(job, results = []) {
   };
 }
 
-async function continueEnrichmentJob(initialJob, { button = null } = {}) {
+async function continueEnrichmentJob(initialJob, { button = null, onProgress = null } = {}) {
   let job = initialJob;
   const results = [];
-  const maxBatches = Math.ceil(Math.max(Number(job?.totalCount || state.devices.length || 0), 1) / ENRICHMENT_BATCH_SIZE) + 10;
+  const batchSize = enrichmentDomain.enrichmentBatchSizeForJob(job, ENRICHMENT_BATCH_SIZE);
+  const maxBatches = Math.ceil(Math.max(Number(job?.totalCount || state.devices.length || 0), 1) / batchSize) + 10;
+
+  updateEnrichmentButtonProgress(button, job);
+  onProgress?.(job);
 
   for (let batchIndex = 0; batchIndex < maxBatches; batchIndex += 1) {
     if (!job || !["queued", "running"].includes(job.status)) break;
     updateEnrichmentButtonProgress(button, job);
-    const batch = await api("/admin/enrichment-jobs/process", {
-      method: "POST",
-      body: JSON.stringify({
-        jobId: job.id,
-        limit: ENRICHMENT_BATCH_SIZE,
-      }),
+    const batch = await inventoryApi.processEnrichmentJob({
+      jobId: job.id,
+      limit: batchSize,
     });
     if (Array.isArray(batch.results)) results.push(...batch.results);
     job = batch.job;
     updateEnrichmentButtonProgress(button, job);
+    onProgress?.(job);
     if (!job || !["queued", "running"].includes(job.status)) break;
   }
 
@@ -5581,11 +4677,31 @@ async function continueEnrichmentJob(initialJob, { button = null } = {}) {
 }
 
 async function resumeActiveEnrichmentJob() {
-  if (activeEnrichmentRun || !state.adminToken || !canPerformAction("DEVICE_EDIT")) return;
-  const active = await api("/admin/enrichment-jobs/active");
+  if (activeEnrichmentRun || unifiedEnrichmentRunActive || !state.adminToken || !canPerformAction("DEVICE_EDIT")) {
+    return;
+  }
+  const storedWorkflow = readEnrichmentWorkflowState();
+  const active = await inventoryApi.getActiveEnrichmentJob();
+  if (storedWorkflow?.active) {
+    if (active.job) {
+      const resumeSteps = resumedEnrichmentWorkflowSteps(active.job, storedWorkflow.steps);
+      await runUnifiedEnrichment({ resumeJob: active.job, resumeSteps });
+      return;
+    }
+    const runningStep = storedWorkflow.steps?.find((step) => step.status === "running");
+    if (runningStep) {
+      const resumeSteps = storedWorkflow.steps.map((step) =>
+        step.id === runningStep.id ? { ...step, status: "success" } : step,
+      );
+      await runUnifiedEnrichment({ resumeFromStepId: runningStep.id, resumeSteps });
+      return;
+    }
+    clearEnrichmentWorkflowState();
+  }
   if (!active.job) return;
-  const button = $("#enrich-admin") || $("#valuation-enrich-all");
-  const originalText = button?.textContent || "";
+  const standaloneSteps = resumedEnrichmentWorkflowSteps(active.job);
+  renderEnrichmentWorkflow(standaloneSteps);
+  const button = $("#valuation-enrich-fleet") || $("#valuation-enrich-all");
   if (button) {
     button.disabled = true;
     updateEnrichmentButtonProgress(button, active.job);
@@ -5593,42 +4709,46 @@ async function resumeActiveEnrichmentJob() {
   activeEnrichmentRun = continueEnrichmentJob(active.job, { button });
   try {
     const result = await activeEnrichmentRun;
+    const completedSteps = standaloneSteps.map((step) =>
+      step.status === "running" ? { ...step, status: "success", result: workflowResultCounts(result) } : step,
+    );
+    renderEnrichmentWorkflow(completedSteps, workflowResultFromStates(completedSteps));
     toast(enrichmentResultMessage(result));
     await loadAdminData();
   } finally {
     activeEnrichmentRun = null;
     if (button) {
       button.disabled = false;
-      button.textContent = originalText;
+      button.textContent = translate("Enrichir et recalculer le parc");
     }
   }
 }
 
 function enrichmentResultMessage(result) {
   const rows = Array.isArray(result?.results) ? result.results : [];
-  const ebayCount = Number(result?.ebayResultCount ?? rows.reduce((sum, item) => sum + Number(item?.providerCounts?.ebay || 0), 0));
+  const ebayCount = Number(
+    result?.ebayResultCount ?? rows.reduce((sum, item) => sum + Number(item?.providerCounts?.ebay || 0), 0),
+  );
   const jobStatuses = Array.isArray(result?.providerStatuses?.ebay) ? result.providerStatuses.ebay : [];
-  const statuses = [...new Set([
-    ...jobStatuses,
-    ...rows.map((item) => item?.providerStatus?.ebay?.status).filter(Boolean),
-  ])];
+  const statuses = [
+    ...new Set([...jobStatuses, ...rows.map((item) => item?.providerStatus?.ebay?.status).filter(Boolean)]),
+  ];
   const statusLabel = statuses.length ? statuses.join(", ") : "disabled";
   if (state.language === "en") {
     return `${result?.enriched || 0} enriched, ${result?.skipped || 0} skipped, ${result?.failed || 0} failed. eBay: ${ebayCount} result(s) (${statusLabel}).`;
   }
-  return `${result?.enriched || 0} enrichie(s), ${result?.skipped || 0} ignoree(s), ${result?.failed || 0} en echec. eBay: ${ebayCount} resultat(s) (${statusLabel}).`;
+  return `${result?.enriched || 0} enrichi(s), ${result?.skipped || 0} ignoré(s), ${result?.failed || 0} en échec. eBay : ${ebayCount} résultat(s) (${statusLabel}).`;
 }
 
 async function importCpuBenchmarkFile(file) {
   if (!file) return;
   const csv = await file.text();
-  const result = await api("/admin/cpu-benchmarks/import", {
-    method: "POST",
-    body: JSON.stringify({ csv }),
-  });
-  toast(state.language === "en"
-    ? `${result.imported} CPU benchmark(s) imported, ${result.rejected} rejected.`
-    : `${result.imported} benchmark(s) CPU importe(s), ${result.rejected} rejete(s).`);
+  const result = await inventoryApi.importCpuBenchmarks({ csv });
+  toast(
+    state.language === "en"
+      ? `${result.imported} CPU benchmark(s) imported, ${result.rejected} rejected.`
+      : `${result.imported} benchmark(s) CPU importé(s), ${result.rejected} rejeté(s).`,
+  );
   await loadCpuBenchmarkStats();
 }
 
@@ -5637,13 +4757,11 @@ async function refreshCpuReleaseDates(button) {
   button.disabled = true;
   button.textContent = translate("Actualisation...");
   try {
-    const result = await api("/admin/cpu-benchmarks/refresh-release-dates", {
-      method: "POST",
-      body: JSON.stringify({ limit: 120 }),
-    });
-    const message = state.language === "en"
-      ? `${result.updated || 0} CPU launch date(s) updated, ${result.official || 0} from official search, ${result.fallback || 0} from family rules.`
-      : `${result.updated || 0} date(s) CPU mise(s) a jour, ${result.official || 0} via recherche officielle, ${result.fallback || 0} via regles de famille.`;
+    const result = await inventoryApi.refreshCpuReleaseDates({ limit: 120 });
+    const message =
+      state.language === "en"
+        ? `${result.updated || 0} CPU launch date(s) updated, ${result.official || 0} from official search, ${result.fallback || 0} from family rules.`
+        : `${result.updated || 0} date(s) CPU mise(s) à jour, ${result.official || 0} via recherche officielle, ${result.fallback || 0} via règles de famille.`;
     toast(message);
     await loadCpuBenchmarkStats();
   } finally {
@@ -5657,19 +4775,367 @@ async function syncCpuBenchmarks(button) {
   button.disabled = true;
   button.textContent = translate("Actualisation...");
   try {
-    const result = await api("/admin/cpu-benchmarks/sync", {
-      method: "POST",
-      body: JSON.stringify({ limit: 250, recalculate: true, recalculateLimit: 120 }),
-    });
-    const message = state.language === "en"
-      ? `${result.matched || 0} CPU score(s) matched, ${result.imported || 0} imported, ${result.updated || 0} updated, ${result.recalculated || 0} device(s) recalculated.`
-      : `${result.matched || 0} score(s) CPU trouve(s), ${result.imported || 0} importe(s), ${result.updated || 0} mis a jour, ${result.recalculated || 0} machine(s) recalculee(s).`;
+    const result = await inventoryApi.syncCpuBenchmarks({ limit: 250, recalculate: true, recalculateLimit: 120 });
+    const message =
+      state.language === "en"
+        ? `${result.matched || 0} CPU score(s) matched, ${result.imported || 0} imported, ${result.updated || 0} updated, ${result.recalculated || 0} device(s) recalculated.`
+        : `${result.matched || 0} score(s) CPU trouvé(s), ${result.imported || 0} importé(s), ${result.updated || 0} mis à jour, ${result.recalculated || 0} poste(s) recalculé(s).`;
     toast(message);
     await loadAdminData();
     await loadCpuBenchmarkStats();
   } finally {
     button.disabled = false;
     button.textContent = previousLabel;
+  }
+}
+
+const enrichmentStepLabels = {
+  benchmarks: "Vérification des benchmarks CPU",
+  scores: "Synchronisation des scores CPU",
+  releaseDates: "Résolution des dates de sortie CPU",
+  enrichDevices: "Enrichissement des postes éligibles",
+  recalculateValues: "Recalcul des valeurs actuelles",
+  refreshDashboard: "Actualisation des indicateurs",
+};
+
+const enrichmentStepIds = Object.keys(enrichmentStepLabels);
+const enrichmentStoredResultKeys = [
+  "analyzed",
+  "updated",
+  "skipped",
+  "failures",
+  "processed",
+  "total",
+  "enriched",
+  "failed",
+  "recalculated",
+  "importedCount",
+  "bundledCount",
+  "matched",
+  "unmatched",
+  "official",
+  "fallback",
+];
+
+function sanitizeEnrichmentWorkflowSteps(steps = []) {
+  return steps.map((step) => {
+    const stored = { id: step.id, status: step.status };
+    if (step.error) stored.error = String(step.error);
+    if (step.result) {
+      stored.result = Object.fromEntries(
+        enrichmentStoredResultKeys
+          .filter((key) => step.result[key] !== undefined)
+          .map((key) => [key, Number(step.result[key] || 0)]),
+      );
+    }
+    return stored;
+  });
+}
+
+function readEnrichmentWorkflowState() {
+  try {
+    const value = JSON.parse(localStorage.getItem(ENRICHMENT_WORKFLOW_STATE_KEY) || "null");
+    return value && typeof value === "object" && Array.isArray(value.steps) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistEnrichmentWorkflowState(steps) {
+  const existing = readEnrichmentWorkflowState();
+  localStorage.setItem(
+    ENRICHMENT_WORKFLOW_STATE_KEY,
+    JSON.stringify({
+      active: true,
+      startedAt: existing?.startedAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      steps: sanitizeEnrichmentWorkflowSteps(steps),
+    }),
+  );
+}
+
+function clearEnrichmentWorkflowState() {
+  localStorage.removeItem(ENRICHMENT_WORKFLOW_STATE_KEY);
+}
+
+function enrichmentStepIdForJob(job) {
+  return job?.mode === "recalculate" ? "recalculateValues" : "enrichDevices";
+}
+
+function resumedEnrichmentWorkflowSteps(job, storedSteps = []) {
+  return enrichmentDomain.resumedEnrichmentStepStates(enrichmentStepIds, enrichmentStepIdForJob(job), storedSteps);
+}
+
+function mergeResumedEnrichmentSteps(steps, resumeSteps = []) {
+  return enrichmentDomain.mergeSuccessfulEnrichmentSteps(steps, resumeSteps);
+}
+
+function workflowResultFromStates(steps) {
+  return {
+    steps,
+    failedStepIds: steps.filter((step) => step.status === "failed").map((step) => step.id),
+    summary: enrichmentDomain.summarizeEnrichmentSteps(steps),
+  };
+}
+
+function enrichmentJobProgressText(job) {
+  const total = Math.max(Number(job?.totalCount || 0), 1);
+  const processed = Math.min(Number(job?.processedCount || 0), total);
+  const updated = Number(job?.enrichedCount || 0);
+  const skipped = Number(job?.skippedCount || 0);
+  const failed = Number(job?.failedCount || 0);
+  if (state.language === "en") {
+    return `${processed}/${total} devices · ${updated} updated · ${skipped} skipped · ${failed} failed`;
+  }
+  return `${processed}/${total} postes · ${updated} mis à jour · ${skipped} ignorés · ${failed} en échec`;
+}
+
+function enrichmentStepDetail(step) {
+  if (step.error) return localizeErrorMessage(step.error, state.language);
+  if (step.status === "running" && enrichmentStepIdForJob(activeEnrichmentJobProgress) === step.id) {
+    return enrichmentJobProgressText(activeEnrichmentJobProgress);
+  }
+  const result = step.result;
+  if (!result) return "";
+  if (step.id === "benchmarks") {
+    return state.language === "en"
+      ? `${result.importedCount || 0} imported · ${result.bundledCount || 0} bundled`
+      : `${result.importedCount || 0} importés · ${result.bundledCount || 0} intégrés`;
+  }
+  if (step.id === "scores") {
+    return state.language === "en"
+      ? `${result.matched || 0} matched · ${result.updated || 0} updated · ${result.unmatched || 0} unmatched`
+      : `${result.matched || 0} trouvés · ${result.updated || 0} mis à jour · ${result.unmatched || 0} non trouvés`;
+  }
+  if (step.id === "releaseDates") {
+    return state.language === "en"
+      ? `${result.updated || 0} updated · ${result.official || 0} official · ${result.fallback || 0} estimated`
+      : `${result.updated || 0} mises à jour · ${result.official || 0} officielles · ${result.fallback || 0} estimées`;
+  }
+  if (["enrichDevices", "recalculateValues"].includes(step.id)) {
+    return state.language === "en"
+      ? `${result.analyzed || 0} analyzed · ${result.updated || 0} updated · ${result.skipped || 0} skipped · ${result.failures || 0} failed`
+      : `${result.analyzed || 0} analysés · ${result.updated || 0} mis à jour · ${result.skipped || 0} ignorés · ${result.failures || 0} en échec`;
+  }
+  return "";
+}
+
+function updateEnrichmentWorkflowJobProgress(job) {
+  if (!job) return;
+  activeEnrichmentJobProgress = job;
+  const stepId = enrichmentStepIdForJob(job);
+  const detail = $(`[data-enrichment-step-detail="${stepId}"]`);
+  if (detail) detail.textContent = enrichmentJobProgressText(job);
+  const container = $("#enrichment-workflow");
+  if (!container || container.classList.contains("is-hidden")) return;
+  const totalSteps = enrichmentStepIds.length;
+  const completed = renderedEnrichmentWorkflowSteps.filter((step) =>
+    ["success", "failed"].includes(step.status),
+  ).length;
+  const total = Math.max(Number(job.totalCount || 0), 1);
+  const processed = Math.min(Number(job.processedCount || 0), total);
+  const jobProgress = Math.max(0, Math.min(1, processed / total));
+  $("#enrichment-progress").value = Math.min(totalSteps, completed + jobProgress);
+  $("#enrichment-progress-value").textContent = `${completed} / ${totalSteps} · ${processed} / ${total}`;
+}
+
+function workflowResultCounts(result, overrides = {}) {
+  return {
+    ...result,
+    analyzed: Number(overrides.analyzed ?? result?.processed ?? result?.total ?? 0),
+    updated: Number(overrides.updated ?? result?.updated ?? result?.enriched ?? result?.recalculated ?? 0),
+    skipped: Number(overrides.skipped ?? result?.skipped ?? 0),
+    failures: Number(overrides.failures ?? result?.failed ?? result?.failures ?? 0),
+  };
+}
+
+function createEnrichmentWorkflowSteps() {
+  return [
+    {
+      id: "benchmarks",
+      run: async () => {
+        const result = await inventoryApi.getCpuBenchmarkStats();
+        state.cpuBenchmarkStats = result;
+        renderValuation();
+        return workflowResultCounts(result);
+      },
+    },
+    {
+      id: "scores",
+      run: async () => {
+        const result = await inventoryApi.syncCpuBenchmarks({ limit: 250, recalculate: false });
+        return workflowResultCounts(result, {
+          analyzed: Number(result.matched || 0) + Number(result.unmatched || 0),
+          updated: result.updated,
+          failures: result.failed,
+        });
+      },
+    },
+    {
+      id: "releaseDates",
+      run: async () => {
+        const result = await inventoryApi.refreshCpuReleaseDates({ limit: 120 });
+        return workflowResultCounts(result, {
+          analyzed: Number(result.updated || 0) + Number(result.skipped || 0),
+          updated: result.updated,
+        });
+      },
+    },
+    {
+      id: "enrichDevices",
+      run: async () => workflowResultCounts(await runEnrichmentBatches({ mode: "refresh" })),
+    },
+    {
+      id: "recalculateValues",
+      run: async () => workflowResultCounts(await runEnrichmentBatches({ mode: "recalculate" })),
+    },
+    {
+      id: "refreshDashboard",
+      run: async () => {
+        await loadAdminData();
+        await loadCpuBenchmarkStats();
+        return {};
+      },
+    },
+  ];
+}
+
+function enrichmentStatusLabel(status) {
+  const labels = {
+    pending: "En attente",
+    running: "En cours",
+    success: "Terminée",
+    failed: "Échec",
+    skipped: "Non relancée",
+  };
+  return translate(labels[status] || status);
+}
+
+function renderEnrichmentWorkflow(steps = [], result = null) {
+  const container = $("#enrichment-workflow");
+  if (!container) return;
+  renderedEnrichmentWorkflowSteps = steps.map((step) => ({ ...step }));
+  container.classList.remove("is-hidden");
+  const totalSteps = Object.keys(enrichmentStepLabels).length;
+  const completed = steps.filter((step) => ["success", "failed"].includes(step.status)).length;
+  $("#enrichment-progress").value = completed;
+  $("#enrichment-progress").max = totalSteps;
+  $("#enrichment-progress-value").textContent = `${completed} / ${totalSteps}`;
+  $("#enrichment-steps").innerHTML = steps
+    .map((step) => {
+      const detail = enrichmentStepDetail(step);
+      return `
+        <li class="status-${escapeHtml(step.status)}">
+          <span class="enrichment-step-marker" aria-hidden="true"></span>
+          <span>
+            <strong>${translate(enrichmentStepLabels[step.id] || step.id)}</strong>
+            <small class="enrichment-step-detail ${step.error ? "is-error" : ""}" data-enrichment-step-detail="${escapeHtml(step.id)}" ${detail ? "" : "hidden"}>${escapeHtml(detail)}</small>
+          </span>
+          <em>${escapeHtml(enrichmentStatusLabel(step.status))}</em>
+        </li>
+      `;
+    })
+    .join("");
+
+  if (activeEnrichmentJobProgress) updateEnrichmentWorkflowJobProgress(activeEnrichmentJobProgress);
+
+  const summary = $("#enrichment-summary");
+  if (!result) {
+    summary.classList.add("is-hidden");
+  } else {
+    const values = [
+      ["Postes analysés", result.summary.analyzed],
+      ["Postes mis à jour", result.summary.updated],
+      ["Postes ignorés", result.summary.skipped],
+      ["Échecs", result.summary.failures],
+    ];
+    summary.innerHTML = values
+      .map(
+        ([label, value]) =>
+          `<span><small>${translate(label)}</small><strong>${formatFleetNumber(value)}</strong></span>`,
+      )
+      .join("");
+    summary.classList.remove("is-hidden");
+  }
+  $("#retry-enrichment").classList.toggle("is-hidden", !result?.failedStepIds?.length);
+}
+
+function setUnifiedEnrichmentBusy(busy) {
+  const primary = $("#valuation-enrich-fleet");
+  if (primary) {
+    primary.disabled = busy;
+    primary.textContent = translate(busy ? "Enrichissement du parc en cours..." : "Enrichir et recalculer le parc");
+  }
+  [
+    "#valuation-enrich-all",
+    "#valuation-recalculate",
+    "#refresh-cpu-release-dates",
+    "#sync-cpu-benchmarks",
+    "#import-cpu-benchmarks",
+  ].forEach((selector) => {
+    const button = $(selector);
+    if (button) button.disabled = busy;
+  });
+}
+
+async function runUnifiedEnrichment({
+  retryFailed = false,
+  resumeJob = null,
+  resumeFromStepId = "",
+  resumeSteps = [],
+} = {}) {
+  const steps = createEnrichmentWorkflowSteps();
+  const requestedResumeStepId = resumeJob ? enrichmentStepIdForJob(resumeJob) : resumeFromStepId;
+  const resumeIndex = enrichmentStepIds.indexOf(requestedResumeStepId);
+  const onlyStepIds = resumeIndex >= 0 ? enrichmentStepIds.slice(resumeIndex + (resumeJob ? 0 : 1)) : undefined;
+  const initialStates = mergeResumedEnrichmentSteps(
+    steps.map((step) => ({
+      id: step.id,
+      status: onlyStepIds && !onlyStepIds.includes(step.id) ? "skipped" : "pending",
+    })),
+    resumeSteps,
+  );
+
+  unifiedEnrichmentRunActive = true;
+  setUnifiedEnrichmentBusy(true);
+  persistEnrichmentWorkflowState(initialStates);
+  renderEnrichmentWorkflow(initialStates);
+  try {
+    const options = {
+      ...(onlyStepIds ? { onlyStepIds } : {}),
+      onChange: (states) => {
+        const displayStates = mergeResumedEnrichmentSteps(states, resumeSteps);
+        persistEnrichmentWorkflowState(displayStates);
+        renderEnrichmentWorkflow(displayStates);
+      },
+    };
+    const result =
+      retryFailed && lastEnrichmentWorkflow
+        ? await enrichmentWorkflowCoordinator.retryFailed(lastEnrichmentWorkflow, steps, options)
+        : await enrichmentWorkflowCoordinator.run(steps, options);
+    const displaySteps = mergeResumedEnrichmentSteps(result.steps, resumeSteps);
+    const displayResult = workflowResultFromStates(displaySteps);
+    lastEnrichmentWorkflow = displayResult;
+    if (retryFailed) {
+      try {
+        await loadAdminData();
+      } catch (error) {
+        toast(error.message, "error");
+      }
+    }
+    renderEnrichmentWorkflow(displaySteps, displayResult);
+    if (!displayResult.failedStepIds.length) clearEnrichmentWorkflowState();
+    toast(
+      displayResult.failedStepIds.length
+        ? "Enrichissement terminé avec des étapes en échec."
+        : "Enrichissement et recalcul terminés.",
+      displayResult.failedStepIds.length ? "warning" : "success",
+    );
+    return displayResult;
+  } finally {
+    unifiedEnrichmentRunActive = false;
+    activeEnrichmentJobProgress = null;
+    setUnifiedEnrichmentBusy(false);
   }
 }
 
@@ -5704,11 +5170,13 @@ function bindEvents() {
     if (event.target.closest(".language-switcher")) return;
     $("#language-menu").classList.add("is-hidden");
     $("#language-toggle").setAttribute("aria-expanded", "false");
+    closeNotificationPanel();
   });
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
     $("#language-menu").classList.add("is-hidden");
     $("#language-toggle").setAttribute("aria-expanded", "false");
+    closeNotificationPanel();
   });
 
   $$(".tab").forEach((tab) => {
@@ -5755,15 +5223,8 @@ function bindEvents() {
     try {
       const hasInvite = Boolean(state.currentInviteCode || form.inviteCode);
       const result = hasInvite
-        ? await api(`/collect/invite/${encodeURIComponent(state.currentInviteCode || form.inviteCode)}/prefill`, {
-          method: "POST",
-          body: JSON.stringify(payload),
-        })
-        : await api("/collect/prefill", {
-          method: "POST",
-          headers: { "X-Collection-Access-Token": form.accessToken },
-          body: JSON.stringify(payload),
-        });
+        ? await inventoryApi.createInvitePrefill(state.currentInviteCode || form.inviteCode, payload)
+        : await inventoryApi.createPrefill(payload, form.accessToken);
       $("#command-empty").classList.add("is-hidden");
       $("#command-result").classList.remove("is-hidden");
       $("#collector-prefill-code").textContent = result.prefillCode || "";
@@ -5772,21 +5233,26 @@ function bindEvents() {
       state.prefillPayload = {
         ...payload,
         prefillCode: result.prefillCode || "",
-        accessToken: result.accessToken || (hasInvite
-          ? `invite_${state.currentInviteCode || form.inviteCode || result.inviteCode || ""}`
-          : form.accessToken || ""),
+        accessToken:
+          result.accessToken ||
+          (hasInvite
+            ? `invite_${state.currentInviteCode || form.inviteCode || result.inviteCode || ""}`
+            : form.accessToken || ""),
         expiresAt: result.expiresAt || "",
         apiUrl: result.apiUrl || CONFIG.apiBaseUrl,
         launchUrl: result.launchUrl || "",
       };
-      $("#powershell-command").textContent = state.language === "en"
-        ? "Use the native collector app. Install it once, then open it from this page to load the profile automatically. The script fallback is reserved for IT support."
-        : "Utilisez l'application collecteur native. Installez-la une fois, puis ouvrez-la depuis cette page pour charger le profil automatiquement. Le script fallback reste réservé au support IT.";
+      $("#powershell-command").textContent =
+        state.language === "en"
+          ? "Use the native collector app. Install it once, then open it from this page to load the profile automatically. The script fallback is reserved for IT support."
+          : "Utilisez l'application collecteur native. Installez-la une fois, puis ouvrez-la depuis cette page pour charger le profil automatiquement. Le script fallback reste réservé au support IT.";
       updateCollectorDownloadUi();
       toast(
         hasKnownCompatibleCollector()
-          ? (state.language === "en" ? "Preparation complete. Open the collector." : "Préparation terminée. Ouvrez le collecteur.")
-          : translate("Preparation terminee. Telechargez le collecteur."),
+          ? state.language === "en"
+            ? "Preparation complete. Open the collector."
+            : "Préparation terminée. Ouvrez le collecteur."
+          : translate("Préparation terminée. Téléchargez le collecteur."),
         "success",
       );
     } catch (error) {
@@ -5796,19 +5262,27 @@ function bindEvents() {
   });
 
   $("#copy-command").addEventListener("click", async () => {
-    await copyText($("#powershell-command").textContent, "Commande copiee.", "Aucune commande a copier");
+    await copyText($("#powershell-command").textContent, "Commande copiée.", "Aucune commande à copier");
   });
   $("#copy-collector-token")?.addEventListener("click", async () => {
-    await copyText($("#collector-token")?.textContent, "Token copie.", "Aucun token a copier");
+    await copyText($("#collector-token")?.textContent, "Token copié.", "Aucun token à copier");
   });
   $("#copy-prefill-code").addEventListener("click", async () => {
-    await copyText($("#collector-prefill-code").textContent, "Code copie.", "Aucun code a copier");
+    await copyText($("#collector-prefill-code").textContent, "Code copié.", "Aucun code à copier");
   });
   $("#copy-ubuntu-command")?.addEventListener("click", async () => {
-    await copyText($("#ubuntu-install-command")?.textContent, "Commande Ubuntu copiee.", "Aucune commande Ubuntu a copier");
+    await copyText(
+      $("#ubuntu-install-command")?.textContent,
+      "Commande Ubuntu copiee.",
+      "Aucune commande Ubuntu à copier",
+    );
   });
   $("#copy-macos-command")?.addEventListener("click", async () => {
-    await copyText($("#macos-install-command")?.textContent, "Commande macOS copiee.", "Aucune commande macOS a copier");
+    await copyText(
+      $("#macos-install-command")?.textContent,
+      "Commande macOS copiee.",
+      "Aucune commande macOS à copier",
+    );
   });
   $("#download-prefill-file").addEventListener("click", downloadPrefillFile);
   $("#collector-download-primary")?.addEventListener("click", () => {
@@ -5836,13 +5310,13 @@ function bindEvents() {
   });
   $("#copy-script").addEventListener("click", async () => {
     if (!state.scriptPreviewText) await loadScriptPreview();
-    await copyText(state.scriptPreviewText, "Script copie.", "Aucun script a copier");
+    await copyText(state.scriptPreviewText, "Script copié.", "Aucun script à copier");
   });
   $("#admin-login-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = Object.fromEntries(new FormData(event.currentTarget));
     try {
-      const result = await api("/auth/admin", { method: "POST", body: JSON.stringify(form) });
+      const result = await inventoryApi.authenticateAdmin(form);
       state.adminToken = result.token;
       state.currentAdmin = result.user || null;
       localStorage.setItem("it_inventory_admin_token", state.adminToken);
@@ -5909,7 +5383,9 @@ function bindEvents() {
     loadAccessTokens().catch((error) => toast(error.message));
     loadCollectionInvites().catch((error) => toast(error.message));
   });
-  $("#refresh-pending-changes").addEventListener("click", () => loadPendingChanges().catch((error) => toast(error.message)));
+  $("#refresh-pending-changes").addEventListener("click", () =>
+    loadPendingChanges().catch((error) => toast(error.message)),
+  );
   $("#new-team").addEventListener("click", resetTeamForm);
   $("#new-establishment").addEventListener("click", resetEstablishmentForm);
   ["name", "abbreviation", "color"].forEach((name) => {
@@ -5938,13 +5414,14 @@ function bindEvents() {
     if (!id) return;
     const team = state.teams.find((item) => item.id === id);
     const confirmed = await confirmAction({
-      message: state.language === "en"
-        ? `Delete the team "${team?.name || form.elements.name.value}"? Deletion will be blocked if computers or users are still assigned.`
-        : `Supprimer l'equipe "${team?.name || form.elements.name.value}" ? La suppression sera bloquee si des machines ou utilisateurs y sont encore affectes.`,
+      message:
+        state.language === "en"
+          ? `Delete the team "${team?.name || form.elements.name.value}"? Deletion will be blocked if computers or users are still assigned.`
+          : `Supprimer l’équipe "${team?.name || form.elements.name.value}" ? La suppression sera bloquée si des postes ou utilisateurs y sont encore affectés.`,
     });
     if (!confirmed) return;
     try {
-      await api(`/admin/teams/${id}`, { method: "DELETE" });
+      await inventoryApi.deleteTeam(id);
       await loadOrganization();
       resetTeamForm();
       toast("Équipe supprimée.", "success");
@@ -5962,13 +5439,14 @@ function bindEvents() {
     if (!id) return;
     const site = state.establishments.find((item) => item.id === id);
     const confirmed = await confirmAction({
-      message: state.language === "en"
-        ? `Delete the location "${site?.name || form.elements.name.value}"? Deletion will be blocked if computers or users are still assigned.`
-        : `Supprimer l'etablissement "${site?.name || form.elements.name.value}" ? La suppression sera bloquee si des machines ou utilisateurs y sont encore affectes.`,
+      message:
+        state.language === "en"
+          ? `Delete the location "${site?.name || form.elements.name.value}"? Deletion will be blocked if computers or users are still assigned.`
+          : `Supprimer l’établissement "${site?.name || form.elements.name.value}" ? La suppression sera bloquée si des postes ou utilisateurs y sont encore affectés.`,
     });
     if (!confirmed) return;
     try {
-      await api(`/admin/establishments/${id}`, { method: "DELETE" });
+      await inventoryApi.deleteEstablishment(id);
       await loadOrganization();
       resetEstablishmentForm();
       toast("Établissement supprimé.", "success");
@@ -5991,12 +5469,12 @@ function bindEvents() {
     const button = event.currentTarget.querySelector('button[type="submit"]');
     button.disabled = true;
     try {
-      await api("/admin/organization/reassign", {
-        method: "POST",
-        body: JSON.stringify(values),
-      });
-      const endpoint = pendingReassignment.entityType === "team" ? "teams" : "establishments";
-      await api(`/admin/${endpoint}/${pendingReassignment.sourceId}`, { method: "DELETE" });
+      await inventoryApi.reassignOrganization(values);
+      if (pendingReassignment.entityType === "team") {
+        await inventoryApi.deleteTeam(pendingReassignment.sourceId);
+      } else {
+        await inventoryApi.deleteEstablishment(pendingReassignment.sourceId);
+      }
       $("#reassign-dialog").close();
       pendingReassignment = null;
       await loadAdminData();
@@ -6024,10 +5502,17 @@ function bindEvents() {
     const button = form.querySelector('button[type="submit"]');
     button.disabled = true;
     try {
-      const result = await api(id ? `/admin/teams/${id}` : "/admin/teams", { method: "POST", body: JSON.stringify(payload) });
+      const result = await inventoryApi.saveTeam(id, payload);
       await loadAdminData();
       resetTeamForm();
-      toast(result.duplicateAbbreviation ? "Abreviation deja utilisee par une autre equipe." : id ? "Equipe mise a jour." : "Equipe creee.", result.duplicateAbbreviation ? "warning" : "info");
+      toast(
+        result.duplicateAbbreviation
+          ? "Abréviation déjà utilisée par une autre équipe."
+          : id
+            ? "Équipe mise à jour."
+            : "Équipe créée.",
+        result.duplicateAbbreviation ? "warning" : "info",
+      );
     } catch (error) {
       toast(error.message);
     } finally {
@@ -6056,13 +5541,17 @@ function bindEvents() {
     const button = form.querySelector('button[type="submit"]');
     button.disabled = true;
     try {
-      const result = await api(id ? `/admin/establishments/${id}` : "/admin/establishments", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+      const result = await inventoryApi.saveEstablishment(id, payload);
       await loadAdminData();
       resetEstablishmentForm();
-      toast(result.duplicateAbbreviation ? "Abreviation deja utilisee par un autre etablissement." : id ? "Etablissement mis a jour." : "Etablissement cree.", result.duplicateAbbreviation ? "warning" : "info");
+      toast(
+        result.duplicateAbbreviation
+          ? "Abréviation déjà utilisée par un autre établissement."
+          : id
+            ? "Établissement mis à jour."
+            : "Établissement créé.",
+        result.duplicateAbbreviation ? "warning" : "info",
+      );
     } catch (error) {
       toast(error.message);
     } finally {
@@ -6100,7 +5589,7 @@ function bindEvents() {
       theme: document.documentElement.dataset.theme || "light",
     };
     try {
-      const result = await api("/admin/collection-invites", { method: "POST", body: JSON.stringify(payload) });
+      const result = await inventoryApi.createCollectionInvite(payload);
       const inviteUrl = result.invite.inviteUrl || result.invite.invite_url;
       state.rawInviteUrls[result.invite.id] = inviteUrl;
       $("#generated-invite-url").textContent = displayInviteUrl(inviteUrl);
@@ -6114,7 +5603,7 @@ function bindEvents() {
     }
   });
   $("#copy-invite-url").addEventListener("click", async () => {
-    await copyText($("#generated-invite-url").textContent, "Lien copie.", "Aucun lien a copier");
+    await copyText($("#generated-invite-url").textContent, "Lien copié.", "Aucun lien à copier");
   });
   $("#token-form").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -6126,7 +5615,7 @@ function bindEvents() {
       maxUses: values.maxUses ? Number(values.maxUses) : null,
     };
     try {
-      const result = await api("/admin/access-tokens", { method: "POST", body: JSON.stringify(payload) });
+      const result = await inventoryApi.createAccessToken(payload);
       state.rawAccessTokens[result.record.id] = result.token;
       $("#generated-token").textContent = result.token;
       $("#token-result").classList.remove("is-hidden");
@@ -6138,7 +5627,7 @@ function bindEvents() {
     }
   });
   $("#copy-token").addEventListener("click", async () => {
-    await copyText($("#generated-token").textContent, "Token copie.", "Aucun token a copier");
+    await copyText($("#generated-token").textContent, "Token copié.", "Aucun token à copier");
   });
   $("#new-admin-user").addEventListener("click", resetAdminUserForm);
   $("#generate-admin-password").addEventListener("click", () => {
@@ -6167,10 +5656,10 @@ function bindEvents() {
       isActive: form.elements.isActive.checked,
     };
     try {
-      await api(id ? `/admin/users/${id}` : "/admin/users", { method: "POST", body: JSON.stringify(payload) });
+      await inventoryApi.saveAdminUser(id, payload);
       await loadAdminUsers();
       resetAdminUserForm();
-      toast(id ? "Compte mis a jour." : "Compte cree.", "success");
+      toast(id ? "Compte mis à jour." : "Compte créé.", "success");
     } catch (error) {
       toast(error.message, "error");
     }
@@ -6180,11 +5669,14 @@ function bindEvents() {
     if (!id) return;
     const user = state.adminUsers.find((item) => item.id === id);
     const confirmed = await confirmAction({
-      message: state.language === "en" ? `Delete account "${user?.username || id}"?` : `Supprimer le compte "${user?.username || id}" ?`,
+      message:
+        state.language === "en"
+          ? `Delete account "${user?.username || id}"?`
+          : `Supprimer le compte "${user?.username || id}" ?`,
     });
     if (!confirmed) return;
     try {
-      await api(`/admin/users/${id}`, { method: "DELETE" });
+      await inventoryApi.deleteAdminUser(id);
       await loadAdminUsers();
       resetAdminUserForm();
       toast("Compte supprimé.", "success");
@@ -6192,16 +5684,26 @@ function bindEvents() {
       toast(error.message, "error");
     }
   });
-  $("#notifications-bell").addEventListener("click", () => {
-    setMainView("admin", { updateUrl: false });
+  $("#notifications-bell").addEventListener("click", (event) => {
+    event.stopPropagation();
+    const panel = $("#notification-panel");
+    const open = panel.classList.contains("is-hidden");
+    panel.classList.toggle("is-hidden", !open);
+    $("#notifications-bell").setAttribute("aria-expanded", String(open));
+    if (open) loadNotifications().catch((error) => toast(error.message, "error"));
+  });
+  $("#notification-panel").addEventListener("click", (event) => event.stopPropagation());
+  $("#view-all-notifications").addEventListener("click", () => {
+    closeNotificationPanel();
+    setMainView("admin");
     setAdminView("notifications");
     loadNotifications().catch((error) => toast(error.message, "error"));
   });
   $("#mark-all-notifications").addEventListener("click", async () => {
     try {
-      await api("/admin/notifications/read-all", { method: "POST", body: "{}" });
+      await inventoryApi.markAllNotificationsRead();
       await loadNotifications();
-      toast("Notifications mises a jour.", "success");
+      toast("Notifications mises à jour.", "success");
     } catch (error) {
       toast(error.message, "error");
     }
@@ -6209,16 +5711,24 @@ function bindEvents() {
   ["notification-severity-filter", "notification-read-filter"].forEach((id) => {
     $(`#${id}`).addEventListener("input", renderNotifications);
   });
-  $("#enrich-admin").addEventListener("click", () =>
-    runEnrichment({ mode: "refresh", button: $("#enrich-admin") }).catch((error) => toast(error.message)));
+  $("#valuation-enrich-fleet").addEventListener("click", () =>
+    runUnifiedEnrichment().catch((error) => toast(error.message, "error")),
+  );
+  $("#retry-enrichment").addEventListener("click", () =>
+    runUnifiedEnrichment({ retryFailed: true }).catch((error) => toast(error.message, "error")),
+  );
   $("#valuation-enrich-all").addEventListener("click", () =>
-    runEnrichment({ mode: "refresh", button: $("#valuation-enrich-all") }).catch((error) => toast(error.message)));
+    runEnrichment({ mode: "refresh", button: $("#valuation-enrich-all") }).catch((error) => toast(error.message)),
+  );
   $("#valuation-recalculate").addEventListener("click", () =>
-    runEnrichment({ mode: "recalculate", button: $("#valuation-recalculate") }).catch((error) => toast(error.message)));
+    runEnrichment({ mode: "recalculate", button: $("#valuation-recalculate") }).catch((error) => toast(error.message)),
+  );
   $("#refresh-cpu-release-dates").addEventListener("click", () =>
-    refreshCpuReleaseDates($("#refresh-cpu-release-dates")).catch((error) => toast(error.message, "error")));
+    refreshCpuReleaseDates($("#refresh-cpu-release-dates")).catch((error) => toast(error.message, "error")),
+  );
   $("#sync-cpu-benchmarks").addEventListener("click", () =>
-    syncCpuBenchmarks($("#sync-cpu-benchmarks")).catch((error) => toast(error.message, "error")));
+    syncCpuBenchmarks($("#sync-cpu-benchmarks")).catch((error) => toast(error.message, "error")),
+  );
   $("#import-cpu-benchmarks").addEventListener("click", () => $("#cpu-benchmark-file").click());
   $("#cpu-benchmark-file").addEventListener("change", async (event) => {
     const input = event.currentTarget;
@@ -6233,27 +5743,55 @@ function bindEvents() {
   $("#export-enriched-csv").addEventListener("click", () => exportCsv(true));
   $("#export-csv").addEventListener("click", () => exportCsv(false));
   $("#clear-filters").addEventListener("click", clearFleetFilters);
-  ["global-search", "filter-team", "filter-establishment", "filter-os", "filter-age", "filter-model", "filter-manufacturer", "filter-status", "filter-cpu-score", "filter-value", "sort-devices"].forEach((id) => {
-    $(`#${id}`).addEventListener("input", applyFilters);
+  [
+    "global-search",
+    "filter-team",
+    "filter-establishment",
+    "filter-os",
+    "filter-age",
+    "filter-model",
+    "filter-manufacturer",
+    "filter-status",
+    "filter-cpu-score",
+    "filter-value",
+    "sort-devices",
+  ].forEach((id) => {
+    $(`#${id}`).addEventListener("input", scheduleApplyFilters);
   });
 }
 
-bindEvents();
-restoreRoute();
-applyLanguage(state.language, false);
-languageObserver.observe(document.body, { childList: true, subtree: true });
-updateTimeFormatButton();
-setInterval(updateClock, 30000);
-loadWeather();
-setInterval(loadWeather, 20 * 60 * 1000);
-restoreCollectionDraft();
-loadPublicOrganization().catch((error) => {
-  updateOrganizationDatalists();
-  toast(`Organisation indisponible: ${error.message}`, "error");
-});
-loadScriptPreview().catch(() => {});
+function renderStartupFailure(error) {
+  const main = document.querySelector("main");
+  if (!main) return;
+  const message = error instanceof Error ? error.message : String(error || "Unknown startup error");
+  main.innerHTML = `
+    <section class="panel startup-error" role="alert">
+      <p class="eyebrow">${escapeHtml(state.language === "en" ? "Application unavailable" : "Application indisponible")}</p>
+      <h2>${escapeHtml(state.language === "en" ? "Unable to start the inventory interface" : "Impossible de démarrer l'interface d'inventaire")}</h2>
+      <p>${escapeHtml(message)}</p>
+      <button type="button" class="primary startup-retry">${escapeHtml(state.language === "en" ? "Retry" : "Réessayer")}</button>
+    </section>
+  `;
+  main.querySelector(".startup-retry")?.addEventListener("click", () => window.location.reload());
+}
 
-if (state.adminToken) {
+function bootstrapApplication() {
+  bindEvents();
+  restoreRoute();
+  applyLanguage(state.language, false);
+  languageObserver.observe(document.body, { childList: true, subtree: true });
+  updateTimeFormatButton();
+  setInterval(updateClock, 30000);
+  loadWeather();
+  setInterval(loadWeather, 20 * 60 * 1000);
+  restoreCollectionDraft();
+  loadPublicOrganization().catch((error) => {
+    updateOrganizationDatalists();
+    toast(`Organisation indisponible: ${error.message}`, "error");
+  });
+  loadScriptPreview().catch(() => {});
+
+  if (!state.adminToken) return;
   $("#admin-login").classList.add("is-hidden");
   $("#admin-dashboard").classList.remove("is-hidden");
   applyPermissions();
@@ -6265,4 +5803,10 @@ if (state.adminToken) {
     $("#admin-login").classList.remove("is-hidden");
     $("#admin-dashboard").classList.add("is-hidden");
   });
+}
+
+try {
+  bootstrapApplication();
+} catch (error) {
+  renderStartupFailure(error);
 }

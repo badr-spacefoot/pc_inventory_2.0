@@ -7,10 +7,10 @@
     <link rel="icon" type="image/svg+xml" href="./assets/brand/favicon.svg" />
     <script>
       document.documentElement.dataset.theme =
-        (localStorage.getItem("it_inventory_theme_preference") === "dark" || localStorage.getItem("it_inventory_theme_preference") === "light"
+        (localStorage.getItem("it_inventory_theme_preference") === "dark" ||
+        localStorage.getItem("it_inventory_theme_preference") === "light"
           ? localStorage.getItem("it_inventory_theme_preference")
-          : null) ||
-        (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+          : null) || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
       document.documentElement.lang = localStorage.getItem("it_inventory_language") || "fr";
     </script>
     <link rel="stylesheet" href="./styles.css" />
@@ -31,16 +31,30 @@
           <button class="tab is-active" data-view="collect">Collecte</button>
           <button class="tab" data-view="admin">Admin</button>
         </nav>
-        <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Activer le mode sombre" title="Changer de theme">
+        <button
+          id="theme-toggle"
+          class="theme-toggle"
+          type="button"
+          aria-label="Activer le mode sombre"
+          title="Changer de theme"
+        >
           <svg class="sun-icon" viewBox="0 0 24 24" aria-hidden="true">
             <circle cx="12" cy="12" r="4"></circle>
-            <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"></path>
+            <path
+              d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"
+            ></path>
           </svg>
           <svg class="moon-icon" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"></path>
           </svg>
         </button>
-        <button id="time-format-toggle" class="time-format-toggle" type="button" aria-label="Format horaire" title="Format horaire">
+        <button
+          id="time-format-toggle"
+          class="time-format-toggle"
+          type="button"
+          aria-label="Format horaire"
+          title="Format horaire"
+        >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <circle cx="12" cy="12" r="9"></circle>
             <path d="M12 7v5l3 2"></path>
@@ -53,12 +67,23 @@
           <span id="weather-value">--</span>
         </button>
         <div class="language-switcher">
-          <button id="language-toggle" class="language-toggle" type="button" aria-label="Changer de langue" title="Changer de langue" aria-expanded="false">
+          <button
+            id="language-toggle"
+            class="language-toggle"
+            type="button"
+            aria-label="Changer de langue"
+            title="Changer de langue"
+            aria-expanded="false"
+          >
             <span id="current-language-flag" aria-hidden="true">&#x1F1EB;&#x1F1F7;</span>
           </button>
           <div id="language-menu" class="language-menu is-hidden" role="menu">
-            <button type="button" data-language="fr" role="menuitem"><span aria-hidden="true">&#x1F1EB;&#x1F1F7;</span> Fran&ccedil;ais</button>
-            <button type="button" data-language="en" role="menuitem"><span aria-hidden="true">&#x1F1EC;&#x1F1E7;</span> English</button>
+            <button type="button" data-language="fr" role="menuitem">
+              <span aria-hidden="true">&#x1F1EB;&#x1F1F7;</span> Fran&ccedil;ais
+            </button>
+            <button type="button" data-language="en" role="menuitem">
+              <span aria-hidden="true">&#x1F1EC;&#x1F1E7;</span> English
+            </button>
           </div>
         </div>
       </div>
@@ -70,16 +95,16 @@
           <section class="panel">
             <div class="panel-head">
               <p class="eyebrow">Accès utilisateur</p>
-              <h2>Declarer un poste</h2>
+              <h2>Déclarer un poste</h2>
             </div>
             <p class="notice">
-              Une page web seule ne peut pas lire le numéro de série, le CPU, la RAM ou le stockage complet.
-              La collecte matérielle passe donc par un script local lance volontairement par l'utilisateur.
+              Une page web seule ne peut pas lire le numéro de série, le CPU, la RAM ou le stockage complet. La collecte
+              matérielle passe donc par un script local lancé volontairement par l'utilisateur.
             </p>
             <form id="collect-form" class="form-grid" novalidate>
               <div id="collect-invite-banner" class="invite-banner is-hidden wide">
                 <strong>Invitation chargée</strong>
-                <span>Vos informations sont pre-remplies. Telechargez le collecteur, relisez puis envoyez.</span>
+                <span>Vos informations sont préremplies. Téléchargez le collecteur, relisez puis envoyez.</span>
               </div>
               <details id="collect-support-token" class="support-token-details wide">
                 <summary>Mode support IT: utiliser un token manuel</summary>
@@ -91,7 +116,12 @@
               </details>
               <label class="wide">
                 Lien d'invitation
-                <input name="inviteCode" autocomplete="off" placeholder="Chargé automatiquement depuis le lien" readonly />
+                <input
+                  name="inviteCode"
+                  autocomplete="off"
+                  placeholder="Chargé automatiquement depuis le lien"
+                  readonly
+                />
                 <span class="field-error"></span>
               </label>
               <label>
@@ -141,13 +171,16 @@
             </form>
             <div class="collector-privacy">
               <h3>Collecte transparente</h3>
-              <p>Ce collecteur recupere uniquement les informations d'inventaire utiles a l'equipe IT.</p>
+              <p>Ce collecteur récupère uniquement les informations d'inventaire utiles à l'équipe IT.</p>
               <ul>
                 <li>hostname, OS, fabricant, modèle et numéro de série</li>
                 <li>CPU, RAM, stockage, GPU si disponible</li>
-                <li>IP locale, MAC si autorisee, utilisateur OS connecte</li>
+                <li>IP locale, MAC si autorisée, utilisateur OS connecté</li>
               </ul>
-              <p>Aucun fichier personnel, historique navigateur, mot de passe ou outil de controle distant n'est lu ou installe.</p>
+              <p>
+                Aucun fichier personnel, historique navigateur, mot de passe ou outil de contrôle distant n'est lu ou
+                installé.
+              </p>
             </div>
           </section>
 
@@ -157,32 +190,57 @@
               <h2>Collecte locale</h2>
             </div>
             <div id="command-empty" class="empty-state">
-              Remplissez le formulaire pour preparer le collecteur et pre-remplir l'application.
+              Remplissez le formulaire pour préparer le collecteur et préremplir l'application.
             </div>
             <div id="command-result" class="is-hidden">
-              <p class="helper">Installez l'application, revenez sur cette page, puis ouvrez le collecteur pour charger le profil pré-rempli.</p>
+              <p class="helper">
+                Installez l'application, revenez sur cette page, puis ouvrez le collecteur pour charger le profil
+                pré-rempli.
+              </p>
               <div class="collector-token-box support-only is-hidden">
                 <span>Code support de pré-remplissage</span>
                 <code id="collector-prefill-code"></code>
-                <button id="copy-prefill-code" class="token-copy-button" type="button" aria-label="Copier le code de pré-remplissage" title="Copier le code de pré-remplissage">
+                <button
+                  id="copy-prefill-code"
+                  class="token-copy-button"
+                  type="button"
+                  aria-label="Copier le code de pré-remplissage"
+                  title="Copier le code de pré-remplissage"
+                >
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <rect width="14" height="14" x="8" y="8" rx="2"></rect>
                     <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
                   </svg>
                 </button>
               </div>
-              <button id="download-prefill-file" class="secondary support-only is-hidden" type="button">Télécharger le fichier de pré-remplissage</button>
+              <button id="download-prefill-file" class="secondary support-only is-hidden" type="button">
+                Télécharger le fichier de pré-remplissage
+              </button>
               <div class="collector-options">
                 <article>
                   <h3>Application native recommandée</h3>
-                  <p id="collector-platform-copy">Detection du systeme en cours...</p>
+                  <p id="collector-platform-copy">Détection du système en cours...</p>
                   <div class="launcher-downloads">
-                    <a id="collector-download-primary" class="primary action-button" href="https://github.com/badr-spacefoot/pc_inventory_2.0/releases" rel="noopener">
+                    <a
+                      id="collector-download-primary"
+                      class="primary action-button"
+                      href="https://github.com/badr-spacefoot/pc_inventory_2.0/releases"
+                      rel="noopener"
+                    >
                       <span id="collector-os-icon" class="collector-os-icon" aria-hidden="true"></span>
                       <span>Télécharger le collecteur</span>
                     </a>
-                    <button id="collector-open-app" class="secondary action-button" type="button" disabled>Ouvrir le collecteur</button>
-                    <a id="collector-releases-link" class="secondary action-button" href="https://github.com/badr-spacefoot/pc_inventory_2.0/releases" target="_blank" rel="noopener">Autres versions</a>
+                    <button id="collector-open-app" class="secondary action-button" type="button" disabled>
+                      Ouvrir le collecteur
+                    </button>
+                    <a
+                      id="collector-releases-link"
+                      class="secondary action-button"
+                      href="https://github.com/badr-spacefoot/pc_inventory_2.0/releases"
+                      target="_blank"
+                      rel="noopener"
+                      >Autres versions</a
+                    >
                   </div>
                   <div class="platform-downloads" aria-label="Télécharger pour une autre plateforme">
                     <span>Autre plateforme</span>
@@ -193,7 +251,7 @@
                   <div id="ubuntu-install-guide" class="ubuntu-install-guide is-hidden">
                     <div>
                       <h4>Ubuntu</h4>
-                      <p>Apres le telechargement, copiez-collez cette commande dans le terminal.</p>
+                      <p>Après le téléchargement, copiez-collez cette commande dans le terminal.</p>
                     </div>
                     <pre><code id="ubuntu-install-command"></code></pre>
                     <button id="copy-ubuntu-command" class="secondary" type="button">Copier la commande Ubuntu</button>
@@ -201,7 +259,10 @@
                   <div id="macos-install-guide" class="platform-install-guide is-hidden">
                     <div>
                       <h4>macOS</h4>
-                      <p>Build interne non notarise. Si macOS indique que l'app est endommagee, placez l'app dans Applications puis lancez cette commande.</p>
+                      <p>
+                        Build interne non notarisé. Si macOS indique que l'app est endommagée, placez l'app dans
+                        Applications puis lancez cette commande.
+                      </p>
                     </div>
                     <pre><code id="macos-install-command"></code></pre>
                     <button id="copy-macos-command" class="secondary" type="button">Copier la commande macOS</button>
@@ -209,7 +270,10 @@
                 </article>
                 <article>
                   <h3>Mode avancé IT</h3>
-                  <p>Script lisible pour diagnostic ou support IT. Les antivirus peuvent bloquer les scripts lances depuis le navigateur.</p>
+                  <p>
+                    Script lisible pour diagnostic ou support IT. Les antivirus peuvent bloquer les scripts lancés
+                    depuis le navigateur.
+                  </p>
                 </article>
               </div>
               <details class="support-tools">
@@ -218,10 +282,12 @@
                 <div class="actions">
                   <button id="copy-command" class="secondary" type="button">Copier la commande</button>
                   <button id="copy-script" class="secondary" type="button">Copier le script</button>
-                  <a id="download-script" class="secondary" href="../scripts/collect-windows.ps1" download>Télécharger le script</a>
+                  <a id="download-script" class="secondary" href="../scripts/collect-windows.ps1" download
+                    >Télécharger le script</a
+                  >
                 </div>
                 <details class="script-preview">
-                  <summary>Apercu du script PowerShell</summary>
+                  <summary>Aperçu du script PowerShell</summary>
                   <pre><code id="script-preview"></code></pre>
                 </details>
               </details>
@@ -256,25 +322,79 @@
               <h2>Vue du parc informatique</h2>
             </div>
             <div class="actions">
-              <button id="notifications-bell" class="icon-button notification-bell" type="button" aria-label="Notifications" title="Notifications">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M10 21h4"></path></svg>
-                <span id="notification-count" class="notification-count is-hidden">0</span>
-              </button>
+              <div class="notification-menu">
+                <button
+                  id="notifications-bell"
+                  class="icon-button notification-bell"
+                  type="button"
+                  aria-label="Notifications"
+                  title="Notifications"
+                  aria-expanded="false"
+                  aria-controls="notification-panel"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path>
+                    <path d="M10 21h4"></path>
+                  </svg>
+                  <span id="notification-count" class="notification-count is-hidden">0</span>
+                </button>
+                <section id="notification-panel" class="notification-panel is-hidden" aria-label="Notifications">
+                  <div class="notification-panel-head">
+                    <strong>Notifications</strong>
+                    <span>Non lues</span>
+                  </div>
+                  <div id="notification-panel-list" class="notification-panel-list"></div>
+                  <p id="notification-panel-empty" class="notification-panel-empty is-hidden">
+                    Aucune nouvelle notification
+                  </p>
+                  <button id="view-all-notifications" class="notification-panel-link" type="button">
+                    Voir toutes les notifications
+                  </button>
+                </section>
+              </div>
               <span id="admin-session-label" class="session-label"></span>
-              <button id="refresh-admin" class="secondary action-button" type="button" aria-label="Actualiser" title="Actualiser">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.3 6.4"></path><path d="M3 12a9 9 0 0 1 15.3-6.4"></path><path d="M18 2v4h-4"></path><path d="M6 22v-4h4"></path></svg>
+              <button
+                id="refresh-admin"
+                class="secondary action-button"
+                type="button"
+                aria-label="Actualiser"
+                title="Actualiser"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M21 12a9 9 0 0 1-15.3 6.4"></path>
+                  <path d="M3 12a9 9 0 0 1 15.3-6.4"></path>
+                  <path d="M18 2v4h-4"></path>
+                  <path d="M6 22v-4h4"></path>
+                </svg>
                 <span>Actualiser</span>
               </button>
-              <button id="enrich-admin" class="secondary action-button" type="button" aria-label="Enrichir les données" title="Enrichir les données">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4"></path><path d="M12 17v4"></path><path d="M3 12h4"></path><path d="M17 12h4"></path><path d="m5.6 5.6 2.8 2.8"></path><path d="m15.6 15.6 2.8 2.8"></path><path d="m18.4 5.6-2.8 2.8"></path><path d="m8.4 15.6-2.8 2.8"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                <span>Enrichir</span>
-              </button>
-              <button id="export-csv" class="primary action-button" type="button" aria-label="Exporter CSV" title="Exporter CSV">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"></path><path d="M14 2v6h6"></path><path d="M12 18v-6"></path><path d="m9 15 3 3 3-3"></path></svg>
+              <button
+                id="export-csv"
+                class="primary action-button"
+                type="button"
+                aria-label="Exporter CSV"
+                title="Exporter CSV"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"></path>
+                  <path d="M14 2v6h6"></path>
+                  <path d="M12 18v-6"></path>
+                  <path d="m9 15 3 3 3-3"></path>
+                </svg>
                 <span>CSV</span>
               </button>
-              <button id="logout-admin" class="secondary action-button" type="button" aria-label="Déconnexion" title="Déconnexion">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="m16 17 5-5-5-5"></path><path d="M21 12H9"></path></svg>
+              <button
+                id="logout-admin"
+                class="secondary action-button"
+                type="button"
+                aria-label="Déconnexion"
+                title="Déconnexion"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                  <path d="m16 17 5-5-5-5"></path>
+                  <path d="M21 12H9"></path>
+                </svg>
                 <span>Déconnexion</span>
               </button>
             </div>
@@ -282,31 +402,60 @@
 
           <nav class="admin-nav" aria-label="Sections d'administration">
             <button class="admin-nav-button is-active" type="button" data-admin-view="fleet">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><rect width="16" height="10" x="4" y="4" rx="2"></rect><path d="M8 20h8M12 14v6"></path></svg>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect width="16" height="10" x="4" y="4" rx="2"></rect>
+                <path d="M8 20h8M12 14v6"></path>
+              </svg>
               Parc
             </button>
             <button class="admin-nav-button" type="button" data-admin-view="organization">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M9 9h1M14 9h1M9 13h1M14 13h1M9 17h1M14 17h1"></path></svg>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M3 21h18M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M9 9h1M14 9h1M9 13h1M14 13h1M9 17h1M14 17h1"
+                ></path>
+              </svg>
               Organisation
             </button>
             <button class="admin-nav-button" type="button" data-admin-view="valuation">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18M7 16l4-5 3 3 5-7"></path><path d="M19 7h-4M19 7v4"></path></svg>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3 3v18h18M7 16l4-5 3 3 5-7"></path>
+                <path d="M19 7h-4M19 7v4"></path>
+              </svg>
               Valorisation
             </button>
             <button class="admin-nav-button" type="button" data-admin-view="access" data-permission="TOKEN_MANAGE">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"></circle><path d="m21 2-9.6 9.6M15 7l2 2M18 4l2 2"></path></svg>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="7.5" cy="15.5" r="5.5"></circle>
+                <path d="m21 2-9.6 9.6M15 7l2 2M18 4l2 2"></path>
+              </svg>
               Accès
             </button>
             <button class="admin-nav-button" type="button" data-admin-view="users" data-permission="USER_MANAGE">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M19 8v6M22 11h-6"></path></svg>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M19 8v6M22 11h-6"></path>
+              </svg>
               Utilisateurs
             </button>
-            <button class="admin-nav-button" type="button" data-admin-view="pending" data-permission="PENDING_CHANGE_APPROVE">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"></path><path d="m8 11 4 4 4-4"></path><path d="M4 21h16"></path></svg>
+            <button
+              class="admin-nav-button"
+              type="button"
+              data-admin-view="pending"
+              data-permission="PENDING_CHANGE_APPROVE"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 3v12"></path>
+                <path d="m8 11 4 4 4-4"></path>
+                <path d="M4 21h16"></path>
+              </svg>
               Validations
             </button>
             <button class="admin-nav-button" type="button" data-admin-view="notifications">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M10 21h4"></path></svg>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path>
+                <path d="M10 21h4"></path>
+              </svg>
               Notifications
             </button>
           </nav>
@@ -318,20 +467,59 @@
                   <p class="eyebrow">Valeur matérielle</p>
                   <h3>Valorisation du parc</h3>
                 </div>
-                <span id="cpu-benchmark-status" class="helper"></span>
+                <div class="valuation-meta">
+                  <span id="last-enrichment-status" class="helper icon-meta">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M20 11a8 8 0 1 0-2.3 5.7"></path>
+                      <path d="M20 4v7h-7"></path>
+                    </svg>
+                    <span id="last-enrichment-label">Aucun enrichissement terminé</span>
+                  </span>
+                  <span id="cpu-benchmark-status" class="helper"></span>
+                </div>
               </div>
-              <div class="actions">
-                <button id="valuation-enrich-all" class="primary" type="button">Enrichir toutes les machines</button>
-                <button id="valuation-recalculate" class="secondary" type="button">Recalculer les valeurs</button>
-                <button id="refresh-cpu-release-dates" class="secondary" type="button">Actualiser dates CPU</button>
-                <button id="sync-cpu-benchmarks" class="secondary" type="button">Synchroniser scores CPU</button>
-                <button id="import-cpu-benchmarks" class="secondary" type="button">Importer benchmarks CPU</button>
-                <button id="export-enriched-csv" class="secondary" type="button">Exporter inventaire enrichi</button>
-                <input id="cpu-benchmark-file" class="is-hidden" type="file" accept=".csv,text/csv" />
+              <div class="valuation-primary-actions">
+                <button id="valuation-enrich-fleet" class="primary" type="button">
+                  Enrichir et recalculer le parc
+                </button>
+                <button id="export-enriched-csv" class="secondary" type="button" data-permission="EXPORT_DATA">
+                  Exporter inventaire enrichi
+                </button>
               </div>
               <p class="helper valuation-note">
-                Les valeurs sont des estimations basees sur le modèle, le CPU, la RAM, le GPU, la categorie et une depreciation par age.
+                Met à jour les références processeur, enrichit les postes éligibles, recalcule leur valeur puis
+                actualise les indicateurs.
               </p>
+
+              <section id="enrichment-workflow" class="enrichment-workflow is-hidden" aria-live="polite">
+                <div class="enrichment-progress-head">
+                  <strong id="enrichment-progress-title">Enrichissement du parc</strong>
+                  <span id="enrichment-progress-value">0 / 6</span>
+                </div>
+                <progress id="enrichment-progress" max="6" value="0"></progress>
+                <ol id="enrichment-steps" class="enrichment-steps"></ol>
+                <div id="enrichment-summary" class="enrichment-summary is-hidden"></div>
+                <button id="retry-enrichment" class="secondary is-hidden" type="button">
+                  Réessayer les étapes en échec
+                </button>
+              </section>
+
+              <details class="valuation-advanced" data-admin-only>
+                <summary>Actions avancées</summary>
+                <p class="helper">Commandes techniques réservées aux administrateurs.</p>
+                <div class="actions">
+                  <button id="valuation-enrich-all" class="secondary" type="button">Enrichir les postes</button>
+                  <button id="valuation-recalculate" class="secondary" type="button">Recalculer les valeurs</button>
+                  <button id="refresh-cpu-release-dates" class="secondary" type="button">
+                    Actualiser les dates CPU
+                  </button>
+                  <button id="sync-cpu-benchmarks" class="secondary" type="button">Synchroniser les scores CPU</button>
+                  <button id="import-cpu-benchmarks" class="secondary" type="button">
+                    Importer des benchmarks CPU
+                  </button>
+                  <input id="cpu-benchmark-file" class="is-hidden" type="file" accept=".csv,text/csv" />
+                </div>
+              </details>
             </section>
 
             <section class="metric-grid valuation-metrics" id="valuation-metrics"></section>
@@ -344,7 +532,10 @@
             </section>
           </section>
 
-          <section class="panel token-manager admin-section-view section-access is-hidden" data-permission="TOKEN_MANAGE">
+          <section
+            class="panel token-manager admin-section-view section-access is-hidden"
+            data-permission="TOKEN_MANAGE"
+          >
             <div class="panel-head inline">
               <div>
                 <p class="eyebrow">Accès collecte</p>
@@ -373,7 +564,7 @@
                   <input name="maxUses" type="number" min="1" max="10000" value="1" />
                 </label>
                 <label>
-                  Email invite
+                  E-mail d’invitation
                   <input name="email" type="email" placeholder="prénom.nom@spacefoot.com" />
                 </label>
                 <label>
@@ -395,10 +586,16 @@
                 <button class="primary" type="submit">Créer un lien d'invitation</button>
               </form>
               <div id="invite-result" class="token-result is-hidden">
-                <p class="helper">Envoyez ce lien a l'utilisateur. Il ne verra pas le token technique.</p>
+                <p class="helper">Envoyez ce lien à l'utilisateur. Il ne verra pas le token technique.</p>
                 <div class="generated-token-field">
                   <code id="generated-invite-url"></code>
-                  <button id="copy-invite-url" class="token-copy-button" type="button" aria-label="Copier le lien" title="Copier le lien">
+                  <button
+                    id="copy-invite-url"
+                    class="token-copy-button"
+                    type="button"
+                    aria-label="Copier le lien"
+                    title="Copier le lien"
+                  >
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <rect width="14" height="14" x="8" y="8" rx="2"></rect>
                       <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
@@ -416,7 +613,7 @@
                     <th>Expiration</th>
                     <th>Utilisations</th>
                     <th>Dernière utilisation</th>
-                    <th>Etat</th>
+                    <th>État</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -425,58 +622,64 @@
             </div>
             <details class="support-token-admin">
               <summary>Tokens techniques avances</summary>
-            <div class="token-manager-grid">
-              <form id="token-form" class="form-grid">
-                <label>
-                  Libellé
-                  <input name="label" placeholder="Agence Paris - juin" required maxlength="120" />
-                </label>
-                <label>
-                  Durée
-                  <select name="durationHours">
-                    <option value="1">1 heure</option>
-                    <option value="24" selected>24 heures</option>
-                    <option value="168">7 jours</option>
-                    <option value="720">30 jours</option>
-                    <option value="2160">90 jours</option>
-                    <option value="8760">1 an</option>
-                  </select>
-                </label>
-                <label>
-                  Utilisations maximum
-                  <input name="maxUses" type="number" min="1" max="10000" placeholder="Illimite" />
-                </label>
-                <button class="primary" type="submit">Generer un token</button>
-              </form>
-              <div id="token-result" class="token-result is-hidden">
-                <p class="helper">Ce token ne sera affiche qu'une fois. Conservez-le dans un endroit securise.</p>
-                <div class="generated-token-field">
-                  <code id="generated-token"></code>
-                  <button id="copy-token" class="token-copy-button" type="button" aria-label="Copier le token" title="Copier le token">
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <rect width="14" height="14" x="8" y="8" rx="2"></rect>
-                      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
-                    </svg>
-                  </button>
+              <div class="token-manager-grid">
+                <form id="token-form" class="form-grid">
+                  <label>
+                    Libellé
+                    <input name="label" placeholder="Agence Paris - juin" required maxlength="120" />
+                  </label>
+                  <label>
+                    Durée
+                    <select name="durationHours">
+                      <option value="1">1 heure</option>
+                      <option value="24" selected>24 heures</option>
+                      <option value="168">7 jours</option>
+                      <option value="720">30 jours</option>
+                      <option value="2160">90 jours</option>
+                      <option value="8760">1 an</option>
+                    </select>
+                  </label>
+                  <label>
+                    Utilisations maximum
+                    <input name="maxUses" type="number" min="1" max="10000" placeholder="Illimité" />
+                  </label>
+                  <button class="primary" type="submit">Générer un token</button>
+                </form>
+                <div id="token-result" class="token-result is-hidden">
+                  <p class="helper">Ce token ne sera affiche qu'une fois. Conservez-le dans un endroit securise.</p>
+                  <div class="generated-token-field">
+                    <code id="generated-token"></code>
+                    <button
+                      id="copy-token"
+                      class="token-copy-button"
+                      type="button"
+                      aria-label="Copier le token"
+                      title="Copier le token"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <rect width="14" height="14" x="8" y="8" rx="2"></rect>
+                        <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div class="table-wrap token-table-wrap">
-              <table class="token-table">
-                <thead>
-                  <tr>
-                    <th>Libellé</th>
-                    <th>Prefixe</th>
-                    <th>Expiration</th>
-                    <th>Utilisations</th>
-                    <th>Dernière utilisation</th>
-                    <th>Etat</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody id="tokens-table"></tbody>
-              </table>
-            </div>
+              <div class="table-wrap token-table-wrap">
+                <table class="token-table">
+                  <thead>
+                    <tr>
+                      <th>Libellé</th>
+                      <th>Préfixe</th>
+                      <th>Expiration</th>
+                      <th>Utilisations</th>
+                      <th>Dernière utilisation</th>
+                      <th>État</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="tokens-table"></tbody>
+                </table>
+              </div>
             </details>
           </section>
 
@@ -484,10 +687,21 @@
             <div class="panel-head inline">
               <div>
                 <p class="eyebrow">Securite</p>
-                <h3>Utilisateurs & roles</h3>
+                <h3>Utilisateurs et rôles</h3>
               </div>
-              <button id="new-admin-user" class="secondary action-button" type="button" aria-label="Nouveau compte" title="Nouveau compte">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M19 8v6"></path><path d="M22 11h-6"></path></svg>
+              <button
+                id="new-admin-user"
+                class="secondary action-button"
+                type="button"
+                aria-label="Nouveau compte"
+                title="Nouveau compte"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="9" cy="7" r="4"></circle>
+                  <path d="M19 8v6"></path>
+                  <path d="M22 11h-6"></path>
+                </svg>
                 <span>Nouveau compte</span>
               </button>
             </div>
@@ -496,7 +710,8 @@
               <label>Identifiant<input name="username" required maxlength="80" autocomplete="off" /></label>
               <label>Nom affiche<input name="displayName" required maxlength="120" /></label>
               <label>Email<input name="email" type="email" maxlength="255" /></label>
-              <label>Role
+              <label
+                >Rôle
                 <select name="role">
                   <option value="ADMIN">ADMIN</option>
                   <option value="MANAGER">MANAGER</option>
@@ -504,14 +719,45 @@
                   <option value="READ_ONLY">READ_ONLY</option>
                 </select>
               </label>
-              <label class="password-field">Mot de passe
+              <label class="password-field"
+                >Mot de passe
                 <span class="password-input-row">
-                  <input name="password" type="password" minlength="10" autocomplete="new-password" placeholder="Vide = inchange" />
-                  <button id="generate-admin-password" class="secondary icon-button password-action" type="button" aria-label="Generer un mot de passe" title="Generer un mot de passe">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4"></path><path d="M12 17v4"></path><path d="M3 12h4"></path><path d="M17 12h4"></path><path d="m5.6 5.6 2.8 2.8"></path><path d="m15.6 15.6 2.8 2.8"></path><path d="m18.4 5.6-2.8 2.8"></path><path d="m8.4 15.6-2.8 2.8"></path></svg>
+                  <input
+                    name="password"
+                    type="password"
+                    minlength="10"
+                    autocomplete="new-password"
+                    placeholder="Vide = inchange"
+                  />
+                  <button
+                    id="generate-admin-password"
+                    class="secondary icon-button password-action"
+                    type="button"
+                    aria-label="Générer un mot de passe"
+                    title="Générer un mot de passe"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 3v4"></path>
+                      <path d="M12 17v4"></path>
+                      <path d="M3 12h4"></path>
+                      <path d="M17 12h4"></path>
+                      <path d="m5.6 5.6 2.8 2.8"></path>
+                      <path d="m15.6 15.6 2.8 2.8"></path>
+                      <path d="m18.4 5.6-2.8 2.8"></path>
+                      <path d="m8.4 15.6-2.8 2.8"></path>
+                    </svg>
                   </button>
-                  <button id="copy-admin-password" class="secondary icon-button password-action" type="button" aria-label="Copier le mot de passe" title="Copier le mot de passe">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
+                  <button
+                    id="copy-admin-password"
+                    class="secondary icon-button password-action"
+                    type="button"
+                    aria-label="Copier le mot de passe"
+                    title="Copier le mot de passe"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <rect width="14" height="14" x="8" y="8" rx="2"></rect>
+                      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
+                    </svg>
                   </button>
                 </span>
               </label>
@@ -520,7 +766,10 @@
                 <span class="account-switch" aria-hidden="true">
                   <span class="switch-knob">
                     <svg class="switch-icon-on" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"></path></svg>
-                    <svg class="switch-icon-off" viewBox="0 0 24 24"><path d="M6 6l12 12"></path><path d="M18 6 6 18"></path></svg>
+                    <svg class="switch-icon-off" viewBox="0 0 24 24">
+                      <path d="M6 6l12 12"></path>
+                      <path d="M18 6 6 18"></path>
+                    </svg>
                   </span>
                 </span>
                 <span class="switch-copy">
@@ -528,13 +777,21 @@
                   <small>Compte utilisateur</small>
                 </span>
               </label>
-              <span id="admin-user-created-at" class="helper">Creation: -</span>
+              <span id="admin-user-created-at" class="helper">Création : -</span>
               <button class="primary" type="submit">Enregistrer le compte</button>
               <button id="delete-admin-user" class="danger-button is-hidden" type="button">Supprimer</button>
             </form>
             <div class="table-wrap">
               <table class="users-table">
-                <thead><tr><th>Identifiant</th><th>Role</th><th>Etat</th><th>Creation</th><th>Derniere connexion</th></tr></thead>
+                <thead>
+                  <tr>
+                    <th>Identifiant</th>
+                    <th>Rôle</th>
+                    <th>État</th>
+                    <th>Création</th>
+                    <th>Dernière connexion</th>
+                  </tr>
+                </thead>
                 <tbody id="admin-users-table"></tbody>
               </table>
             </div>
@@ -549,8 +806,22 @@
               <button id="mark-all-notifications" class="secondary" type="button">Tout marquer comme lu</button>
             </div>
             <div class="filters notification-filters">
-              <label>Severite<select id="notification-severity-filter"><option value="">Toutes</option><option value="INFO">INFO</option><option value="SUCCESS">SUCCESS</option><option value="WARNING">WARNING</option><option value="ERROR">ERROR</option></select></label>
-              <label>Etat<select id="notification-read-filter"><option value="">Tous</option><option value="unread">Non lues</option><option value="read">Lues</option></select></label>
+              <label
+                >Sévérité<select id="notification-severity-filter">
+                  <option value="">Toutes</option>
+                  <option value="INFO">INFO</option>
+                  <option value="SUCCESS">SUCCESS</option>
+                  <option value="WARNING">WARNING</option>
+                  <option value="ERROR">ERROR</option>
+                </select></label
+              >
+              <label
+                >État<select id="notification-read-filter">
+                  <option value="">Tous</option>
+                  <option value="unread">Non lues</option>
+                  <option value="read">Lues</option>
+                </select></label
+              >
             </div>
             <div id="notifications-list" class="notifications-list"></div>
           </section>
@@ -563,7 +834,9 @@
               </div>
               <button id="refresh-pending-changes" class="secondary" type="button">Actualiser</button>
             </div>
-            <p class="helper">Les propositions utilisateur ne creent pas d'equipe ou d'etablissement avant validation admin.</p>
+            <p class="helper">
+              Les propositions utilisateur ne créent pas d'équipe ou d'établissement avant validation admin.
+            </p>
             <div id="pending-changes-list" class="pending-changes-list"></div>
           </section>
 
@@ -575,7 +848,14 @@
                     <p class="eyebrow">Structure</p>
                     <h3>Équipes</h3>
                   </div>
-                  <button id="new-team" class="secondary icon-button" type="button" aria-label="Nouvelle équipe" title="Nouvelle équipe" data-permission="TEAM_MANAGE">
+                  <button
+                    id="new-team"
+                    class="secondary icon-button"
+                    type="button"
+                    aria-label="Nouvelle équipe"
+                    title="Nouvelle équipe"
+                    data-permission="TEAM_MANAGE"
+                  >
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
                   </button>
                 </div>
@@ -626,7 +906,14 @@
                     <p class="eyebrow">Implantations</p>
                     <h3>Établissements</h3>
                   </div>
-                  <button id="new-establishment" class="secondary icon-button" type="button" aria-label="Nouvel établissement" title="Nouvel établissement" data-permission="LOCATION_MANAGE">
+                  <button
+                    id="new-establishment"
+                    class="secondary icon-button"
+                    type="button"
+                    aria-label="Nouvel établissement"
+                    title="Nouvel établissement"
+                    data-permission="LOCATION_MANAGE"
+                  >
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
                   </button>
                 </div>
@@ -689,8 +976,11 @@
                   <label class="wide address-search-field">
                     Rechercher une adresse
                     <span class="address-search-control">
-                      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
-                      <input id="address-search" autocomplete="off" placeholder="Commencez a saisir une adresse..." />
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="11" cy="11" r="7"></circle>
+                        <path d="m20 20-3.5-3.5"></path>
+                      </svg>
+                      <input id="address-search" autocomplete="off" placeholder="Commencez à saisir une adresse..." />
                     </span>
                     <span id="address-search-status" class="helper"></span>
                     <div id="address-suggestions" class="address-suggestions is-hidden" role="listbox"></div>
@@ -719,7 +1009,7 @@
                       <option value="Allemagne">Allemagne</option>
                       <option value="Pays-Bas">Pays-Bas</option>
                       <option value="Portugal">Portugal</option>
-                      <option value="Etats-Unis">Etats-Unis</option>
+                      <option value="Etats-Unis">États-Unis</option>
                     </select>
                   </label>
                   <label>
@@ -741,7 +1031,10 @@
                 </form>
                 <div id="establishment-map" class="establishment-map">
                   <div class="map-empty">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"></path>
+                      <circle cx="12" cy="10" r="3"></circle>
+                    </svg>
                     Renseignez latitude et longitude pour afficher la carte.
                   </div>
                 </div>
@@ -771,9 +1064,9 @@
                 Signal parc
                 <select id="filter-age">
                   <option value="">Toutes</option>
-                  <option value="recent">Recent</option>
-                  <option value="aging">A surveiller</option>
-                  <option value="old">A remplacer</option>
+                  <option value="recent">Récent</option>
+                  <option value="aging">À surveiller</option>
+                  <option value="old">À remplacer</option>
                 </select>
               </label>
               <label>
@@ -798,7 +1091,7 @@
                 <select id="filter-status">
                   <option value="">Tous</option>
                   <option value="active">Actif</option>
-                  <option value="replace">Remplacement planifie</option>
+                  <option value="replace">Remplacement planifié</option>
                   <option value="stock">En stock</option>
                   <option value="lost">Perdu</option>
                   <option value="retired">Sorti du parc</option>
@@ -822,14 +1115,30 @@
                   <option value="high">Plus de 350 EUR</option>
                 </select>
               </label>
-              <button id="clear-filters" class="secondary action-button clear-filters-button" type="button" aria-label="Réinitialiser les filtres" title="Réinitialiser les filtres">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14H6L5 6"></path><path d="M10 11v5"></path><path d="M14 11v5"></path></svg>
+              <button
+                id="clear-filters"
+                class="secondary action-button clear-filters-button"
+                type="button"
+                aria-label="Réinitialiser les filtres"
+                title="Réinitialiser les filtres"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M3 6h18"></path>
+                  <path d="M8 6V4h8v2"></path>
+                  <path d="M19 6l-1 14H6L5 6"></path>
+                  <path d="M10 11v5"></path>
+                  <path d="M14 11v5"></path>
+                </svg>
                 <span>Effacer les filtres</span>
               </button>
             </div>
           </section>
 
-          <section class="fleet-dashboard admin-section-view section-fleet" id="fleet-dashboard" aria-label="Dashboard parc informatique">
+          <section
+            class="fleet-dashboard admin-section-view section-fleet"
+            id="fleet-dashboard"
+            aria-label="Dashboard parc informatique"
+          >
             <section class="fleet-kpi-grid" id="fleet-kpis" aria-label="Indicateurs principaux du parc"></section>
             <section class="panel fleet-priority-panel" id="fleet-priority"></section>
             <section class="fleet-section-grid">
@@ -843,7 +1152,7 @@
           <section class="dashboard-grid admin-section-view section-fleet">
             <section class="panel table-panel">
               <div class="panel-head inline">
-                <h3>Machines</h3>
+                <h3>Postes</h3>
                 <span id="result-count"></span>
               </div>
               <div class="table-wrap">
@@ -868,12 +1177,11 @@
             <aside class="panel detail-panel">
               <div class="panel-head">
                 <p class="eyebrow">Detail</p>
-                <h3 id="detail-title">Selectionnez une machine</h3>
+                <h3 id="detail-title">Sélectionnez un poste</h3>
               </div>
-              <div id="device-detail" class="detail-empty">Aucune machine s?lectionn?e.</div>
+              <div id="device-detail" class="detail-empty">Aucun poste sélectionné</div>
             </aside>
           </section>
-
         </section>
       </section>
     </main>
@@ -881,7 +1189,10 @@
     <dialog id="confirm-dialog" class="confirm-dialog">
       <form method="dialog">
         <div class="confirm-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"></path><path d="M10.3 3.8 2.7 17a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0Z"></path></svg>
+          <svg viewBox="0 0 24 24">
+            <path d="M12 9v4M12 17h.01"></path>
+            <path d="M10.3 3.8 2.7 17a2 2 0 0 0 1.7 3h15.2a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0Z"></path>
+          </svg>
         </div>
         <h3 id="confirm-title">Confirmer la suppression</h3>
         <p id="confirm-message"></p>
@@ -895,9 +1206,15 @@
     <dialog id="retire-dialog" class="confirm-dialog">
       <form method="dialog">
         <div class="confirm-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><path d="M9 3h6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M5 6h14"></path><path d="m7 6 1 15h8l1-15"></path></svg>
+          <svg viewBox="0 0 24 24">
+            <path d="M9 3h6"></path>
+            <path d="M10 11v6"></path>
+            <path d="M14 11v6"></path>
+            <path d="M5 6h14"></path>
+            <path d="m7 6 1 15h8l1-15"></path>
+          </svg>
         </div>
-        <h3 id="retire-dialog-title">Sortir la machine du parc</h3>
+        <h3 id="retire-dialog-title">Sortir le poste du parc</h3>
         <p id="retire-dialog-message">Ajoutez une note avant de confirmer la sortie du parc.</p>
         <label>
           Note
@@ -912,9 +1229,13 @@
     <dialog id="reassign-dialog" class="confirm-dialog reassign-dialog">
       <form id="reassign-form">
         <div class="confirm-icon neutral" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><path d="M17 3l4 4-4 4"></path><path d="M3 7h18M7 21l-4-4 4-4"></path><path d="M21 17H3"></path></svg>
+          <svg viewBox="0 0 24 24">
+            <path d="M17 3l4 4-4 4"></path>
+            <path d="M3 7h18M7 21l-4-4 4-4"></path>
+            <path d="M21 17H3"></path>
+          </svg>
         </div>
-        <h3>Reaffecter les elements liés</h3>
+        <h3>Réaffecter les éléments liés</h3>
         <p id="reassign-message"></p>
         <input name="entityType" type="hidden" />
         <input name="sourceId" type="hidden" />
@@ -924,12 +1245,13 @@
         </label>
         <div class="confirm-actions">
           <button id="cancel-reassign" class="secondary" type="button">Annuler</button>
-          <button class="primary" type="submit">Reaffecter</button>
+          <button class="primary" type="submit">Réaffecter</button>
         </div>
       </form>
     </dialog>
     <div id="toast" role="status" aria-live="polite"></div>
 
-    <script src="./app.js?v=20260709-current-org-counts"></script>
+    <script src="./core.js?v=20260710-refactor-core"></script>
+    <script src="./app.js?v=20260710-refactor-core"></script>
   </body>
 </html>

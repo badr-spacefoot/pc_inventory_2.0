@@ -1,0 +1,31 @@
+{
+  "name": "spacefoot-it-inventory",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm run build:frontend",
+    "build:frontend": "node scripts/build-frontend.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint frontend/app.js frontend/src tests scripts/build-frontend.mjs supabase/functions --max-warnings 0",
+    "check:deno": "deno fmt --check --ignore=supabase/functions/inventory-api/cpu_benchmarks.json supabase/functions && deno check supabase/functions/inventory-api/index.ts",
+    "check:legacy": "node --check frontend/app.js",
+    "check:python": "python -m compileall -q collectors/desktop_collector scripts/collect-cross-platform.py",
+    "format": "prettier --write frontend/app.js frontend/index.html frontend/styles.css frontend/src tests scripts/build-frontend.mjs package.json tsconfig.json eslint.config.mjs .prettierrc.json README.md .github/workflows",
+    "format:check": "prettier --check frontend/app.js frontend/index.html frontend/styles.css frontend/src tests scripts/build-frontend.mjs package.json tsconfig.json eslint.config.mjs .prettierrc.json README.md .github/workflows",
+    "test:typescript": "vitest run",
+    "test:collector": "python -m unittest discover -s tests/collector -v",
+    "test": "pnpm run test:typescript && pnpm run test:collector",
+    "quality": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run check:deno && pnpm run check:legacy && pnpm run check:python && pnpm run test && pnpm run build"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "esbuild": "^0.28.1",
+    "eslint": "^9.39.1",
+    "globals": "^17.7.0",
+    "prettier": "^3.9.4",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.63.0",
+    "vitest": "^4.1.10"
+  }
+}

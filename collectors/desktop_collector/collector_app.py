@@ -3,31 +3,63 @@
 
 from __future__ import annotations
 
-import argparse
 import ctypes
 import datetime
-import getpass
 import json
-import os
 import platform
-import re
-import shlex
-import shutil
-import socket
-import ssl
-import subprocess
 import sys
-import tempfile
 import threading
-import time
 import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox, scrolledtext, ttk
-import urllib.error
 import urllib.parse
 import urllib.request
-import uuid
-import zipfile
+
+try:
+    from .config import (
+        COLLECTOR_BUILD_CHANNEL,
+        COLLECTOR_VERSION,
+        DEFAULT_API_URL,
+    )
+    from .support import (
+        api_error_message,
+        api_request,
+        clear_sensitive_draft,
+        http_ssl_context,
+        launch_prefill_from_args,
+        load_draft,
+        normalize_api_url,
+        save_draft,
+    )
+    from .prefill import PrefillMixin
+    from .prefill_update import CollectorUpdateMixin
+    from .platform_integration import register_linux_url_scheme
+    from .scan_presentation import ScanPresentationMixin
+    from .ui import COLORS, DARK_COLORS, LIGHT_COLORS, ThemedButton, apply_palette
+except ImportError:  # Supports direct execution and PyInstaller entry points.
+    module_directory = str(Path(__file__).resolve().parent)
+    if module_directory not in sys.path:
+        sys.path.insert(0, module_directory)
+    from config import (
+        COLLECTOR_BUILD_CHANNEL,
+        COLLECTOR_VERSION,
+        DEFAULT_API_URL,
+    )
+    from support import (
+        api_error_message,
+        api_request,
+        clear_sensitive_draft,
+        http_ssl_context,
+        launch_prefill_from_args,
+        load_draft,
+        normalize_api_url,
+        save_draft,
+    )
+    from prefill import PrefillMixin
+    from prefill_update import CollectorUpdateMixin
+    from platform_integration import register_linux_url_scheme
+    from scan_presentation import ScanPresentationMixin
+    from ui import COLORS, DARK_COLORS, LIGHT_COLORS, ThemedButton, apply_palette
 
 try:
     import winreg
@@ -52,70 +84,11 @@ else:
     COLLECTOR_IMPORT_ERROR = None
 
 
-DEFAULT_API_URL = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
-COLLECTOR_VERSION = "0.1.48"
-COLLECTOR_BUILD_CHANNEL = "github-release"
-COLLECTOR_RELEASES_URL = "https://badr-spacefoot.github.io/pc_inventory_2.0/collector-releases.json"
-MACOS_APP_BUNDLE_PREFIX = "spacefoot-it-collector-macos"
-DRAFT_PATH = Path.home() / ".spacefoot_it_collector.json"
-PREFILL_FILE_MAX_AGE_SECONDS = 24 * 60 * 60
-DARK_COLORS = {
-    "bg": "#1d241f",
-    "panel": "#252d28",
-    "panel_2": "#2d3831",
-    "line": "#3c473f",
-    "text": "#edf4ee",
-    "muted": "#aab6ad",
-    "brand": "#1f8a70",
-    "brand_2": "#43c0a3",
-    "danger": "#ef4444",
-    "warning": "#eab308",
-    "success": "#22c55e",
-    "input": "#1a211d",
-}
-LIGHT_COLORS = {
-    "bg": "#eef1ed",
-    "panel": "#ffffff",
-    "panel_2": "#e4ebe5",
-    "line": "#cbd5ce",
-    "text": "#202a24",
-    "muted": "#5f6f66",
-    "brand": "#1f8a70",
-    "brand_2": "#087966",
-    "danger": "#dc2626",
-    "warning": "#b7791f",
-    "success": "#15803d",
-    "input": "#f7faf8",
-}
-COLORS = DARK_COLORS.copy()
-
-
 def bundled_asset_path(relative_path: str) -> Path:
     if getattr(sys, "frozen", False):
         return Path(getattr(sys, "_MEIPASS")) / relative_path
     return Path(__file__).resolve().parents[2] / "frontend" / relative_path
 
-
-_HTTP_SSL_CONTEXT = None
-
-
-def http_ssl_context():
-    global _HTTP_SSL_CONTEXT
-    if _HTTP_SSL_CONTEXT is not None:
-        return _HTTP_SSL_CONTEXT
-    cafile = os.environ.get("SSL_CERT_FILE")
-    if not cafile:
-        try:
-            import certifi
-
-            cafile = certifi.where()
-        except Exception:
-            cafile = ""
-    if cafile and Path(cafile).exists():
-        _HTTP_SSL_CONTEXT = ssl.create_default_context(cafile=cafile)
-    else:
-        _HTTP_SSL_CONTEXT = ssl.create_default_context()
-    return _HTTP_SSL_CONTEXT
 
 TRANSLATIONS = {
     "fr": {
@@ -268,324 +241,7 @@ TRANSLATIONS = {
 }
 
 
-def load_draft() -> dict:
-    try:
-        return json.loads(DRAFT_PATH.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-
-
-def save_draft(values: dict) -> None:
-    try:
-        DRAFT_PATH.write_text(json.dumps(values, indent=2), encoding="utf-8")
-    except OSError:
-        pass
-
-
-def clear_sensitive_draft() -> None:
-    draft = load_draft()
-    api_url = normalize_api_url(draft.get("apiUrl") or DEFAULT_API_URL)
-    save_draft({"apiUrl": api_url})
-
-
-def normalize_api_url(value: str) -> str:
-    text = str(value or "").strip().strip('"')
-    if not text:
-        return DEFAULT_API_URL
-    if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", text):
-        text = f"https://{text}"
-    parsed = urllib.parse.urlparse(text)
-    host = parsed.netloc.lower()
-    scheme = parsed.scheme or "https"
-    path = parsed.path.rstrip("/")
-    if host.endswith(".supabase.co") or host == "supabase.co":
-        scheme = "https"
-        path = "/functions/v1/inventory-api"
-    return urllib.parse.urlunparse((scheme, parsed.netloc, path or "", "", "", ""))
-
-
-def version_tuple(value: str) -> tuple[int, ...]:
-    text = str(value or "").strip().lower().replace("collector-v", "").lstrip("v")
-    parts = re.findall(r"\d+", text)
-    return tuple(int(part) for part in parts[:4]) or (0,)
-
-
-def is_newer_version(candidate: str, current: str) -> bool:
-    left = version_tuple(candidate)
-    right = version_tuple(current)
-    size = max(len(left), len(right))
-    return left + (0,) * (size - len(left)) > right + (0,) * (size - len(right))
-
-
-def version_label(value: str) -> str:
-    return ".".join(str(part) for part in version_tuple(value))
-
-
-def fetch_json_url(url: str, timeout=10) -> dict:
-    separator = "&" if "?" in url else "?"
-    uncached_url = f"{url}{separator}v={int(time.time())}"
-    request = urllib.request.Request(uncached_url, headers={
-        "User-Agent": f"spacefoot-it-collector/{COLLECTOR_VERSION}",
-        "Cache-Control": "no-cache",
-        "Pragma": "no-cache",
-    })
-    with urllib.request.urlopen(request, timeout=timeout, context=http_ssl_context()) as response:
-        return json.loads(response.read().decode("utf-8"))
-
-
-def download_file(url: str, destination: Path, timeout=60) -> None:
-    request = urllib.request.Request(url, headers={"User-Agent": f"spacefoot-it-collector/{COLLECTOR_VERSION}"})
-    with urllib.request.urlopen(request, timeout=timeout, context=http_ssl_context()) as response:
-        with destination.open("wb") as output:
-            shutil.copyfileobj(response, output)
-
-
-def api_request(api_url: str, path: str, method="GET", body=None, headers=None, timeout=25):
-    url = f"{normalize_api_url(api_url).rstrip('/')}{path}"
-    data = json.dumps(body).encode("utf-8") if body is not None else None
-    request = urllib.request.Request(
-        url,
-        data=data,
-        headers={"Content-Type": "application/json", **(headers or {})},
-        method=method,
-    )
-    with urllib.request.urlopen(request, timeout=timeout, context=http_ssl_context()) as response:
-        raw = response.read().decode("utf-8")
-        return json.loads(raw) if raw else {}
-
-
-def api_error_message(exc: Exception) -> str:
-    if isinstance(exc, urllib.error.HTTPError):
-        detail = exc.read().decode("utf-8", errors="ignore")
-        try:
-            return json.loads(detail).get("error", detail) or str(exc)
-        except json.JSONDecodeError:
-            return detail or str(exc)
-    if isinstance(exc, urllib.error.URLError):
-        return f"API unreachable: {exc.reason}"
-    return str(exc)
-
-
-def money_text(value):
-    return "-" if value in (None, "") else str(value)
-
-
-def as_float(value):
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def compact_number(value, digits=0):
-    number = as_float(value)
-    if number is None:
-        return ""
-    if digits == 0:
-        return str(int(round(number)))
-    return f"{number:.{digits}f}".rstrip("0").rstrip(".")
-
-
-def downloads_dirs() -> list[Path]:
-    home = Path.home()
-    candidates = [
-        home / "Downloads",
-        home / "Téléchargements",
-        home / "Telechargements",
-    ]
-    user_dirs = home / ".config" / "user-dirs.dirs"
-    try:
-        content = user_dirs.read_text(encoding="utf-8")
-    except OSError:
-        content = ""
-    match = re.search(r'^XDG_DOWNLOAD_DIR=(?P<quote>["\'])(?P<path>.*?)(?P=quote)', content, flags=re.MULTILINE)
-    if match:
-        xdg_path = match.group("path").replace("$HOME", str(home))
-        candidates.insert(0, Path(os.path.expandvars(os.path.expanduser(xdg_path))))
-    unique: list[Path] = []
-    seen: set[str] = set()
-    for candidate in candidates:
-        key = str(candidate)
-        if key not in seen:
-            unique.append(candidate)
-            seen.add(key)
-    return unique
-
-
-def newest_prefill_file() -> Path | None:
-    candidates: list[Path] = []
-    for directory in downloads_dirs():
-        try:
-            candidates.extend(directory.glob("spacefoot-collector-prefill*.json"))
-        except OSError:
-            continue
-    if not candidates:
-        return None
-    return max(candidates, key=lambda path: path.stat().st_mtime)
-
-
-def os_icon_name(os_name: str) -> str:
-    text = str(os_name or "").lower()
-    if "windows" in text:
-        return "WIN"
-    if "mac" in text or "darwin" in text:
-        return "MAC"
-    if "linux" in text:
-        return "LNX"
-    return "OS"
-
-
-def linux_desktop_exec_path() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve()
-    return Path(__file__).resolve()
-
-
-def desktop_exec_quote(value: str) -> str:
-    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
-
-
-def register_linux_url_scheme() -> None:
-    if platform.system() != "Linux":
-        return
-    executable = linux_desktop_exec_path()
-    if not executable.exists():
-        return
-    applications_dir = Path.home() / ".local" / "share" / "applications"
-    desktop_file = applications_dir / "spacefoot-it-collector.desktop"
-    exec_line = f"{desktop_exec_quote(str(executable))} %u"
-    if not getattr(sys, "frozen", False):
-        exec_line = f"{desktop_exec_quote(sys.executable)} {desktop_exec_quote(str(executable))} %u"
-    content = "\n".join([
-        "[Desktop Entry]",
-        "Type=Application",
-        "Name=Spacefoot IT Collector",
-        "Comment=Spacefoot hardware inventory collector",
-        f"Exec={exec_line}",
-        "Terminal=false",
-        "Categories=Utility;",
-        "MimeType=x-scheme-handler/spacefoot-collector;",
-        "",
-    ])
-    try:
-        applications_dir.mkdir(parents=True, exist_ok=True)
-        if not desktop_file.exists() or desktop_file.read_text(encoding="utf-8") != content:
-            desktop_file.write_text(content, encoding="utf-8")
-        subprocess.run(
-            ["xdg-mime", "default", desktop_file.name, "x-scheme-handler/spacefoot-collector"],
-            check=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=3,
-        )
-    except Exception:
-        pass
-
-
-def launch_prefill_from_args(argv: list[str]) -> dict:
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("launch_url", nargs="?")
-    parser.add_argument("--prefill-code", dest="prefill_code")
-    parser.add_argument("--api-url", dest="api_url")
-    try:
-        args, remaining = parser.parse_known_args(argv[1:])
-    except SystemExit:
-        return {}
-    result = {
-        "prefillCode": str(args.prefill_code or "").strip(),
-        "apiUrl": normalize_api_url(args.api_url) if args.api_url else "",
-        "launchUrl": "",
-    }
-    launch_url = str(args.launch_url or "").strip()
-    for value in [*remaining, *argv[1:]]:
-        text = str(value or "").strip()
-        if text.lower().startswith("/launchurl="):
-            launch_url = text.split("=", 1)[1].strip().strip('"')
-            break
-    if launch_url.startswith("spacefoot-collector://"):
-        result["launchUrl"] = launch_url
-        parsed = urllib.parse.urlparse(launch_url)
-        params = urllib.parse.parse_qs(parsed.query)
-        result["prefillCode"] = result["prefillCode"] or (
-            params.get("prefillCode")
-            or params.get("prefill")
-            or params.get("code")
-            or params.get("token")
-            or [""]
-        )[0].strip()
-        result["apiUrl"] = result["apiUrl"] or normalize_api_url((params.get("apiUrl") or [""])[0])
-    return {key: value for key, value in result.items() if value}
-
-
-class ThemedButton(tk.Label):
-    def __init__(self, parent, text, command, secondary=False):
-        self.command = command
-        self.secondary = secondary
-        self._state = "normal"
-        self.normal_bg = COLORS["panel_2"] if secondary else COLORS["brand"]
-        self.hover_bg = COLORS["line"] if secondary else COLORS["brand_2"]
-        self.disabled_bg = COLORS["panel"]
-        self.normal_fg = COLORS["text"]
-        self.disabled_fg = COLORS["muted"]
-        super().__init__(
-            parent,
-            text=text,
-            bg=self.normal_bg,
-            fg=self.normal_fg,
-            padx=16,
-            pady=9,
-            font=("Segoe UI", 10, "bold"),
-            cursor="hand2",
-            borderwidth=0,
-            highlightthickness=0,
-        )
-        self.bind("<Button-1>", self._click)
-        self.bind("<Return>", self._click)
-        self.bind("<Enter>", self._hover)
-        self.bind("<Leave>", self._leave)
-
-    def _click(self, _event=None):
-        if self._state != "disabled" and self.command:
-            return self.command()
-        return None
-
-    def _hover(self, _event=None) -> None:
-        if self._state != "disabled":
-            tk.Label.configure(self, bg=self.hover_bg)
-
-    def _leave(self, _event=None) -> None:
-        self._sync_visual()
-
-    def _sync_visual(self) -> None:
-        if self._state == "disabled":
-            tk.Label.configure(self, bg=self.disabled_bg, fg=self.disabled_fg, cursor="")
-        else:
-            tk.Label.configure(self, bg=self.normal_bg, fg=self.normal_fg, cursor="hand2")
-
-    def configure(self, cnf=None, **kwargs):
-        options = {}
-        if cnf:
-            options.update(cnf)
-        options.update(kwargs)
-        if "state" in options:
-            self._state = str(options.pop("state") or "normal")
-        if "command" in options:
-            self.command = options.pop("command")
-        if "text" in options:
-            tk.Label.configure(self, text=options.pop("text"))
-        if options:
-            tk.Label.configure(self, **options)
-        self._sync_visual()
-
-    config = configure
-
-    def cget(self, key):
-        if key == "state":
-            return self._state
-        return tk.Label.cget(self, key)
-
-
-class CollectorApp(tk.Tk):
+class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title(f"Spacefoot IT Collector {COLLECTOR_VERSION}")
@@ -752,8 +408,7 @@ class CollectorApp(tk.Tk):
         return self.system_theme() if preference == "system" else preference
 
     def apply_theme_colors(self) -> None:
-        global COLORS
-        COLORS = (LIGHT_COLORS if self.active_theme() == "light" else DARK_COLORS).copy()
+        apply_palette(LIGHT_COLORS if self.active_theme() == "light" else DARK_COLORS)
         self.apply_widget_styles()
 
     def apply_widget_styles(self) -> None:
@@ -1542,367 +1197,6 @@ class CollectorApp(tk.Tk):
             "prefillFileMtime": self.last_loaded_prefill_mtime,
         })
 
-    def load_prefill(self) -> None:
-        if not self.prefill_code.get().strip():
-            messagebox.showwarning(self.t("Prefill code"), self.t("Please enter the prefill code."))
-            return
-        self.status.set(self.t("Load prefill"))
-        threading.Thread(target=self._load_prefill_background, daemon=True).start()
-
-    def check_update_then_load_prefill(self) -> None:
-        if not self.auto_update.get() or platform.system() not in {"Windows", "Linux", "Darwin"}:
-            self.load_prefill()
-            return
-        self.status.set(self.t("Checking collector version..."))
-        threading.Thread(target=self._check_update_then_load_prefill_background, daemon=True).start()
-
-    def _check_update_then_load_prefill_background(self) -> None:
-        try:
-            manifest = fetch_json_url(COLLECTOR_RELEASES_URL, timeout=8)
-            latest = str(manifest.get("latestVersion") or "")
-            platform_key = {
-                "Windows": "windows",
-                "Linux": "linux",
-                "Darwin": "macos",
-            }.get(platform.system(), "")
-            asset = (manifest.get("assets") or {}).get(platform_key) or {}
-            download_url = str(asset.get("downloadUrl") or "")
-            default_name = {
-                "windows": "spacefoot-it-collector-update.exe",
-                "linux": "spacefoot-it-collector-update.deb",
-                "macos": "spacefoot-it-collector-update.app.zip",
-            }.get(platform_key, "spacefoot-it-collector-update")
-            file_name = str(asset.get("fileName") or default_name)
-            if not latest or not download_url or not is_newer_version(latest, COLLECTOR_VERSION):
-                self.after(0, self.load_prefill)
-                return
-            safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "-", file_name) or default_name
-            installer_path = Path(tempfile.gettempdir()) / safe_name
-            self.after(0, lambda: self.status.set(self.t("Downloading collector update...")))
-            download_file(download_url, installer_path, timeout=120)
-            if platform_key == "linux":
-                self.after(0, lambda: self.install_linux_update_and_relaunch(installer_path, latest))
-            elif platform_key == "macos":
-                self.after(0, lambda: self.install_macos_update_and_relaunch(installer_path, latest))
-            else:
-                self.after(0, lambda: self.install_update_and_relaunch(installer_path))
-        except Exception:
-            self.after(0, lambda: self.status.set(self.t("Update check failed. Loading current collector.")))
-            self.after(700, self.load_prefill)
-
-    def launch_url_for_reopen(self) -> str:
-        if self.launch_prefill_url:
-            return self.launch_prefill_url
-        params = urllib.parse.urlencode({
-            "prefillCode": self.prefill_code.get().strip(),
-            "apiUrl": normalize_api_url(self.api_url.get()),
-        })
-        return f"spacefoot-collector://collect?{params}"
-
-    def linux_update_command(self, installer_path: Path) -> str:
-        return f"sudo apt install -y {shlex.quote(str(installer_path))}"
-
-    def linux_executable(self, name: str) -> str:
-        found = shutil.which(name)
-        if found:
-            return found
-        for directory in ("/usr/local/bin", "/usr/bin", "/bin", "/snap/bin", "/var/lib/flatpak/exports/bin"):
-            candidate = Path(directory) / name
-            if candidate.exists():
-                return str(candidate)
-        return ""
-
-    def linux_process_env(self) -> dict:
-        env = os.environ.copy()
-        default_path = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin"
-        env["PATH"] = f"{env.get('PATH')}:{default_path}" if env.get("PATH") else default_path
-        return env
-
-    def launch_linux_update_terminal(self, installer_path: Path) -> bool:
-        script_path = Path(tempfile.gettempdir()) / "spacefoot-it-collector-update.sh"
-        script = "\n".join([
-            "#!/bin/sh",
-            "echo 'Installing Spacefoot IT Collector update...'",
-            'sudo apt install -y "$1"',
-            "status=$?",
-            'if [ "$status" -ne 0 ]; then',
-            "  echo",
-            "  echo 'Update failed. Please keep this terminal open and copy the error for IT support.'",
-            "  echo 'Command:'",
-            '  echo "sudo apt install -y $1"',
-            "  read -r _",
-            '  exit "$status"',
-            "fi",
-            "echo",
-            "echo 'Update installed. The collector will reopen automatically.'",
-            "sleep 4",
-            "",
-        ])
-        script_path.write_text(script, encoding="utf-8")
-        script_path.chmod(0o755)
-        shell_command = f"sh {shlex.quote(str(script_path))} {shlex.quote(str(installer_path))}"
-        terminal_commands = [
-            ["gnome-terminal", "--wait", "--", "bash", "-lc", shell_command],
-            ["gnome-terminal", "--", "bash", "-lc", shell_command],
-            ["ptyxis", "--wait", "--", "bash", "-lc", shell_command],
-            ["kgx", "--wait", "--", "bash", "-lc", shell_command],
-            ["x-terminal-emulator", "-e", "bash", "-lc", shell_command],
-            ["konsole", "-e", "bash", "-lc", shell_command],
-            ["xfce4-terminal", "-e", f"bash -lc {shlex.quote(shell_command)}"],
-            ["mate-terminal", "--wait", "--", "bash", "-lc", shell_command],
-            ["tilix", "-e", "bash", "-lc", shell_command],
-            ["alacritty", "-e", "bash", "-lc", shell_command],
-            ["kitty", "bash", "-lc", shell_command],
-            ["xterm", "-e", "bash", "-lc", shell_command],
-        ]
-        env = self.linux_process_env()
-        for command in terminal_commands:
-            executable = self.linux_executable(command[0])
-            if not executable:
-                continue
-            command = [executable, *command[1:]]
-            try:
-                process = subprocess.Popen(command, env=env)
-                time.sleep(0.8)
-                status = process.poll()
-                if status is None or status == 0:
-                    return True
-            except Exception:
-                continue
-        return False
-
-    def installed_linux_collector_version(self) -> str:
-        try:
-            result = subprocess.run(
-                ["dpkg-query", "-W", "-f=${Version}", "spacefoot-it-collector"],
-                capture_output=True,
-                text=True,
-                timeout=4,
-                check=False,
-            )
-            return result.stdout.strip() if result.returncode == 0 else ""
-        except Exception:
-            return ""
-
-    def wait_for_linux_update_and_relaunch(self, expected_version: str, launch_url: str, deadline: float) -> None:
-        installed = self.installed_linux_collector_version()
-        if installed and is_newer_version(installed, COLLECTOR_VERSION) and not is_newer_version(expected_version, installed):
-            executable = Path("/opt/spacefoot-it-collector/spacefoot-it-collector")
-            try:
-                xdg_open = self.linux_executable("xdg-open")
-                subprocess.Popen([str(executable), launch_url] if executable.exists() else [xdg_open or "xdg-open", launch_url], env=self.linux_process_env())
-            except Exception:
-                pass
-            self.destroy()
-            return
-        if time.time() < deadline:
-            self.status.set(self.t("Waiting for Ubuntu to finish installing the update..."))
-            self.after(2000, lambda: self.wait_for_linux_update_and_relaunch(expected_version, launch_url, deadline))
-            return
-        self.status.set(self.t("Update did not finish. Loading current collector."))
-        self.after(1000, self.load_prefill)
-
-    def install_linux_update_and_relaunch(self, installer_path: Path, latest_version: str) -> None:
-        self.status.set(self.t("Installing update. The collector will reopen automatically."))
-        launch_url = self.launch_url_for_reopen()
-        messagebox.showinfo(
-            self.t("Collector update ready"),
-            self.t("A new collector version has been downloaded. Ubuntu will now ask for your password in a terminal to install the update. The collector will reopen automatically with the prefilled profile."),
-        )
-        try:
-            if self.launch_linux_update_terminal(installer_path):
-                self.status.set(self.t("Waiting for Ubuntu to finish installing the update..."))
-                self.after(2000, lambda: self.wait_for_linux_update_and_relaunch(latest_version, launch_url, time.time() + 180))
-                return
-            command = self.linux_update_command(installer_path)
-            messagebox.showwarning(
-                self.t("Collector update ready"),
-                f"{self.t('Unable to open a terminal for the update. Run this command, then reopen the collector from the web page:')}\n\n{command}",
-            )
-            self.after(1000, self.load_prefill)
-        except Exception as exc:
-            self.status.set(api_error_message(exc))
-            self.after(1000, self.load_prefill)
-
-    def macos_target_app_path(self, latest_version: str) -> Path:
-        version = version_label(latest_version)
-        return Path.home() / "Applications" / f"{MACOS_APP_BUNDLE_PREFIX}-{version}.app"
-
-    def install_macos_update_and_relaunch(self, installer_path: Path, latest_version: str) -> None:
-        self.status.set(self.t("Installing update. The collector will reopen automatically."))
-        launch_url = self.launch_url_for_reopen()
-        messagebox.showinfo(
-            self.t("Collector update ready"),
-            self.t("A new collector version has been downloaded. macOS will install it in your Applications folder and reopen it automatically with the prefilled profile."),
-        )
-        try:
-            with tempfile.TemporaryDirectory(prefix="spacefoot-collector-macos-") as temp_dir:
-                extract_dir = Path(temp_dir)
-                with zipfile.ZipFile(installer_path) as archive:
-                    archive.extractall(extract_dir)
-                apps = sorted(extract_dir.rglob("*.app"), key=lambda path: len(path.parts))
-                if not apps:
-                    raise RuntimeError("No macOS app bundle was found in the update archive.")
-                source_app = apps[0]
-                target_app = self.macos_target_app_path(latest_version)
-                target_app.parent.mkdir(parents=True, exist_ok=True)
-                if target_app.exists():
-                    shutil.rmtree(target_app)
-                shutil.copytree(source_app, target_app, symlinks=True)
-            subprocess.run(
-                ["xattr", "-dr", "com.apple.quarantine", str(target_app)],
-                check=False,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                timeout=10,
-            )
-            lsregister = Path("/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister")
-            if lsregister.exists():
-                subprocess.run(
-                    [str(lsregister), "-f", str(target_app)],
-                    check=False,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    timeout=10,
-                )
-            subprocess.Popen(["open", "-n", str(target_app), "--args", launch_url])
-            self.after(900, self.destroy)
-        except Exception as exc:
-            self.status.set(api_error_message(exc))
-            messagebox.showwarning(
-                self.t("Collector update ready"),
-                f"{self.t('Unable to install the macOS update automatically. Open the downloaded file, then reopen the collector from the web page:')}\n\n{installer_path}",
-            )
-            self.after(1000, self.load_prefill)
-
-    def install_update_and_relaunch(self, installer_path: Path) -> None:
-        self.status.set(self.t("Installing update. The collector will reopen automatically."))
-        messagebox.showinfo(
-            self.t("Collector update ready"),
-            self.t("A new collector version has been downloaded. Windows will now ask for permission to run the installer. Click Yes or Run. The collector will reopen automatically with the prefilled profile."),
-        )
-        prefill_code = self.prefill_code.get().strip()
-        try:
-            subprocess.Popen([
-                str(installer_path),
-                "/SP-",
-                "/SILENT",
-                "/NORESTART",
-                "/CLOSEAPPLICATIONS",
-                "/LaunchAfterInstall=1",
-                f"/PrefillCode={prefill_code}",
-            ])
-            self.after(800, self.destroy)
-        except Exception as exc:
-            self.status.set(api_error_message(exc))
-            self.after(1000, self.load_prefill)
-
-    def auto_load_prefill_file(self) -> None:
-        path = newest_prefill_file()
-        if not path:
-            return
-        try:
-            mtime = path.stat().st_mtime
-        except OSError:
-            return
-        if time.time() - mtime > PREFILL_FILE_MAX_AGE_SECONDS:
-            return
-        try:
-            data = json.loads(path.read_text(encoding="utf-8-sig"))
-        except (OSError, json.JSONDecodeError):
-            return
-        code = str(data.get("prefillCode") or "").strip()
-        launch_url = str(data.get("launchUrl") or "").strip()
-        if launch_url.startswith("spacefoot-collector://"):
-            launch_prefill = launch_prefill_from_args([sys.argv[0], launch_url])
-            code = code or str(launch_prefill.get("prefillCode") or "").strip()
-            if launch_prefill.get("apiUrl") and not data.get("apiUrl"):
-                data["apiUrl"] = launch_prefill.get("apiUrl")
-        if not code:
-            return
-        current_code = self.prefill_code.get().strip()
-        if current_code and code != current_code:
-            return
-        already_loaded = str(path) == self.last_loaded_prefill_file and mtime <= self.last_loaded_prefill_mtime
-        if already_loaded:
-            return
-        if data.get("apiUrl"):
-            self.api_url.set(normalize_api_url(str(data.get("apiUrl"))))
-        self.prefill_code.set(code)
-        self.last_loaded_prefill_file = str(path)
-        self.last_loaded_prefill_mtime = mtime
-        self.status.set(self.t("Prefill file loaded automatically. You can edit before submitting."))
-        self.persist_draft()
-        if data.get("accessToken") or any(data.get(key) for key in ("firstName", "lastName", "email", "team", "establishment")):
-            self.apply_prefill(data)
-            return
-        self.load_prefill()
-
-    def start_prefill_file_watch(self) -> None:
-        if self.prefill_watch_active:
-            return
-        self.prefill_watch_active = True
-        self.prefill_file_watch_tick()
-
-    def prefill_file_watch_tick(self) -> None:
-        self.auto_load_prefill_file()
-        profile_complete = not self.profile_missing_fields() and bool(self.access_token.get().strip())
-        if profile_complete:
-            self.prefill_watch_active = False
-            return
-        self.after(2500, self.prefill_file_watch_tick)
-
-    def mark_newest_prefill_file_seen(self) -> None:
-        path = newest_prefill_file()
-        if not path:
-            return
-        try:
-            self.last_loaded_prefill_file = str(path)
-            self.last_loaded_prefill_mtime = path.stat().st_mtime
-        except OSError:
-            return
-
-    def _load_prefill_background(self) -> None:
-        try:
-            data = api_request(
-                normalize_api_url(self.api_url.get()),
-                f"/collect/prefill/{urllib.parse.quote(self.prefill_code.get().strip())}",
-                timeout=15,
-            )
-            self.after(0, lambda: self.apply_prefill(data))
-        except Exception as exc:
-            self.after(0, lambda: self.status.set(api_error_message(exc)))
-
-    def apply_prefill(self, data: dict) -> None:
-        if data.get("apiUrl"):
-            self.api_url.set(normalize_api_url(data.get("apiUrl")))
-        if data.get("accessToken"):
-            self.access_token.set(data.get("accessToken"))
-        for key, variable in [
-            ("firstName", self.first_name),
-            ("lastName", self.last_name),
-            ("email", self.email),
-            ("team", self.team),
-            ("establishment", self.establishment),
-            ("proposedTeam", self.proposed_team),
-            ("proposedEstablishment", self.proposed_establishment),
-            ("comment", self.comment),
-        ]:
-            if data.get(key) is not None:
-                variable.set(str(data.get(key) or ""))
-        if data.get("language") in ("fr", "en"):
-            self.language.set(data.get("language"))
-        if data.get("theme") in ("dark", "light", "system"):
-            self.theme_preference.set(data.get("theme"))
-            self.theme_preference_explicit = False
-        self.profile_visible.set(bool(self.profile_missing_fields()))
-        self.step_index = 0
-        if self.access_token.get().strip():
-            self.connection_status.set(self.t("Connection ready"))
-        self.persist_draft()
-        self.status.set(self.t("Prefilled from the web page. You can edit before submitting."))
-        self._build_ui()
-
     def show_step(self, index: int) -> None:
         self.step_index = max(0, min(index, len(self.step_frames) - 1))
         for frame in self.step_frames:
@@ -2086,132 +1380,6 @@ class CollectorApp(tk.Tk):
             self.after(0, lambda: messagebox.showerror(self.t("Scan failed"), str(exc)))
             self.after(0, lambda: self.status.set(self.t("Scan failed")))
             self.after(0, self.update_primary_action)
-
-    def value_card(self, parent, row, column, title, value, accent=False):
-        card = self.card(parent)
-        card.grid(row=row, column=column, sticky="nsew", padx=6, pady=6)
-        parent.columnconfigure(column, weight=1)
-        self.label(card, title.upper(), 8, muted=True, bold=True).grid(row=0, column=0, sticky="w")
-        tk.Label(
-            card,
-            text=money_text(value),
-            fg=COLORS["brand_2"] if accent else COLORS["text"],
-            bg=COLORS["panel"],
-            wraplength=320,
-            justify="left",
-            font=("Segoe UI", 11, "bold" if accent else "normal"),
-        ).grid(row=1, column=0, sticky="w", pady=(6, 0))
-
-    def gb_unit(self) -> str:
-        return "Go" if self.language.get() == "fr" else "GB"
-
-    def tb_unit(self) -> str:
-        return "To" if self.language.get() == "fr" else "TB"
-
-    def format_gb(self, value, digits=0) -> str:
-        number = as_float(value)
-        if number is None:
-            return ""
-        return f"{compact_number(number, digits)} {self.gb_unit()}"
-
-    def marketed_storage_label(self, usable_gib) -> str:
-        gib = as_float(usable_gib)
-        if gib is None:
-            return ""
-        marketed_gb = gib * 1.073741824
-        common_gb = [128, 256, 512, 1000, 2000, 4000, 8000]
-        nearest = min(common_gb, key=lambda item: abs(item - marketed_gb))
-        if abs(nearest - marketed_gb) / nearest > 0.16:
-            return self.format_gb(gib)
-        if nearest >= 1000:
-            return f"{compact_number(nearest / 1000, 1)} {self.tb_unit()}"
-        return f"{nearest} {self.gb_unit()}"
-
-    def format_storage_summary(self, payload: dict) -> str:
-        total = payload.get("storageTotalGb")
-        free = payload.get("storageFreeGb")
-        if total is None and free is None:
-            return ""
-        label = self.marketed_storage_label(total)
-        usable = self.format_gb(total)
-        free_text = self.format_gb(free)
-        storage_type = str(payload.get("storageType") or "").strip()
-        parts = [part for part in [label, storage_type] if part]
-        if usable:
-            parts.append(f"({usable} {self.t('usable')})")
-        if free_text:
-            parts.append(f"/ {free_text} {self.t('free')}")
-        return " ".join(parts)
-
-    def format_cpu_summary(self, payload: dict) -> str:
-        cpu = str(payload.get("cpu") or "").strip()
-        speed = as_float(payload.get("cpuMaxClockGhz") or payload.get("cpuCurrentClockGhz"))
-        if cpu and speed and not re.search(r"\d+(\.\d+)?\s*GHz", cpu, re.I):
-            return f"{cpu} ({speed:.2f} GHz)"
-        return cpu
-
-    def format_gpu_summary(self, payload: dict) -> str:
-        gpu = str(payload.get("gpu") or "").strip()
-        gpus = payload.get("gpus") if isinstance(payload.get("gpus"), list) else []
-        if not gpu and gpus:
-            gpu = " | ".join(str(item.get("name") or "").strip() for item in gpus if item.get("name"))
-        return gpu
-
-    def format_memory_details(self, payload: dict) -> str:
-        modules = payload.get("memoryModules") if isinstance(payload.get("memoryModules"), list) else []
-        populated = [item for item in modules if as_float(item.get("capacityGb"))]
-        useful_modules = populated or modules
-        types = sorted({str(item.get("memoryType") or item.get("type") or "").strip() for item in useful_modules if item.get("memoryType") or item.get("type")})
-        speeds = sorted({int(speed) for item in useful_modules for speed in [as_float(item.get("configuredSpeedMhz") or item.get("speedMhz"))] if speed})
-        capacities = [as_float(item.get("capacityGb")) for item in populated if as_float(item.get("capacityGb"))]
-        parts = []
-        if capacities and len(capacities) > 1:
-            parts.append(" + ".join(self.format_gb(value) for value in capacities))
-        if types:
-            parts.append(" + ".join(types))
-        if speeds:
-            parts.append(f"{' / '.join(str(speed) for speed in speeds)} MHz")
-        if populated and len(populated) > 1:
-            parts.append(f"{len(populated)} modules")
-        if parts:
-            return " · ".join(parts)
-        if payload.get("ramTotalGb"):
-            return f"{self.format_gb(payload.get('ramTotalGb'), 1)} {self.t('installed')}"
-        return ""
-
-    def render_scan_summary(self) -> None:
-        for child in self.summary.winfo_children():
-            child.destroy()
-        p = self.payload
-        identity = p.get("hardwareIdentity") or {}
-        memory_summary = self.format_memory_details(p)
-        items = [
-            (self.t("Collection engine"), " ".join(str(part) for part in [p.get("collectorEngine"), p.get("osqueryVersion") or p.get("collectorEngineVersion")] if part)),
-            (self.t("OS"), f"{os_icon_name(p.get('osName'))}  {p.get('osName', '')} {p.get('osVersion', '')}".strip()),
-            (self.t("Manufacturer"), p.get("manufacturer")),
-            (self.t("Model"), p.get("model"), True),
-            (self.t("Model number / SKU"), p.get("modelNumber") or identity.get("systemSku")),
-            (self.t("Serial / Service tag"), p.get("serialNumber") or p.get("serviceTag") or identity.get("serviceTag")),
-            (self.t("CPU"), self.format_cpu_summary(p)),
-            (self.t("RAM"), self.format_gb(p.get("ramTotalGb"), 1) if p.get("ramTotalGb") else ""),
-            (self.t("Memory details"), memory_summary),
-            (self.t("Storage"), self.format_storage_summary(p)),
-            (self.t("GPU"), self.format_gpu_summary(p)),
-            (self.t("Network"), f"{self.t('IP')} {p.get('localIp') or '-'} / {self.t('MAC')} {p.get('macAddress') or '-'}"),
-        ]
-        for index, item in enumerate(items):
-            title, value, *rest = item
-            self.value_card(self.summary, index // 2, index % 2, title, value, bool(rest and rest[0]))
-        missing = [title for title, value, *_ in items if not value or value == "-"]
-        if missing:
-            self.status.set(f"{self.t('Scan completed with unavailable fields')}: {', '.join(missing)}.")
-        else:
-            self.status.set(self.t("Scan completed."))
-        if hasattr(self, "submit_button"):
-            self.submit_button.configure(state="normal")
-        if hasattr(self, "raw_output"):
-            self.raw_output.delete("1.0", tk.END)
-            self.raw_output.insert(tk.END, json.dumps(self.payload, indent=2, ensure_ascii=False))
 
     def profile_body(self) -> dict:
         team = self.org_name_from_label(self.team.get().strip(), self.teams)

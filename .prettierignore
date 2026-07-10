@@ -1,0 +1,6 @@
+build/
+dist/
+frontend/core.js
+reports/
+.codex-remote-attachments/
+supabase/functions/inventory-api/index.ts

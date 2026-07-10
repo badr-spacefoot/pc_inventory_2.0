@@ -4,15 +4,69 @@ Application web d'inventaire de parc informatique pour remplacer ou compléter l
 
 Le front est statique et peut etre heberge sur GitHub Pages. La collecte complete du materiel passe par un script local volontaire, car un navigateur ne peut pas lire de maniere fiable et autorisee le numero de serie, le CPU, la RAM, le stockage, l'adresse MAC ou l'utilisateur Windows.
 
-## Architecture recommandee
+## Démarrage développeur
 
-- `frontend/` : application responsive HTML/CSS/JS hébergeable sur GitHub Pages.
-- `supabase/schema.sql` : tables `users`, `devices`, `device_scans`, `teams`, `establishments`, `audit_logs` et tokens de collecte.
+Prérequis : Node.js 22, pnpm 10+, Deno 2, Python 3.12+ et la CLI Supabase pour les opérations cloud.
+
+```powershell
+pnpm install --frozen-lockfile
+pnpm run quality
+python -m http.server 8090 --directory frontend
+```
+
+Ouvrir ensuite `http://127.0.0.1:8090/`. Le fichier `frontend/core.js` est généré depuis `frontend/src/`; il ne doit pas être modifié à la main.
+
+Commandes principales :
+
+- `pnpm run build` : compile le noyau TypeScript du frontend.
+- `pnpm run typecheck` : vérifie le TypeScript strict sans produire de fichier.
+- `pnpm run lint` : exécute ESLint sans tolérer d'avertissement.
+- `pnpm run test` : exécute les tests TypeScript et Python du collecteur.
+- `pnpm run check:deno` : formate et type-checke l'Edge Function.
+- `pnpm run quality` : exécute tous les contrôles, puis produit le bundle frontend.
+
+## Architecture
+
+Le dépôt conserve un frontend statique compatible GitHub Pages. Le code métier est extrait du point d'entrée DOM historique vers des modules TypeScript stricts, sans modifier les routes ni les contrats réseau.
+
+```text
+frontend/
+  app.js                         Point d'entrée DOM et orchestration UI
+  core.js                        Bundle généré, chargé avant app.js
+  src/
+    core/                        Configuration, état, DOM, client HTTP
+    domain/                      Normalisation inventaire et dates
+    features/                    Parc, collector, historique, factures et garanties
+    i18n/                        Dictionnaires de traduction
+    services/                    API d'inventaire centralisée
+supabase/functions/inventory-api/
+  index.ts                       Routage et orchestration Edge
+  core/                         Types, validation, réponses HTTP et permissions
+  domain/                        CPU, valorisation et recherche marché
+collectors/desktop_collector/
+  collector_app.py              Fenêtre Tkinter et orchestration UI
+  config.py                     Configuration stable du collecteur
+  platform_integration.py       Enregistrement du protocole Linux
+  scan_presentation.py          Formatage et rendu du résumé matériel
+  support.py                    HTTP, brouillon, versions et parsing
+  prefill.py                    Acquisition et application du pré-remplissage
+  prefill_update.py             Installation des mises à jour natives
+  ui.py                         Palette partagée et composants Tkinter
+scripts/collect-cross-platform.py  Moteur matériel multi-plateforme
+tests/
+  frontend/                     Tests du noyau frontend
+  backend/                      Tests des règles Edge
+  collector/                    Tests Python multi-plateforme
+```
+
+Responsabilités d'infrastructure :
+
+- `supabase/schema.sql` : schéma Postgres et politiques de sécurité.
 - `supabase/functions/inventory-api/` : API Supabase Edge Function.
-- `collectors/desktop_collector/` : prototype d'application collecteur transparente avec revue avant envoi.
-- `scripts/collect-windows.ps1` : fallback PowerShell de collecte Windows.
-- `scripts/collect-cross-platform.py` : collecteur standard-library Windows, Ubuntu/Linux et macOS.
-- Backend recommande : Supabase pour Postgres, Edge Functions, secrets serveur et CORS.
+- `collectors/desktop_collector/` : application native avec relecture avant envoi.
+- `scripts/collect-windows.ps1` : fallback PowerShell de support Windows.
+- `.github/workflows/quality.yml` : contrôle qualité sur `main` et les pull requests.
+- `.github/workflows/pages.yml` : vérification, build et déploiement GitHub Pages.
 
 Flux:
 
@@ -101,17 +155,7 @@ https://YOUR_PROJECT.supabase.co/functions/v1/inventory-api
 
 ## Configuration frontend
 
-Option simple: modifier les valeurs en haut de `frontend/app.js`:
-
-```js
-const CONFIG = {
-  apiBaseUrl: "https://YOUR_PROJECT.supabase.co/functions/v1/inventory-api",
-  scriptUrl: "https://badr-spacefoot.github.io/pc_inventory_2.0/scripts/collect-windows.ps1",
-  staleDays: 30,
-};
-```
-
-Alternative: injecter ces valeurs avant `app.js` dans `frontend/index.html`:
+La configuration est lue par `frontend/src/core/config.ts`. Pour conserver un build unique entre les environnements, injecter les valeurs runtime avant `core.js` dans `frontend/index.html` :
 
 ```html
 <script>
@@ -124,17 +168,17 @@ Alternative: injecter ces valeurs avant `app.js` dans `frontend/index.html`:
 </script>
 ```
 
-La meteo de la barre superieure utilise Open-Meteo cote navigateur. Par defaut, aucune cle API n'est necessaire; les coordonnees ci-dessus permettent de choisir la ville affichee.
+Ne pas ajouter de secret dans le frontend : tout son contenu est public sur GitHub Pages. Les secrets eBay, Supabase service-role et synchronisation CPU restent dans les secrets Supabase/GitHub documentés dans `.env.example`.
+
+La météo de la barre supérieure utilise Open-Meteo côté navigateur. Par défaut, aucune clé API n'est nécessaire ; les coordonnées ci-dessus déterminent la ville affichée.
 
 ## Deploiement GitHub Pages
 
-1. Pousser le dossier `frontend/` dans le dépôt.
-2. Dans GitHub, ouvrir `Settings > Pages`.
-3. Choisir la branche `main`.
-4. Activer GitHub Actions comme source Pages.
-5. Verifier que `ALLOWED_ORIGINS` contient l'URL GitHub Pages.
+1. Dans GitHub, ouvrir `Settings > Pages` et choisir GitHub Actions comme source.
+2. Vérifier que `ALLOWED_ORIGINS` contient l'URL GitHub Pages.
+3. Pousser sur `main` uniquement après validation de `.github/workflows/quality.yml`.
 
-Le workflow `.github/workflows/pages.yml` publie `frontend/` a la racine du site et copie aussi `scripts/` et `collectors/`, afin que le fallback PowerShell et la documentation du collecteur soient disponibles depuis GitHub Pages.
+Le workflow `.github/workflows/pages.yml` installe les dépendances, exécute `pnpm run quality`, reconstruit `frontend/core.js`, puis publie `frontend/` à la racine du site. Il copie aussi `scripts/` et `collectors/` pour le fallback PowerShell et la documentation du collecteur.
 
 ## Collecteur recommande, lanceurs simples et fallback script
 

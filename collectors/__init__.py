@@ -1,0 +1,1 @@
+"""Spacefoot inventory collectors."""

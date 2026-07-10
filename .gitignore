@@ -1,5 +1,9 @@
 .tools/
 .pnpm-store/
+node_modules/
+frontend/core.js
+.codex-remote-attachments/
+reports/
 *.zip
 *.log
 *.spec

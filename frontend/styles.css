@@ -64,8 +64,17 @@ body {
   min-height: 100vh;
   background: var(--bg);
   color: var(--ink);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  transition: background-color 0.18s ease, color 0.18s ease;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease;
 }
 
 button,
@@ -176,6 +185,62 @@ a.secondary {
   position: relative;
 }
 
+.notification-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.notification-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 40;
+  width: min(440px, calc(100vw - 32px));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+.notification-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.notification-panel-head span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.notification-panel-list {
+  display: grid;
+  gap: 8px;
+  max-height: min(520px, 62vh);
+  overflow: auto;
+}
+
+.notification-panel-empty {
+  margin: 18px 8px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.notification-panel-link {
+  width: 100%;
+  margin-top: 10px;
+  border-top: 1px solid var(--line);
+  padding: 12px 8px 4px;
+  background: transparent;
+  color: var(--brand);
+  text-align: center;
+}
+
 .notification-count {
   position: absolute;
   top: -6px;
@@ -226,25 +291,6 @@ a.secondary {
   color: var(--muted);
   font-size: 11px;
   font-weight: 900;
-}
-
-.time-format-control {
-  width: auto;
-  display: inline-flex;
-  grid-template-columns: none;
-  align-items: center;
-  gap: 7px;
-  color: var(--muted);
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.time-format-control select {
-  width: auto;
-  min-height: 36px;
-  padding: 6px 28px 6px 10px;
-  font-size: 12px;
-  font-weight: 850;
 }
 
 .topbar {
@@ -646,7 +692,9 @@ select:focus {
   padding: 3px;
   background: var(--soft);
   border: 1px solid var(--line);
-  transition: background 0.18s ease, border-color 0.18s ease;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease;
 }
 
 .switch-knob {
@@ -659,7 +707,9 @@ select:focus {
   color: var(--muted);
   box-shadow: 0 4px 12px rgba(24, 32, 27, 0.16);
   transform: translateX(0);
-  transition: transform 0.18s ease, color 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    color 0.18s ease;
 }
 
 .switch-knob svg {
@@ -741,7 +791,10 @@ pre {
 }
 
 .admin-nav {
-  display: inline-flex;
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
   gap: 4px;
   margin-bottom: 18px;
   padding: 4px;
@@ -788,6 +841,172 @@ pre {
   margin-bottom: 18px;
 }
 
+.valuation-primary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.valuation-meta {
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+  text-align: right;
+}
+
+.icon-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.icon-meta svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.enrichment-workflow {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+
+.enrichment-progress-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.enrichment-workflow progress {
+  width: 100%;
+  height: 10px;
+  accent-color: var(--brand);
+}
+
+.enrichment-steps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.enrichment-steps li {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: start;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--soft);
+}
+
+.enrichment-step-marker {
+  width: 9px;
+  height: 9px;
+  margin-top: 4px;
+  border: 2px solid var(--muted);
+  border-radius: 999px;
+}
+
+.enrichment-steps li.status-running .enrichment-step-marker {
+  border-color: var(--brand);
+  border-top-color: transparent;
+  animation: enrichment-spin 0.8s linear infinite;
+}
+
+.enrichment-steps li.status-success .enrichment-step-marker {
+  border-color: var(--brand);
+  background: var(--brand);
+}
+
+.enrichment-steps li.status-failed .enrichment-step-marker {
+  border-color: var(--danger);
+  background: var(--danger);
+}
+
+.enrichment-steps li.status-skipped {
+  opacity: 0.56;
+}
+
+.enrichment-steps strong,
+.enrichment-steps small {
+  display: block;
+}
+
+.enrichment-step-detail {
+  margin-top: 3px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.enrichment-step-detail.is-error {
+  color: var(--danger);
+}
+
+.enrichment-steps em {
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.enrichment-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.enrichment-summary > span {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.enrichment-summary small {
+  color: var(--muted);
+}
+
+.enrichment-summary strong {
+  font-size: 22px;
+}
+
+.valuation-advanced {
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.valuation-advanced summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.valuation-advanced .actions {
+  margin-top: 10px;
+}
+
+@keyframes enrichment-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .valuation-note {
   margin-top: 14px;
 }
@@ -811,6 +1030,13 @@ pre {
   display: block;
   font-size: 30px;
   margin-top: 8px;
+}
+
+.metric small {
+  display: block;
+  margin-top: 10px;
+  color: var(--muted);
+  line-height: 1.45;
 }
 
 .token-manager {
@@ -1340,6 +1566,89 @@ pre {
   white-space: nowrap;
 }
 
+.organization-item .organization-meta {
+  display: grid;
+  gap: 3px;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.organization-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
+}
+
+.organization-count-chip {
+  min-height: 25px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.organization-count-chip svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.organization-count-chip strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.organization-count-chip.type-stock {
+  color: var(--site-ink);
+}
+
+.organization-count-chip.type-unassigned {
+  color: var(--danger);
+}
+
+.organization-unused {
+  margin-top: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.organization-unused > summary {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 8px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.organization-unused > summary strong {
+  min-width: 26px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--ink);
+  text-align: center;
+}
+
+.organization-unused-list {
+  opacity: 0.78;
+}
+
 .organization-item small {
   margin-top: 4px;
   color: var(--muted);
@@ -1642,25 +1951,67 @@ pre {
   text-overflow: ellipsis;
 }
 
-.team-tech { color: #21806f; }
-.team-sales, .team-b2c { color: #9a6a22; }
-.team-design { color: #7b5aa6; }
-.team-logistics, .team-purchase { color: #3f7694; }
-.team-finance { color: #5d7d35; }
-.team-management { color: #886a22; }
-.team-marketing { color: #a0506e; }
-.team-marketplace { color: #8f6b22; }
-.team-ads { color: #a0506e; }
-.location-store, .location-general { color: #9a5971; }
-.location-bike { color: #267b68; }
-.location-racket { color: #6f63a6; }
-.location-football { color: #4f7f45; }
-.location-golf { color: #7c7530; }
-.location-lifestyle { color: #a0506e; }
-.location-running { color: #b86632; }
-.location-warehouse { color: #9a6a22; }
-.location-headquarters, .location-office { color: #406f9e; }
-.location-remote { color: #527967; }
+.team-tech {
+  color: #21806f;
+}
+.team-sales,
+.team-b2c {
+  color: #9a6a22;
+}
+.team-design {
+  color: #7b5aa6;
+}
+.team-logistics,
+.team-purchase {
+  color: #3f7694;
+}
+.team-finance {
+  color: #5d7d35;
+}
+.team-management {
+  color: #886a22;
+}
+.team-marketing {
+  color: #a0506e;
+}
+.team-marketplace {
+  color: #8f6b22;
+}
+.team-ads {
+  color: #a0506e;
+}
+.location-store,
+.location-general {
+  color: #9a5971;
+}
+.location-bike {
+  color: #267b68;
+}
+.location-racket {
+  color: #6f63a6;
+}
+.location-football {
+  color: #4f7f45;
+}
+.location-golf {
+  color: #7c7530;
+}
+.location-lifestyle {
+  color: #a0506e;
+}
+.location-running {
+  color: #b86632;
+}
+.location-warehouse {
+  color: #9a6a22;
+}
+.location-headquarters,
+.location-office {
+  color: #406f9e;
+}
+.location-remote {
+  color: #527967;
+}
 
 .manufacturer-logo text {
   fill: currentColor;
@@ -1671,21 +2022,53 @@ pre {
   text-anchor: middle;
 }
 
-.oem-dell { --oem-color: #1683c4; }
-.oem-hp { --oem-color: #1685b8; }
-.oem-lenovo { --oem-color: #d43b31; }
-.oem-asus { --oem-color: #3472a4; }
-.oem-acer { --oem-color: #6a9b25; }
-.oem-apple { --oem-color: #65706a; }
-.oem-microsoft, .oem-surface { --oem-color: #2676bd; }
-.oem-msi { --oem-color: #c63f36; }
-.oem-samsung { --oem-color: #385ab4; }
-.oem-fujitsu { --oem-color: #bd3434; }
-.oem-dynabook, .oem-toshiba { --oem-color: #b83e35; }
-.oem-huawei { --oem-color: #cc3d3d; }
-.oem-intel-nuc { --oem-color: #197aa9; }
-.oem-gigabyte { --oem-color: #4477a7; }
-.oem-framework { --oem-color: #8a6c20; }
+.oem-dell {
+  --oem-color: #1683c4;
+}
+.oem-hp {
+  --oem-color: #1685b8;
+}
+.oem-lenovo {
+  --oem-color: #d43b31;
+}
+.oem-asus {
+  --oem-color: #3472a4;
+}
+.oem-acer {
+  --oem-color: #6a9b25;
+}
+.oem-apple {
+  --oem-color: #65706a;
+}
+.oem-microsoft,
+.oem-surface {
+  --oem-color: #2676bd;
+}
+.oem-msi {
+  --oem-color: #c63f36;
+}
+.oem-samsung {
+  --oem-color: #385ab4;
+}
+.oem-fujitsu {
+  --oem-color: #bd3434;
+}
+.oem-dynabook,
+.oem-toshiba {
+  --oem-color: #b83e35;
+}
+.oem-huawei {
+  --oem-color: #cc3d3d;
+}
+.oem-intel-nuc {
+  --oem-color: #197aa9;
+}
+.oem-gigabyte {
+  --oem-color: #4477a7;
+}
+.oem-framework {
+  --oem-color: #8a6c20;
+}
 
 .manufacturer-cell small {
   display: block;
@@ -1911,16 +2294,14 @@ tbody tr.is-selected {
 #devices-table tr[class*="device-row-status-"] {
   --row-accent: var(--brand);
   background:
-    linear-gradient(90deg, color-mix(in srgb, var(--row-accent) 14%, transparent), transparent 42%),
-    var(--surface);
+    linear-gradient(90deg, color-mix(in srgb, var(--row-accent) 14%, transparent), transparent 42%), var(--surface);
   box-shadow: inset 3px 0 0 color-mix(in srgb, var(--row-accent) 76%, transparent);
 }
 
 #devices-table tr[class*="device-row-status-"]:hover,
 #devices-table tr[class*="device-row-status-"].is-selected {
   background:
-    linear-gradient(90deg, color-mix(in srgb, var(--row-accent) 20%, transparent), transparent 48%),
-    var(--soft-hover);
+    linear-gradient(90deg, color-mix(in srgb, var(--row-accent) 20%, transparent), transparent 48%), var(--soft-hover);
 }
 
 #devices-table tr[class*="device-row-status-"].is-selected {
@@ -2037,10 +2418,16 @@ tbody tr.is-selected {
   font-weight: 900;
 }
 
-.role-admin { color: var(--danger); }
-.role-manager { color: var(--brand); }
+.role-admin {
+  color: var(--danger);
+}
+.role-manager {
+  color: var(--brand);
+}
 .role-viewer,
-.role-read_only { color: var(--muted); }
+.role-read_only {
+  color: var(--muted);
+}
 
 .notifications-list {
   display: grid;
@@ -2059,7 +2446,9 @@ tbody tr.is-selected {
   padding: 14px;
   background: var(--surface);
   cursor: pointer;
-  transition: background 0.16s ease, transform 0.16s ease;
+  transition:
+    background 0.16s ease,
+    transform 0.16s ease;
 }
 
 .notification-item:hover,
@@ -2073,9 +2462,15 @@ tbody tr.is-selected {
   opacity: 0.68;
 }
 
-.notification-item.severity-success { border-left-color: var(--brand); }
-.notification-item.severity-warning { border-left-color: var(--accent); }
-.notification-item.severity-error { border-left-color: var(--danger); }
+.notification-item.severity-success {
+  border-left-color: var(--brand);
+}
+.notification-item.severity-warning {
+  border-left-color: var(--accent);
+}
+.notification-item.severity-error {
+  border-left-color: var(--danger);
+}
 
 .notification-icon {
   width: 40px;
@@ -2114,6 +2509,39 @@ tbody tr.is-selected {
 .notification-item p,
 .notification-item small {
   display: block;
+}
+
+.notification-item.is-compact {
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px;
+}
+
+.notification-item.is-compact .notification-icon {
+  width: 34px;
+  height: 34px;
+}
+
+.notification-item.is-compact .notification-icon img {
+  max-width: 22px;
+  max-height: 22px;
+}
+
+.notification-item.is-compact .notification-heading {
+  gap: 5px;
+}
+
+.notification-item.is-compact p {
+  margin: 4px 0;
+  font-size: 12px;
+}
+
+.notification-item.is-compact .mark-notification-read {
+  grid-column: 2;
+  justify-self: start;
+  min-height: 30px;
+  padding: 6px 9px;
+  font-size: 11px;
 }
 
 .notification-item p {
@@ -2727,34 +3155,6 @@ tbody tr.is-selected {
   background: var(--brand);
 }
 
-.scatter {
-  position: relative;
-  height: 190px;
-  border-left: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  background:
-    linear-gradient(to top, rgba(22, 115, 95, 0.08), transparent),
-    repeating-linear-gradient(to right, transparent 0 24%, var(--chart-grid) 24% 25%);
-}
-
-.point {
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--brand);
-  transform: translate(-50%, 50%);
-  box-shadow: 0 0 0 3px rgba(22, 115, 95, 0.16);
-}
-
-.point.watch {
-  background: var(--accent);
-}
-
-.point.replace {
-  background: var(--danger);
-}
-
 .fleet-dashboard {
   display: grid;
   gap: 18px;
@@ -2776,7 +3176,11 @@ tbody tr.is-selected {
   border-radius: 8px;
   padding: 16px;
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--fleet-level-color, var(--brand)) 12%, transparent), transparent 58%),
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--fleet-level-color, var(--brand)) 12%, transparent),
+      transparent 58%
+    ),
     var(--surface);
   box-shadow: var(--shadow);
 }
@@ -2854,8 +3258,7 @@ tbody tr.is-selected {
 .fleet-priority-panel {
   border-color: color-mix(in srgb, var(--brand) 36%, var(--line));
   background:
-    linear-gradient(90deg, color-mix(in srgb, var(--brand) 10%, transparent), transparent 52%),
-    var(--surface);
+    linear-gradient(90deg, color-mix(in srgb, var(--brand) 10%, transparent), transparent 52%), var(--surface);
 }
 
 .fleet-priority-table-wrap {
@@ -3053,6 +3456,11 @@ tbody tr.is-selected {
   font-weight: 800;
 }
 
+.fleet-value-grid small {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
 .fleet-value-grid strong {
   font-size: 22px;
   font-variant-numeric: tabular-nums;
@@ -3067,8 +3475,7 @@ tbody tr.is-selected {
   border-radius: 8px;
   padding: 16px;
   background:
-    radial-gradient(circle at 18% 0%, color-mix(in srgb, var(--brand) 10%, transparent), transparent 34%),
-    var(--soft);
+    radial-gradient(circle at 18% 0%, color-mix(in srgb, var(--brand) 10%, transparent), transparent 34%), var(--soft);
 }
 
 .age-cpu-chart svg {
@@ -3286,6 +3693,11 @@ tbody tr.is-selected {
     grid-column: 2;
     justify-self: flex-start;
   }
+
+  .enrichment-steps,
+  .enrichment-summary {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (min-width: 1600px) {
@@ -3367,6 +3779,16 @@ tbody tr.is-selected {
   .fleet-card-head {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .valuation-toolbar .panel-head.inline {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .valuation-meta {
+    justify-items: start;
+    text-align: left;
   }
 
   .fleet-card-note {
