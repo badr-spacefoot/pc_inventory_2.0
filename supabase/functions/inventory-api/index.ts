@@ -5115,7 +5115,10 @@ async function synchronizeObservedCpuReleases(body: Json) {
     vendors: requestedCpuVendors(body),
   });
   clearCpuReleaseCatalogCache();
-  const backfilled = body.recalculateDevices === false
+  const catalogChanged = results.some((result) =>
+    result.insertedCount > 0 || result.updatedCount > 0
+  );
+  const backfilled = body.recalculateDevices === false || !catalogChanged
     ? 0
     : await backfillCpuReleaseEnrichment();
   return { cpuNames, options, results, backfilled };
