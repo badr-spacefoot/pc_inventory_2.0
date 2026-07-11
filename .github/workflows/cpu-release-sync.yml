@@ -28,17 +28,11 @@ jobs:
           SYNC_TOKEN: ${{ secrets.CPU_RELEASE_SYNC_TOKEN }}
           VENDOR: ${{ inputs.vendor }}
           FORCE: ${{ inputs.force }}
-          EVENT_NAME: ${{ github.event_name }}
         shell: bash
         run: |
           test -n "$API_URL" || { echo "Missing repository variable IT_INVENTORY_API_URL"; exit 1; }
           test -n "$SYNC_TOKEN" || { echo "Missing repository secret CPU_RELEASE_SYNC_TOKEN"; exit 1; }
-          if [ "$EVENT_NAME" = "schedule" ]; then
-            force=true
-          else
-            force="${FORCE:-false}"
-          fi
-          payload=$(printf '{"limit":120,"unresolvedOnly":true,"staleOnly":true,"staleDays":1,"force":%s,"vendor":"%s"}' "$force" "${VENDOR:-}")
+          payload=$(printf '{"limit":120,"unresolvedOnly":true,"staleOnly":false,"force":%s,"vendor":"%s"}' "${FORCE:-false}" "${VENDOR:-}")
           curl --fail-with-body --show-error --silent \
             --retry 2 --retry-delay 5 --max-time 300 \
             --request POST "$API_URL/admin/cpu-releases/sync" \
