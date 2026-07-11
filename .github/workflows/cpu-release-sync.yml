@@ -1,0 +1,41 @@
+name: Sync authoritative CPU release dates
+
+on:
+  schedule:
+    - cron: "41 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      vendor:
+        description: "Optional vendor: intel, amd, apple, or qualcomm"
+        required: false
+        type: string
+      force:
+        description: "Re-verify records even when the catalog is fresh"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Synchronize official CPU release catalog
+        env:
+          API_URL: ${{ vars.IT_INVENTORY_API_URL }}
+          SYNC_TOKEN: ${{ secrets.CPU_RELEASE_SYNC_TOKEN }}
+          VENDOR: ${{ inputs.vendor }}
+          FORCE: ${{ inputs.force }}
+        shell: bash
+        run: |
+          test -n "$API_URL" || { echo "Missing repository variable IT_INVENTORY_API_URL"; exit 1; }
+          test -n "$SYNC_TOKEN" || { echo "Missing repository secret CPU_RELEASE_SYNC_TOKEN"; exit 1; }
+          payload=$(printf '{"limit":120,"unresolvedOnly":true,"staleOnly":true,"staleDays":30,"force":%s,"vendor":"%s"}' "${FORCE:-false}" "${VENDOR:-}")
+          curl --fail-with-body --show-error --silent \
+            --retry 2 --retry-delay 5 --max-time 300 \
+            --request POST "$API_URL/admin/cpu-releases/sync" \
+            --header "content-type: application/json" \
+            --header "x-cpu-release-sync-token: $SYNC_TOKEN" \
+            --data "$payload"

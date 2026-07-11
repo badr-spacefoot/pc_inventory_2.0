@@ -50,12 +50,35 @@ import {
   manufacturerPriceForDevice,
   marketListingMatchesDevice,
 } from "./domain/market-search.ts";
+import {
+  AmdReleaseAdapter,
+  AppleReleaseAdapter,
+  IntelReleaseAdapter,
+  QualcommReleaseAdapter,
+} from "./domain/cpu-release/adapters/index.ts";
+import { BoundedCpuReleaseHttpClient } from "./domain/cpu-release/http-client.ts";
+import { CpuReleaseRepository } from "./domain/cpu-release/repository.ts";
+import { resolveCpuRelease } from "./domain/cpu-release/resolver.ts";
+import {
+  shouldSynchronizeCpuRelease,
+  synchronizeCpuReleaseCatalog,
+} from "./domain/cpu-release/sync.ts";
+import { releaseYear } from "./domain/cpu-release/date-parser.ts";
+import type {
+  CpuReleaseCatalogRow,
+  CpuReleaseResolution,
+  CpuReleaseSyncOptions,
+  CpuVendor,
+} from "./domain/cpu-release/types.ts";
+import type { CpuReleaseAliasRow } from "./domain/cpu-release/resolver.ts";
+import { hasCpuReleaseSyncToken } from "./domain/cpu-release/authorization.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const adminPassword = Deno.env.get("ADMIN_PASSWORD") ?? "";
 const adminSessionSecret = Deno.env.get("ADMIN_SESSION_SECRET") ?? "";
 const collectionAccessToken = Deno.env.get("COLLECTION_ACCESS_TOKEN") ?? "";
+const cpuReleaseSyncToken = Deno.env.get("CPU_RELEASE_SYNC_TOKEN") ?? "";
 const invoiceStorageBucket = Deno.env.get("INVOICE_STORAGE_BUCKET") ??
   "device-invoices";
 
@@ -1228,6 +1251,113 @@ type CpuReleaseReference = {
   searchUrl?: string;
 };
 
+let cpuReleaseCatalogCache: {
+  expiresAt: number;
+  rows: CpuReleaseCatalogRow[];
+  aliases: CpuReleaseAliasRow[];
+} | null = null;
+
+function clearCpuReleaseCatalogCache() {
+  cpuReleaseCatalogCache = null;
+}
+
+async function catalogCpuRelease(
+  cpuName: string,
+): Promise<CpuReleaseResolution | null> {
+  if (!cpuName) return null;
+  if (
+    !cpuReleaseCatalogCache || cpuReleaseCatalogCache.expiresAt <= Date.now()
+  ) {
+    const catalog = await new CpuReleaseRepository(supabase).catalog();
+    cpuReleaseCatalogCache = {
+      expiresAt: Date.now() + 5 * 60_000,
+      rows: catalog.rows,
+      aliases: catalog.aliases,
+    };
+  }
+  return resolveCpuRelease(
+    cpuName,
+    cpuReleaseCatalogCache.rows,
+    cpuReleaseCatalogCache.aliases,
+  );
+}
+
+function cpuReleaseEnrichmentFields(resolution: CpuReleaseResolution) {
+  return {
+    cpu_release_catalog_id: resolution.catalogId,
+    cpu_release_year: releaseYear(resolution.period),
+    cpu_release_period_start: resolution.period.periodStart,
+    cpu_release_period_end: resolution.period.periodEnd,
+    cpu_release_precision: resolution.period.precision,
+    cpu_release_event_type: resolution.eventType,
+    cpu_release_display: resolution.period.displayValue,
+    cpu_release_source_type: resolution.sourceType,
+    cpu_release_source_url: resolution.sourceUrl,
+    cpu_release_match_scope: resolution.matchScope,
+    cpu_release_match_method: resolution.matchMethod,
+    cpu_release_confidence: resolution.confidence,
+    cpu_release_is_official: resolution.isOfficial,
+    cpu_release_last_verified_at: resolution.lastVerifiedAt,
+  };
+}
+
+function nonOfficialCpuReleaseFields(
+  cpuReleaseYear: number | null,
+  benchmark: CpuBenchmark | null,
+) {
+  if (!cpuReleaseYear) return {};
+  const source = safeString(benchmark?.source, 120) || "cpu-family-heuristic";
+  const observed = source === "passmark-first-seen";
+  return {
+    cpu_release_catalog_id: null,
+    cpu_release_year: cpuReleaseYear,
+    cpu_release_period_start: `${cpuReleaseYear}-01-01`,
+    cpu_release_period_end: `${cpuReleaseYear}-12-31`,
+    cpu_release_precision: "year",
+    cpu_release_event_type: "unknown",
+    cpu_release_display: String(cpuReleaseYear),
+    cpu_release_source_type: observed ? "passmark-observed" : "heuristic",
+    cpu_release_source_url: safeExternalUrl(benchmark?.source_url) || null,
+    cpu_release_match_scope: null,
+    cpu_release_match_method: "heuristic",
+    cpu_release_confidence: observed ? 45 : 30,
+    cpu_release_is_official: false,
+    cpu_release_last_verified_at: null,
+  };
+}
+
+async function backfillCpuReleaseEnrichment(): Promise<number> {
+  const repository = new CpuReleaseRepository(supabase);
+  const catalog = await repository.catalog();
+  const { data: devices, error } = await supabase.from("device_inventory_view")
+    .select("id,cpu,enrichment_cpu_name")
+    .limit(1000);
+  if (error) throw error;
+  const rows = (devices ?? []).flatMap((device) => {
+    const cpuName = safeString(device.cpu || device.enrichment_cpu_name, 260);
+    const resolution = resolveCpuRelease(
+      cpuName,
+      catalog.rows,
+      catalog.aliases,
+    );
+    return resolution
+      ? [{
+        device_id: safeString(device.id),
+        ...cpuReleaseEnrichmentFields(resolution),
+      }]
+      : [];
+  });
+  if (rows.length > 0) {
+    const { error: upsertError } = await supabase.from("hardware_enrichment")
+      .upsert(rows, {
+        onConflict: "device_id",
+      });
+    if (upsertError) throw upsertError;
+  }
+  clearCpuReleaseCatalogCache();
+  return rows.length;
+}
+
 async function lookupCpuBenchmark(cpuName: string) {
   const normalized = normalizeCpuName(cpuName);
   if (!normalized) return { benchmark: null, match: "none" };
@@ -1426,7 +1556,7 @@ function knownCpuReleaseReference(cpuName: string): CpuReleaseReference | null {
       source: "official-intel-ark",
       confidence: "official-model",
       searchUrl:
-        "https://www.intel.com/content/www/us/en/products/sku/208662/intel-core-i71165g7-processor-12m-cache-up-to-4-70-ghz/specifications.html",
+        "https://www.intel.com/content/www/us/en/products/sku/208921/intel-core-i71165g7-processor-12m-cache-up-to-4-70-ghz-with-ipu/specifications.html",
     }],
   ];
 
@@ -1783,7 +1913,11 @@ async function enrichOneDevice(
 
   const cpuLookup = await lookupCpuBenchmark(cpuName);
   const benchmark = cpuLookup.benchmark;
-  const cpuReleaseYear = benchmark?.release_year ??
+  const officialCpuRelease = await catalogCpuRelease(cpuName);
+  const officialCpuReleaseYear = officialCpuRelease
+    ? releaseYear(officialCpuRelease.period)
+    : null;
+  const cpuReleaseYear = officialCpuReleaseYear ?? benchmark?.release_year ??
     inferCpuReleaseYear(cpuName);
   const cpuScore = benchmark?.cpu_mark_score ?? estimateCpuScore(cpuName);
   const modelRelease = inferModelReleaseYear(model, cpuReleaseYear);
@@ -1937,6 +2071,7 @@ async function enrichOneDevice(
   ].filter(Boolean);
 
   const sources = [
+    officialCpuRelease?.sourceType || "",
     benchmark?.source || (cpuName ? "cpu-generation-estimate" : ""),
     "category-price-rules",
     "age-depreciation",
@@ -1975,6 +2110,9 @@ async function enrichOneDevice(
     cpu_benchmark_source_url: benchmark?.source_url || null,
     cpu_generation: benchmark?.generation || inferCpuGeneration(cpuName),
     cpu_release_year: cpuReleaseYear,
+    ...(officialCpuRelease
+      ? cpuReleaseEnrichmentFields(officialCpuRelease)
+      : nonOfficialCpuReleaseFields(cpuReleaseYear, benchmark)),
     model_release_year: modelReleaseYear,
     release_year: modelReleaseYear,
     estimated_launch_price: launchPrice,
@@ -4877,6 +5015,169 @@ async function handleAdminSyncCpuBenchmarks(request: Request) {
   });
 }
 
+function cpuReleaseAdapters() {
+  const client = new BoundedCpuReleaseHttpClient(
+    "SpacefootInventory/1.0 (+https://badr-spacefoot.github.io/pc_inventory_2.0/)",
+  );
+  return [
+    new IntelReleaseAdapter(client),
+    new AmdReleaseAdapter(client),
+    new AppleReleaseAdapter(client),
+    new QualcommReleaseAdapter(client),
+  ];
+}
+
+async function canSynchronizeCpuReleases(request: Request): Promise<boolean> {
+  if (hasCpuReleaseSyncToken(request.headers, cpuReleaseSyncToken)) return true;
+  return await isAdmin(request, "DEVICE_EDIT");
+}
+
+function cpuReleaseSyncOptions(body: Json): CpuReleaseSyncOptions {
+  return {
+    unresolvedOnly: body.unresolvedOnly !== false,
+    staleOnly: Boolean(body.staleOnly),
+    limit: Math.max(1, Math.min(Number(body.limit || 80), 200)),
+    force: Boolean(body.force),
+    staleDays: Math.max(1, Math.min(Number(body.staleDays || 30), 365)),
+  };
+}
+
+function requestedCpuVendor(value: unknown): CpuVendor | undefined {
+  const vendor = safeString(value, 20).toLowerCase();
+  return ["intel", "amd", "apple", "qualcomm"].includes(vendor)
+    ? vendor as CpuVendor
+    : undefined;
+}
+
+function requestedCpuVendors(body: Json): CpuVendor[] {
+  const values = Array.isArray(body.vendors) ? body.vendors : [body.vendor];
+  return [
+    ...new Set(
+      values.map(requestedCpuVendor).filter((vendor): vendor is CpuVendor =>
+        Boolean(vendor)
+      ),
+    ),
+  ];
+}
+
+async function synchronizeObservedCpuReleases(body: Json) {
+  const repository = new CpuReleaseRepository(supabase);
+  const options = cpuReleaseSyncOptions(body);
+  const requestedNames = Array.isArray(body.cpuNames)
+    ? body.cpuNames.map((value) => safeString(value, 240)).filter(Boolean)
+      .slice(0, 200)
+    : [];
+  const observedCpuNames = requestedNames.length > 0
+    ? [...new Set(requestedNames)]
+    : await repository.observedCpuNames(1000);
+  const existingCatalog = await repository.catalog();
+  const cpuNames = observedCpuNames.filter((cpuName) => {
+    const resolution = resolveCpuRelease(
+      cpuName,
+      existingCatalog.rows,
+      existingCatalog.aliases,
+    );
+    return shouldSynchronizeCpuRelease(resolution, options);
+  }).slice(0, options.limit);
+  const results = await synchronizeCpuReleaseCatalog({
+    repository,
+    adapters: cpuReleaseAdapters(),
+    cpuNames,
+    options,
+    vendors: requestedCpuVendors(body),
+  });
+  clearCpuReleaseCatalogCache();
+  const backfilled = body.recalculateDevices === false
+    ? 0
+    : await backfillCpuReleaseEnrichment();
+  return { cpuNames, options, results, backfilled };
+}
+
+async function handleCpuReleaseSync(request: Request) {
+  if (!(await canSynchronizeCpuReleases(request))) {
+    return badRequest(
+      request,
+      "CPU release synchronization is not authorized.",
+      403,
+    );
+  }
+  const body = await request.json().catch(() => ({})) as Json;
+  const sync = await synchronizeObservedCpuReleases(body);
+  await audit("cpu_release_catalog_synchronized", "cpu_release_catalog", null, {
+    requested: sync.cpuNames.length,
+    backfilled: sync.backfilled,
+    results: sync.results,
+  });
+  return json(request, {
+    ok: sync.results.every((result) => result.status !== "failed"),
+    requested: sync.cpuNames.length,
+    backfilled: sync.backfilled,
+    options: sync.options,
+    results: sync.results,
+  });
+}
+
+async function handleCpuReleaseStatus(request: Request) {
+  if (!(await canSynchronizeCpuReleases(request))) {
+    return badRequest(
+      request,
+      "CPU release synchronization status is not authorized.",
+      403,
+    );
+  }
+  const repository = new CpuReleaseRepository(supabase);
+  const [{ rows, aliases }, runs, observedCpuNames] = await Promise.all([
+    repository.catalog(),
+    repository.latestRuns(16),
+    repository.observedCpuNames(1000),
+  ]);
+  const now = Date.now();
+  const unresolvedCpuNames = observedCpuNames.filter((cpuName) =>
+    !resolveCpuRelease(cpuName, rows, aliases)
+  );
+  const successfulByVendor = Object.fromEntries(
+    ["intel", "amd", "apple", "qualcomm"].map((vendor) => [
+      vendor,
+      runs.find((run) =>
+        safeString(run.vendor) === vendor &&
+        safeString(run.status) === "completed"
+      ) ?? null,
+    ]),
+  );
+  return json(request, {
+    catalogCount: rows.length,
+    officialCount: rows.filter((row) => row.is_official).length,
+    exactCount: rows.filter((row) => row.match_scope !== "family").length,
+    familyCount: rows.filter((row) => row.match_scope === "family").length,
+    unresolvedCount: unresolvedCpuNames.length,
+    unresolvedCpuNames: unresolvedCpuNames.slice(0, 100),
+    staleCount: rows.filter((row) =>
+      now - new Date(row.last_verified_at).getTime() > 30 * 86_400_000
+    ).length,
+    byVendor: Object.fromEntries(
+      ["intel", "amd", "apple", "qualcomm"].map((vendor) => [
+        vendor,
+        rows.filter((row) =>
+          row.vendor === vendor
+        ).length,
+      ]),
+    ),
+    byPrecision: Object.fromEntries(
+      ["day", "month", "quarter", "half_year", "year", "unknown"].map((
+        precision,
+      ) => [
+        precision,
+        rows.filter((row) => row.release_precision === precision).length,
+      ]),
+    ),
+    lastSuccessfulByVendor: successfulByVendor,
+    recentFailures: runs.filter((run) =>
+      ["failed", "partial"].includes(safeString(run.status))
+    ).slice(0, 10),
+    runs,
+  });
+}
+
 async function handleAdminRefreshCpuReleaseDates(request: Request) {
   if (!(await isAdmin(request, "DEVICE_EDIT"))) {
     return badRequest(request, "Action non autorisee pour ce role.", 403);
@@ -4884,6 +5185,12 @@ async function handleAdminRefreshCpuReleaseDates(request: Request) {
   const body = await request.json().catch(() => ({}));
   const limit = Math.max(1, Math.min(Number(body.limit || 60), 200));
   const force = Boolean(body.force);
+
+  const catalogSync = await synchronizeObservedCpuReleases({
+    ...body,
+    limit,
+    force,
+  });
 
   const { data: devices, error: devicesError } = await supabase
     .from("device_inventory_view")
@@ -5032,6 +5339,7 @@ async function handleAdminRefreshCpuReleaseDates(request: Request) {
       safeString(row.source).includes("family-rule")
     ).length,
     rows: resultRows,
+    catalogSync: catalogSync.results,
   });
 }
 
@@ -6191,6 +6499,14 @@ Deno.serve(async (request) => {
       request.method === "POST" &&
       path.endsWith("/admin/cpu-benchmarks/refresh-release-dates")
     ) return await handleAdminRefreshCpuReleaseDates(request);
+    if (
+      request.method === "POST" &&
+      path.endsWith("/admin/cpu-releases/sync")
+    ) return await handleCpuReleaseSync(request);
+    if (
+      request.method === "GET" &&
+      path.endsWith("/admin/cpu-releases/status")
+    ) return await handleCpuReleaseStatus(request);
     if (request.method === "GET" && path.endsWith("/admin/access-tokens")) {
       return await handleAdminListAccessTokens(request);
     }

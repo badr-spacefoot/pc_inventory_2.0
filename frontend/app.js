@@ -29,6 +29,7 @@ const {
     formatters: formattersDomain,
     enrichment: enrichmentDomain,
     notifications: notificationDomain,
+    cpuRelease: cpuReleaseDomain,
   },
 } = window.SpacefootCore;
 
@@ -106,6 +107,19 @@ function localizedEnrichmentValue(value) {
       spec_estimate: "Estimation technique",
       fallback_estimate: "Estimation prudente",
       invoice_backed: "Facture verifiee",
+      day: "Jour exact",
+      month: "Mois",
+      quarter: "Trimestre",
+      half_year: "Semestre",
+      year: "Année",
+      announcement: "Annonce",
+      launch: "Lancement",
+      first_product_availability: "Première disponibilité produit",
+      expected_availability: "Disponibilité prévue",
+      exact_part_number: "Référence exacte",
+      exact_canonical_name: "Nom exact",
+      validated_alias: "Alias validé",
+      controlled_family: "Famille contrôlée",
     },
     en: {
       completed: "Completed",
@@ -127,6 +141,19 @@ function localizedEnrichmentValue(value) {
       spec_estimate: "Spec estimate",
       fallback_estimate: "Fallback estimate",
       invoice_backed: "Invoice backed",
+      day: "Exact day",
+      month: "Month",
+      quarter: "Quarter",
+      half_year: "Half-year",
+      year: "Year",
+      announcement: "Announcement",
+      launch: "Launch",
+      first_product_availability: "First product availability",
+      expected_availability: "Expected availability",
+      exact_part_number: "Exact part number",
+      exact_canonical_name: "Exact name",
+      validated_alias: "Validated alias",
+      controlled_family: "Controlled family",
     },
   };
   return labels[state.language]?.[value] || value;
@@ -3119,6 +3146,15 @@ function renderDetail(device, scans, history = []) {
         html: `<a href="${escapeHtml(cpuBenchmarkSourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(translate("Voir la source"))}</a>`,
       }
     : "";
+  const cpuReleaseSourceUrl = /^https?:\/\//i.test(String(device.cpu_release_source_url || ""))
+    ? String(device.cpu_release_source_url)
+    : "";
+  const cpuReleaseSourceLink = cpuReleaseSourceUrl
+    ? {
+        html: `<a href="${escapeHtml(cpuReleaseSourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(translate("Voir la source officielle"))}</a>`,
+      }
+    : "";
+  const cpuReleaseInfo = cpuReleaseDomain.cpuReleasePresentation(device, state.language);
   const effectiveTeamId = unassignedStatus ? "" : device.team_id;
   const effectiveUserId = unassignedStatus ? "" : device.assigned_user_id;
   const teamOptions = state.teams
@@ -3226,6 +3262,15 @@ function renderDetail(device, scans, history = []) {
         ["Score CPU", device.cpu_benchmark_score || device.cpu_score],
         ...(cpuBenchmarkSourceLink ? [["Source du score CPU", cpuBenchmarkSourceLink]] : []),
         ["Génération du processeur", device.cpu_generation],
+        ["Date de sortie CPU", cpuReleaseInfo.summary],
+        ["Nom CPU canonique", device.cpu_release_canonical_name],
+        ["Fabricant de la source CPU", localizedEnrichmentValue(device.cpu_release_vendor)],
+        ["Précision de la date CPU", localizedEnrichmentValue(device.cpu_release_precision)],
+        ["Type d'événement CPU", localizedEnrichmentValue(device.cpu_release_event_type)],
+        ["Correspondance CPU", localizedEnrichmentValue(device.cpu_release_match_method)],
+        ["Confiance date CPU", device.cpu_release_confidence ? `${device.cpu_release_confidence}/100` : ""],
+        ...(cpuReleaseSourceLink ? [["Source officielle de la date CPU", cpuReleaseSourceLink]] : []),
+        ["Dernière vérification de la date CPU", formatDate(device.cpu_release_last_verified_at)],
         ["Année du modèle", device.release_year || device.model_release_year],
         ["Prix d’achat réel", actualPurchasePrice],
         ["Garantie", warrantyDisplay],

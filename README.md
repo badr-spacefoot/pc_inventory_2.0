@@ -530,7 +530,7 @@ Pour chaque machine, le service calcule:
 5. Depreciation: 70% a un an, 55% a deux ans, 40% a trois ans, 30% a quatre ans, 20% a cinq ans, puis 10 a 15%.
 6. eBay Browse API peut etre activee en option. Keepa n'est pas requis.
 
-Le scraping de pages constructeur et de sites editoriaux n'est pas active automatiquement. Ces sources peuvent servir a verifier et mettre a jour manuellement les jeux locaux, sans rendre le dashboard dependant de pages externes.
+Les dates de sortie CPU sont synchronisees cote serveur depuis les sources officielles Intel, AMD, Apple et Qualcomm. Le dashboard lit ensuite le catalogue Supabase mis en cache; il ne depend pas des sites constructeurs pendant la navigation.
 
 ### Score de confiance
 
@@ -564,17 +564,32 @@ Le workflow GitHub Actions `.github/workflows/cpu-benchmark-sync.yml` lance la m
 
 La source par defaut lit la table publique CPU Mark de PassMark/CPU Benchmark puis le CSV versionne du repo. Si elle ne fournit pas un processeur donne, le CPU reste marque comme manquant et l'enrichissement conserve le fallback existant.
 
-### Actualiser les dates de lancement CPU
+### Catalogue officiel des dates de lancement CPU
 
-Dans Admin > Valorisation, le bouton `Actualiser dates CPU` parcourt les processeurs vus dans le parc et met a jour le cache `cpu_benchmarks.release_year`.
+La migration `20260711040651_authoritative_cpu_release_catalog.sql` cree un catalogue separe des scores PassMark. Elle conserve le nom canonique, les alias, la date ou periode, sa precision, le type d'evenement, l'URL officielle et la derniere verification.
 
-- Intel: recherche officielle via Intel ARK / pages Intel.
-- AMD: recherche officielle via les pages produits AMD.
-- Intel Core Ultra 200V: si la recherche Intel est rendue cote navigateur, l'API applique la famille officielle Lunar Lake / Core Ultra 200V, par exemple `Intel Core Ultra 7 256V` => 2024.
-- Familles modernes couvertes par regles officielles de famille: Intel Core Ultra 100H/U/P, Intel Core Series 1, AMD Ryzen AI 300/400 et Qualcomm Snapdragon X / X Plus.
-- Si la page officielle ne retourne pas de date exploitable, l'API applique une regle de famille processeur et marque la source comme `*-family-rule`.
+- Intel: fiches Intel ARK. Une valeur comme `Q3'20` reste un trimestre, du 1er juillet au 30 septembre 2020.
+- AMD: specifications produit. Une valeur comme `1/6/2020` sur le site anglais est stockee comme le 6 janvier 2020.
+- Apple Silicon: annonces Apple Newsroom, distinguees d'une disponibilite commerciale.
+- Qualcomm Snapdragon: catalogue produit et communiques officiels. Le synchroniseur lit les modeles AEM publics `*.model.json`, separe la preuve du numero de piece de la date de famille et conserve une disponibilite future comme prevue.
 
-Apres actualisation, lancer `Recalculer les valeurs` pour propager les nouvelles annees de lancement aux scores d'age, de depreciation et de remplacement.
+La collecte reste dynamique via les index et pages constructeurs. Un petit jeu de references exactes deja verifiees peut servir de secours lorsque le CDN AMD ou Intel refuse temporairement les Edge Functions; il ne contient aucune date deduite et ne remplace jamais la decouverte officielle principale. Les valeurs brutes (`1/6/2020`, `Q3'20`, `mid-2024`) restent stockees pour audit.
+
+La resolution applique cet ordre: reference exacte, nom canonique exact, alias valide, puis famille controlee. Une source officielle gagne toujours sur PassMark et sur les heuristiques historiques. Le backfill met a jour les lignes `hardware_enrichment` existantes sans modifier les contrats API historiques.
+
+Endpoints proteges:
+
+- `POST /admin/cpu-releases/sync`: synchronise les processeurs observes. Accepte une session admin ou `x-cpu-release-sync-token`. Pour un diagnostic cible, `cpuNames` accepte au maximum 200 noms explicites; les autres options sont `vendors`, `unresolvedOnly`, `staleOnly`, `limit`, `force` et `recalculateDevices`.
+- `GET /admin/cpu-releases/status`: retourne les volumes par fournisseur, les donnees obsoletes et les derniers runs.
+
+Le workflow `.github/workflows/cpu-release-sync.yml` execute une synchronisation incrementale chaque lundi a 04:41 UTC. Configurer le secret Actions et Edge Function `CPU_RELEASE_SYNC_TOKEN`. Le workflow peut aussi etre lance manuellement par fournisseur.
+
+Pour verifier les parseurs sans reseau, lancer `pnpm test:typescript`. Les tests live officiels sont optionnels:
+
+```powershell
+$env:RUN_LIVE_CPU_RELEASE_TESTS="1"
+pnpm test:typescript -- tests/backend/cpu-release-catalog.test.ts
+```
 
 ### Cache et actions admin
 
@@ -594,6 +609,7 @@ supabase secrets set EBAY_BROWSE_API_TOKEN="..."
 supabase secrets set GOOGLE_MAPS_API_KEY="..."
 supabase secrets set CPU_BENCHMARK_SOURCE_URLS="https://www.cpubenchmark.net/cpu-list/,https://raw.githubusercontent.com/badr-spacefoot/pc_inventory_2.0/main/data/cpu_benchmarks.csv"
 supabase secrets set CPU_BENCHMARK_SYNC_TOKEN="..."
+supabase secrets set CPU_RELEASE_SYNC_TOKEN="..."
 supabase secrets set ENRICHMENT_CACHE_DAYS="90"
 ```
 

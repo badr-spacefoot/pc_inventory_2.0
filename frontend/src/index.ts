@@ -12,6 +12,7 @@ import * as invoices from "./features/invoices/warranty";
 import * as notifications from "./features/notifications/model";
 import * as history from "./features/history/history-model";
 import * as organization from "./features/organization/statistics";
+import * as cpuRelease from "./features/cpu-release/presentation";
 import { localizeErrorMessage } from "./i18n/errors";
 import { englishTranslations, frenchNotificationTranslations, normalizeTranslationKey } from "./i18n/translations";
 import * as formatters from "./i18n/formatters";
@@ -50,6 +51,7 @@ export interface SpacefootCore {
     history: typeof history;
     inventory: typeof inventory;
     organization: typeof organization;
+    cpuRelease: typeof cpuRelease;
     formatters: typeof formatters;
   };
 }
@@ -94,6 +96,7 @@ window.SpacefootCore = Object.freeze({
     history: Object.freeze(history),
     inventory: Object.freeze(inventory),
     organization: Object.freeze(organization),
+    cpuRelease: Object.freeze(cpuRelease),
     formatters: Object.freeze(formatters),
   }),
 });
