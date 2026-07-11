@@ -4760,8 +4760,8 @@ async function refreshCpuReleaseDates(button) {
     const result = await inventoryApi.refreshCpuReleaseDates({ limit: 120 });
     const message =
       state.language === "en"
-        ? `${result.updated || 0} CPU launch date(s) updated, ${result.official || 0} from official search, ${result.fallback || 0} from family rules.`
-        : `${result.updated || 0} date(s) CPU mise(s) à jour, ${result.official || 0} via recherche officielle, ${result.fallback || 0} via règles de famille.`;
+        ? `${result.updated || 0} CPU date(s) updated: ${result.official || 0} official, ${result.observed || 0} observed by PassMark, ${result.fallback || 0} estimated.`
+        : `${result.updated || 0} date(s) CPU mise(s) à jour : ${result.official || 0} officielles, ${result.observed || 0} observées via PassMark, ${result.fallback || 0} estimées.`;
     toast(message);
     await loadCpuBenchmarkStats();
   } finally {
@@ -4814,6 +4814,7 @@ const enrichmentStoredResultKeys = [
   "matched",
   "unmatched",
   "official",
+  "observed",
   "fallback",
 ];
 
@@ -4909,8 +4910,8 @@ function enrichmentStepDetail(step) {
   }
   if (step.id === "releaseDates") {
     return state.language === "en"
-      ? `${result.updated || 0} updated · ${result.official || 0} official · ${result.fallback || 0} estimated`
-      : `${result.updated || 0} mises à jour · ${result.official || 0} officielles · ${result.fallback || 0} estimées`;
+      ? `${result.updated || 0} updated · ${result.official || 0} official · ${result.observed || 0} observed · ${result.fallback || 0} estimated`
+      : `${result.updated || 0} mises à jour · ${result.official || 0} officielles · ${result.observed || 0} observées · ${result.fallback || 0} estimées`;
   }
   if (["enrichDevices", "recalculateValues"].includes(step.id)) {
     return state.language === "en"

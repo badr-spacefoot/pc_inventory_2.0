@@ -5,6 +5,7 @@ import {
   inferCpuGeneration,
   inferCpuReleaseYear,
   normalizeCpuName,
+  parsePassMarkFirstSeen,
 } from "../../supabase/functions/inventory-api/domain/cpu";
 
 describe("CPU domain", () => {
@@ -51,5 +52,13 @@ describe("CPU domain", () => {
     expect(canonicalizeCpuBenchmarkSourceUrl("https://www.cpubenchmark.net/cpu_lookup.php?cpu=Unknown")).toBe(
       "https://www.cpubenchmark.net/cpu_lookup.php?cpu=Unknown",
     );
+  });
+
+  it.each([
+    ["CPU First Seen on Charts: Q2 2021", { year: 2021, quarter: 2, label: "Q2 2021" }],
+    ["CPU First Seen on Charts 2024", { year: 2024, quarter: null, label: "2024" }],
+    ["CPU First Seen on Charts: unknown", null],
+  ])("parses PassMark first-seen evidence from %s", (text, expected) => {
+    expect(parsePassMarkFirstSeen(text)).toEqual(expected);
   });
 });

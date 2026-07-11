@@ -26,6 +26,7 @@ import {
   inferCpuReleaseYear,
   inferModelReleaseYear,
   normalizeCpuName,
+  parsePassMarkFirstSeen,
 } from "./domain/cpu.ts";
 import {
   bookValueEstimate,
@@ -1221,6 +1222,10 @@ type CpuReleaseReference = {
   source: string;
 
   confidence: string;
+
+  releasePeriod?: string;
+
+  searchUrl?: string;
 };
 
 async function lookupCpuBenchmark(cpuName: string) {
@@ -1504,7 +1509,7 @@ function parseLaunchYearFromOfficialText(text: string) {
   return null;
 }
 
-async function fetchOfficialCpuText(url: string) {
+async function fetchCpuReferenceText(url: string) {
   if (!url) return "";
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
@@ -1530,14 +1535,50 @@ async function fetchOfficialCpuText(url: string) {
   }
 }
 
-async function lookupCpuReleaseDate(cpuName: string) {
+function passMarkCpuDetailUrl(sourceUrl: string) {
+  const canonicalUrl = canonicalizeCpuBenchmarkSourceUrl(sourceUrl);
+  if (!canonicalUrl) return "";
+  try {
+    const url = new URL(canonicalUrl);
+    if (
+      !/(^|\.)cpubenchmark\.net$/i.test(url.hostname) ||
+      !/\/cpu\.php$/i.test(url.pathname) ||
+      !url.searchParams.has("id")
+    ) return "";
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
+async function lookupCpuReleaseDate(
+  cpuName: string,
+  benchmarkSourceUrl = "",
+): Promise<CpuReleaseReference> {
   const cleanCpu = safeString(cpuName, 260);
   const vendor = cpuVendor(cleanCpu);
   const searchUrl = officialCpuSearchUrl(cleanCpu, vendor);
-  const knownOfficial = knownCpuReleaseReference(cleanCpu) ??
-    knownOfficialCpuReleaseDate(cleanCpu);
+  const knownReference = knownCpuReleaseReference(cleanCpu);
+  const knownOfficial = knownReference?.source.startsWith("official-")
+    ? knownReference
+    : knownOfficialCpuReleaseDate(cleanCpu);
   if (knownOfficial) return { ...knownOfficial, searchUrl };
-  const officialText = await fetchOfficialCpuText(searchUrl);
+  const passMarkUrl = passMarkCpuDetailUrl(benchmarkSourceUrl);
+  const passMarkFirstSeen = parsePassMarkFirstSeen(
+    await fetchCpuReferenceText(passMarkUrl),
+  );
+  if (passMarkFirstSeen) {
+    return {
+      releaseYear: passMarkFirstSeen.year,
+      releasePeriod: passMarkFirstSeen.label,
+      generation: inferCpuGeneration(cleanCpu) || undefined,
+      category: "mobile",
+      source: "passmark-first-seen",
+      confidence: "observed",
+      searchUrl: passMarkUrl,
+    };
+  }
+  const officialText = await fetchCpuReferenceText(searchUrl);
   const officialYear = parseLaunchYearFromOfficialText(officialText);
   if (officialYear) {
     return {
@@ -1553,6 +1594,7 @@ async function lookupCpuReleaseDate(cpuName: string) {
       searchUrl,
     };
   }
+  if (knownReference) return { ...knownReference, searchUrl };
   const fallbackYear = inferCpuReleaseYear(cleanCpu);
   return {
     releaseYear: fallbackYear,
@@ -4894,7 +4936,10 @@ async function handleAdminRefreshCpuReleaseDates(request: Request) {
       continue;
     }
 
-    const lookup = await lookupCpuReleaseDate(candidateCpuName);
+    const lookup = await lookupCpuReleaseDate(
+      candidateCpuName,
+      existingSourceUrl,
+    );
     if (!lookup.releaseYear) {
       skipped += 1;
       resultRows.push({
@@ -4935,6 +4980,7 @@ async function handleAdminRefreshCpuReleaseDates(request: Request) {
       releaseYear: lookup.releaseYear,
       source: lookup.source,
       confidence: lookup.confidence,
+      releasePeriod: lookup.releasePeriod || String(lookup.releaseYear),
       status: "updated",
     });
   }
@@ -4958,6 +5004,9 @@ async function handleAdminRefreshCpuReleaseDates(request: Request) {
     skipped,
     official: resultRows.filter((row) =>
       safeString(row.source).startsWith("official-")
+    ).length,
+    observed: resultRows.filter((row) =>
+      safeString(row.source) === "passmark-first-seen"
     ).length,
     fallback: resultRows.filter((row) =>
       safeString(row.source).includes("family-rule")

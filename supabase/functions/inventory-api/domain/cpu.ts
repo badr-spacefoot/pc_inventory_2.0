@@ -38,6 +38,30 @@ export function canonicalizeCpuBenchmarkSourceUrl(
   }
 }
 
+export type PassMarkFirstSeen = {
+  year: number;
+  quarter: number | null;
+  label: string;
+};
+
+export function parsePassMarkFirstSeen(
+  pageText: string,
+): PassMarkFirstSeen | null {
+  const text = boundedString(pageText, 500_000).replace(/\s+/g, " ");
+  const match = text.match(
+    /CPU\s+First\s+Seen\s+on\s+Charts\s*:?\s*(?:Q([1-4])\s+)?((?:19|20)\d{2})/i,
+  );
+  if (!match?.[2]) return null;
+  const year = Number(match[2]);
+  const quarter = match[1] ? Number(match[1]) : null;
+  if (year < 1990 || year > new Date().getFullYear() + 1) return null;
+  return {
+    year,
+    quarter,
+    label: quarter ? `Q${quarter} ${year}` : String(year),
+  };
+}
+
 function intelGenerationLabel(generation: number): string {
   const suffix = generation % 100 >= 11 && generation % 100 <= 13
     ? "th"
@@ -139,19 +163,20 @@ export function inferCpuReleaseYear(cpuName: string): number | null {
   const amd = cpu.match(/ryzen\s+[3579]\s+(\d{4})/i);
   if (amd?.[1]) {
     const family = Number(amd[1][0]);
-    return ({
-      1: 2017,
-      2: 2018,
-      3: 2019,
-      4: 2020,
-      5: 2021,
-      6: 2022,
-      7: 2023,
-      8: 2024,
-    } as Record<
-      number,
-      number
-    >)[family] ?? null;
+    return (
+      (
+        {
+          1: 2017,
+          2: 2018,
+          3: 2019,
+          4: 2020,
+          5: 2021,
+          6: 2022,
+          7: 2023,
+          8: 2024,
+        } as Record<number, number>
+      )[family] ?? null
+    );
   }
   const amdAi = cpu.match(/\bryzen\s+ai\s+[3579]\s+(\d{3})\b/i);
   if (amdAi?.[1]) {
