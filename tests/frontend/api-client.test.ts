@@ -39,6 +39,31 @@ describe("ApiClient", () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
+  it("retries a transient Supabase Edge deployment 404 when explicitly enabled", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({ message: "Requested function was not found" }, 404))
+      .mockResolvedValueOnce(jsonResponse({ matched: 40 }));
+    const client = new ApiClient({ baseUrl: "https://example.test", fetcher });
+
+    await expect(
+      client.request("/admin/cpu-benchmarks/sync", {
+        method: "POST",
+        retries: 2,
+        retryDelayMs: 0,
+      }),
+    ).resolves.toEqual({ matched: 40 });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry an ordinary missing endpoint", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ message: "Route inconnue" }, 404));
+    const client = new ApiClient({ baseUrl: "https://example.test", fetcher });
+
+    await expect(client.request("/missing", { retries: 2, retryDelayMs: 0 })).rejects.toBeInstanceOf(ApiError);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
   it("exposes structured API error details", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ error: "Forbidden", code: "DENIED" }, 403));
     const client = new ApiClient({ baseUrl: "https://example.test", fetcher });

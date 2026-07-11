@@ -27,6 +27,11 @@ function errorMessage(body: unknown): string {
   return "Erreur API";
 }
 
+function isRetryableResponse(status: number, body: unknown): boolean {
+  if (RETRYABLE_STATUS_CODES.has(status)) return true;
+  return status === 404 && /^requested function was not found\.?$/i.test(errorMessage(body));
+}
+
 function delay(milliseconds: number): Promise<void> {
   if (milliseconds <= 0) return Promise.resolve();
   return new Promise((resolve) => globalThis.setTimeout(resolve, milliseconds));
@@ -90,7 +95,7 @@ export class ApiClient {
         const body = await parseResponse(response);
         if (response.ok) return body as T;
 
-        if (attempt < retries && RETRYABLE_STATUS_CODES.has(response.status)) {
+        if (attempt < retries && isRetryableResponse(response.status, body)) {
           await delay(retryDelayMs * 2 ** attempt);
           continue;
         }

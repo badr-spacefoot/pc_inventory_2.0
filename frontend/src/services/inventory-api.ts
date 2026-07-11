@@ -6,6 +6,8 @@ export interface ApiTransport {
 
 type ApiResponse = JsonObject;
 const ENRICHMENT_JOB_REQUEST_TIMEOUT_MS = 120_000;
+const EDGE_DEPLOYMENT_RETRIES = 2;
+const EDGE_DEPLOYMENT_RETRY_DELAY_MS = 750;
 
 function encodePathSegment(value: string): string {
   return encodeURIComponent(value);
@@ -221,6 +223,10 @@ export class InventoryApi {
   }
 
   syncCpuBenchmarks(payload: JsonObject): Promise<ApiResponse> {
-    return this.transport.request("/admin/cpu-benchmarks/sync", jsonRequest("POST", payload));
+    return this.transport.request("/admin/cpu-benchmarks/sync", {
+      ...jsonRequest("POST", payload),
+      retries: EDGE_DEPLOYMENT_RETRIES,
+      retryDelayMs: EDGE_DEPLOYMENT_RETRY_DELAY_MS,
+    });
   }
 }

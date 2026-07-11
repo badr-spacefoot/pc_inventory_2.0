@@ -55,4 +55,17 @@ describe("InventoryApi", () => {
       timeoutMs: 120_000,
     });
   });
+
+  it("retries CPU synchronization during a transient Edge deployment", async () => {
+    const { api, request } = setup();
+
+    await api.syncCpuBenchmarks({ limit: 250 });
+
+    expect(request).toHaveBeenCalledWith("/admin/cpu-benchmarks/sync", {
+      method: "POST",
+      body: JSON.stringify({ limit: 250 }),
+      retries: 2,
+      retryDelayMs: 750,
+    });
+  });
 });
