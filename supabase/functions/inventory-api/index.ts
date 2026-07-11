@@ -1380,6 +1380,16 @@ function knownOfficialCpuReleaseDate(cpuName: string) {
 function knownCpuReleaseReference(cpuName: string): CpuReleaseReference | null {
   const cpu = canonicalCpuText(cpuName);
   const exactRules: Array<[RegExp, CpuReleaseReference]> = [
+    [/\bryzen\s+5\s+4500u\b/, {
+      releaseYear: 2020,
+      releasePeriod: "2020-01-06",
+      generation: "Ryzen 4000",
+      category: "mobile",
+      source: "official-amd-product-spec",
+      confidence: "official-model",
+      searchUrl:
+        "https://www.amd.com/en/support/downloads/drivers.html/processors/ryzen/ryzen-4000-series/amd-ryzen-5-4500u.html",
+    }],
     [/\bryzen\s+5\s+7520u\b/, {
       releaseYear: 2022,
       generation: "Ryzen 7000",
@@ -1407,6 +1417,16 @@ function knownCpuReleaseReference(cpuName: string): CpuReleaseReference | null {
       category: "mobile",
       source: "official-intel-core-series-1",
       confidence: "official-model",
+    }],
+    [/\bcore\s+i7[-\s]?1165g7\b/, {
+      releaseYear: 2020,
+      releasePeriod: "Q3 2020",
+      generation: "11th Gen Intel",
+      category: "mobile",
+      source: "official-intel-ark",
+      confidence: "official-model",
+      searchUrl:
+        "https://www.intel.com/content/www/us/en/products/sku/208662/intel-core-i71165g7-processor-12m-cache-up-to-4-70-ghz/specifications.html",
     }],
   ];
 
@@ -1562,7 +1582,7 @@ async function lookupCpuReleaseDate(
   const knownOfficial = knownReference?.source.startsWith("official-")
     ? knownReference
     : knownOfficialCpuReleaseDate(cleanCpu);
-  if (knownOfficial) return { ...knownOfficial, searchUrl };
+  if (knownOfficial) return { searchUrl, ...knownOfficial };
   const passMarkUrl = passMarkCpuDetailUrl(benchmarkSourceUrl);
   const passMarkFirstSeen = parsePassMarkFirstSeen(
     await fetchCpuReferenceText(passMarkUrl),
@@ -1594,7 +1614,7 @@ async function lookupCpuReleaseDate(
       searchUrl,
     };
   }
-  if (knownReference) return { ...knownReference, searchUrl };
+  if (knownReference) return { searchUrl, ...knownReference };
   const fallbackYear = inferCpuReleaseYear(cleanCpu);
   return {
     releaseYear: fallbackYear,
