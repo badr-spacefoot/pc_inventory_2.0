@@ -5308,7 +5308,6 @@ async function handleAdminRefreshCpuReleaseDates(request: Request) {
       lookup.category || reference?.category || existing?.category,
       80,
     ) || null;
-    const lookupIsOfficial = lookup.source.startsWith("official-");
     rows.push({
       cpu_name: safeString(existing?.cpu_name || candidateCpuName, 260),
       normalized_name: normalizedName,
@@ -5316,12 +5315,10 @@ async function handleAdminRefreshCpuReleaseDates(request: Request) {
       release_year: lookup.releaseYear,
       generation,
       category,
-      source: lookupIsOfficial
-        ? lookup.source
-        : existingSource || lookup.source,
-      source_url: lookupIsOfficial
-        ? safeExternalUrl(lookup.searchUrl)
-        : existingSourceUrl || safeExternalUrl(lookup.searchUrl) || null,
+      // Benchmark provenance and release-date provenance are separate. The
+      // latter lives in cpu_release_catalog / hardware_enrichment.
+      source: existingSource || "cpu-score-estimate",
+      source_url: existingSourceUrl || null,
       updated_at: now,
     });
     resultRows.push({
