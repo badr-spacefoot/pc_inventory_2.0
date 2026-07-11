@@ -79,6 +79,7 @@ const adminPassword = Deno.env.get("ADMIN_PASSWORD") ?? "";
 const adminSessionSecret = Deno.env.get("ADMIN_SESSION_SECRET") ?? "";
 const collectionAccessToken = Deno.env.get("COLLECTION_ACCESS_TOKEN") ?? "";
 const cpuReleaseSyncToken = Deno.env.get("CPU_RELEASE_SYNC_TOKEN") ?? "";
+const enrichmentSyncToken = Deno.env.get("ENRICHMENT_SYNC_TOKEN") ?? "";
 const invoiceStorageBucket = Deno.env.get("INVOICE_STORAGE_BUCKET") ??
   "device-invoices";
 
@@ -4679,6 +4680,16 @@ function isCpuBenchmarkSyncRequest(request: Request) {
   );
 }
 
+function isEnrichmentSyncRequest(request: Request) {
+  const provided = safeString(
+    request.headers.get("x-enrichment-sync-token"),
+    512,
+  );
+  return Boolean(
+    enrichmentSyncToken && provided && provided === enrichmentSyncToken,
+  );
+}
+
 async function authorizeCpuBenchmarkSync(request: Request) {
   if (isCpuBenchmarkSyncRequest(request)) return null;
   if (!(await isAdmin(request, "DEVICE_EDIT"))) {
@@ -5481,8 +5492,11 @@ async function handleActiveEnrichmentJob(request: Request) {
 }
 
 async function handleStartEnrichmentJob(request: Request) {
-  const { response, session } = await requireAction(request, "DEVICE_EDIT");
-  if (response) return response;
+  const scheduled = isEnrichmentSyncRequest(request);
+  const authorization = scheduled
+    ? { response: null, session: null }
+    : await requireAction(request, "DEVICE_EDIT");
+  if (authorization.response) return authorization.response;
 
   const body = await request.json().catch(() => ({}));
   const mode = safeString(body.mode, 40) || "refresh";
@@ -5510,7 +5524,10 @@ async function handleStartEnrichmentJob(request: Request) {
       force,
       use_external: useExternal,
       total_count: count ?? 0,
-      actor_label: session?.displayName || session?.username || "admin",
+      actor_label: scheduled
+        ? "scheduled-enrichment"
+        : authorization.session?.displayName ||
+          authorization.session?.username || "admin",
     })
     .select("*")
     .single();
@@ -5527,7 +5544,10 @@ async function handleStartEnrichmentJob(request: Request) {
 }
 
 async function handleProcessEnrichmentJob(request: Request) {
-  if (!(await isAdmin(request, "DEVICE_EDIT"))) {
+  if (
+    !isEnrichmentSyncRequest(request) &&
+    !(await isAdmin(request, "DEVICE_EDIT"))
+  ) {
     return badRequest(request, "Action non autorisee pour ce role.", 403);
   }
 

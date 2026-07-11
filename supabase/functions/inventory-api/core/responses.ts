@@ -18,7 +18,7 @@ export function createResponseHelpers(
     return {
       "Access-Control-Allow-Origin": allowOrigin,
       "Access-Control-Allow-Headers":
-        "authorization, x-client-info, apikey, content-type, x-collection-access-token, x-cpu-benchmark-sync-token",
+        "authorization, x-client-info, apikey, content-type, x-collection-access-token, x-cpu-benchmark-sync-token, x-cpu-release-sync-token, x-enrichment-sync-token",
       "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
       Vary: "Origin",
     };
