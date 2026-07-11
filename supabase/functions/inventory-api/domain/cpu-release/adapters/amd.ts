@@ -2,7 +2,10 @@ import { parseReleasePeriod } from "../date-parser.ts";
 import { extractTitle, findLabelValue, textContainsIdentity } from "../html.ts";
 import type { CpuReleaseHttpClient } from "../http-client.ts";
 import { OfficialSourceNotModifiedError } from "../http-client.ts";
-import { findCuratedOfficialReference } from "../official-references.ts";
+import {
+  curatedReferencePeriods,
+  findCuratedOfficialReference,
+} from "../official-references.ts";
 import { discoverBatchFromOfficialSitemaps } from "../sitemap.ts";
 import type {
   CpuIdentity,
@@ -89,21 +92,6 @@ export class AmdReleaseAdapter implements CpuReleaseAdapter {
     context?: CpuReleaseFetchContext,
   ): Promise<OfficialCpuReleaseRecord | null> {
     const reference = findCuratedOfficialReference(identity);
-    const verifiedLaunch = parseReleasePeriod(
-      reference?.rawReleaseValue ?? "",
-      "en-US",
-    );
-    if (reference && verifiedLaunch.periodStart) {
-      return officialRecord({
-        identity,
-        canonicalName: reference.canonicalName,
-        launch: verifiedLaunch,
-        sourceType: reference.sourceType,
-        sourceUrl: reference.sourceUrl,
-        sourceTitle: reference.sourceTitle,
-        rawContent: JSON.stringify(reference),
-      });
-    }
     for (const url of candidateUrls.slice(0, 5)) {
       let response;
       try {
@@ -138,6 +126,26 @@ export class AmdReleaseAdapter implements CpuReleaseAdapter {
         etag: response.etag,
         lastModified: response.lastModified,
       });
+    }
+    if (reference) {
+      const periods = curatedReferencePeriods(reference);
+      if (
+        periods.launch?.periodStart || periods.availability?.periodStart ||
+        periods.announcement?.periodStart
+      ) {
+        return officialRecord({
+          identity,
+          canonicalName: reference.canonicalName,
+          ...periods,
+          ...(reference.effectiveEventType
+            ? { effectiveEventType: reference.effectiveEventType }
+            : {}),
+          sourceType: reference.sourceType,
+          sourceUrl: reference.sourceUrl,
+          sourceTitle: reference.sourceTitle,
+          rawContent: JSON.stringify(reference),
+        });
+      }
     }
     return null;
   }

@@ -6,7 +6,10 @@ import {
   textContainsIdentity,
 } from "../html.ts";
 import type { CpuReleaseHttpClient } from "../http-client.ts";
-import { findCuratedOfficialReference } from "../official-references.ts";
+import {
+  curatedReferencePeriods,
+  findCuratedOfficialReference,
+} from "../official-references.ts";
 import type {
   CpuIdentity,
   CpuReleaseAdapter,
@@ -17,6 +20,10 @@ import type {
 import { conditionalRequest, officialRecord } from "./shared.ts";
 
 const intelArkIndex = "https://www.intel.com/content/www/us/en/ark.html";
+
+function compactIdentifier(value: string | null | undefined): string {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
 
 function intelSeriesMatcher(identity: CpuIdentity): RegExp | null {
   const name = identity.rawName;
@@ -57,16 +64,12 @@ function identityMatchesLink(
   identity: CpuIdentity,
   link: { url: string; text: string },
 ): boolean {
-  const compact = `${link.url} ${link.text}`.toLowerCase().replace(
-    /[^a-z0-9]+/g,
-    "",
-  );
+  const compact = compactIdentifier(`${link.url} ${link.text}`);
   return [identity.partNumber, identity.modelNumber, ...identity.aliases].some(
     (value) => {
-      const token = String(value || "")
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "");
-      return token.length >= 4 && compact.includes(token);
+      const token = compactIdentifier(value);
+      return token.length >= 4 &&
+        (compact.includes(`${token}processor`) || compact.endsWith(token));
     },
   );
 }
@@ -154,23 +157,10 @@ export class IntelReleaseAdapter implements CpuReleaseAdapter {
     context?: CpuReleaseFetchContext,
   ): Promise<OfficialCpuReleaseRecord | null> {
     const reference = findCuratedOfficialReference(identity);
-    const verifiedLaunch = parseReleasePeriod(
-      reference?.rawReleaseValue ?? "",
-      "en-US",
+    const urls = [reference?.sourceUrl ?? "", ...candidateUrls].filter(
+      (url, index, all) => Boolean(url) && all.indexOf(url) === index,
     );
-    if (reference && verifiedLaunch.periodStart) {
-      return officialRecord({
-        identity,
-        canonicalName: reference.canonicalName,
-        partNumber: reference.modelNumber,
-        launch: verifiedLaunch,
-        sourceType: reference.sourceType,
-        sourceUrl: reference.sourceUrl,
-        sourceTitle: reference.sourceTitle,
-        rawContent: JSON.stringify(reference),
-      });
-    }
-    for (const url of candidateUrls.slice(0, 5)) {
+    for (const url of urls.slice(0, 6)) {
       let response;
       try {
         response = await this.client.getText(
@@ -181,23 +171,26 @@ export class IntelReleaseAdapter implements CpuReleaseAdapter {
         continue;
       }
       if (!textContainsIdentity(response.body, identity.aliases)) continue;
+      const processorNumber = findLabelValue(response.body, [
+        /^Processor Number$/i,
+        /^Numero du processeur$/i,
+      ]);
+      if (
+        processorNumber && identity.modelNumber &&
+        compactIdentifier(processorNumber) !==
+          compactIdentifier(identity.modelNumber)
+      ) continue;
       const rawLaunch = findLabelValue(response.body, [
         /^Launch Date$/i,
         /^Date de lancement$/i,
       ]);
       const launch = parseReleasePeriod(rawLaunch ?? "", "en-US");
       if (!launch.periodStart) continue;
-      const processorNumber = findLabelValue(response.body, [
-        /^Processor Number$/i,
-        /^Numero du processeur$/i,
-      ]);
       return officialRecord({
         identity,
-        canonicalName: findLabelValue(response.body, [/^Intel.*Processor$/i]) ??
-          extractTitle(response.body)
-            ?.replace(/\s*[-|].*$/, "")
-            .trim() ??
-          identity.rawName,
+        canonicalName: reference?.canonicalName ??
+          findLabelValue(response.body, [/^Intel.*Processor$/i]) ??
+          `Intel ${identity.modelNumber ?? identity.rawName}`,
         partNumber: processorNumber ?? identity.partNumber,
         launch,
         sourceType: "intel-ark-product-specification",
@@ -207,6 +200,27 @@ export class IntelReleaseAdapter implements CpuReleaseAdapter {
         etag: response.etag,
         lastModified: response.lastModified,
       });
+    }
+    if (reference) {
+      const periods = curatedReferencePeriods(reference);
+      if (
+        periods.launch?.periodStart || periods.availability?.periodStart ||
+        periods.announcement?.periodStart
+      ) {
+        return officialRecord({
+          identity,
+          canonicalName: reference.canonicalName,
+          partNumber: reference.modelNumber,
+          ...periods,
+          ...(reference.effectiveEventType
+            ? { effectiveEventType: reference.effectiveEventType }
+            : {}),
+          sourceType: reference.sourceType,
+          sourceUrl: reference.sourceUrl,
+          sourceTitle: reference.sourceTitle,
+          rawContent: JSON.stringify(reference),
+        });
+      }
     }
     return null;
   }

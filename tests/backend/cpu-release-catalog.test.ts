@@ -134,6 +134,75 @@ describe("official vendor adapters", () => {
     });
   });
 
+  it.each([
+    ["AMD Ryzen 5 5500U with Radeon Graphics", "2021-01-12", "launch"],
+    ["AMD Ryzen 5 5600H with Radeon Graphics", "2021-01-12", "launch"],
+    ["AMD Ryzen 5 7520U with Radeon Graphics", "2022-09-20", "launch"],
+    ["AMD Ryzen 7 3700U with Radeon Vega Mobile Gfx", "2019-01-01", "launch"],
+    ["AMD Ryzen 7 5700U with Radeon Graphics", "2021-01-12", "launch"],
+    ["AMD Ryzen 7 5800H with Radeon Graphics", "2021-01-12", "launch"],
+    ["AMD Ryzen 7 7730U with Radeon Graphics", "2023-01-01", "launch"],
+    ["AMD Ryzen 5 8540U w/ Radeon 740M Graphics", "2024-01-01", "expected_availability"],
+    ["AMD Ryzen 7 8840HS w/ Radeon 780M Graphics", "2024-01-01", "expected_availability"],
+    ["AMD Ryzen 7 8840U w/ Radeon 780M Graphics", "2024-01-01", "expected_availability"],
+    ["AMD Ryzen AI 7 350 w/ Radeon 860M", "2025-02-18", "launch"],
+    ["AMD Ryzen AI 7 445 w/ Radeon 840M", "2026-01-05", "launch"],
+  ] as const)(
+    "retains the verified AMD manufacturer period for %s when the CDN is unavailable",
+    async (cpu, start, eventType) => {
+      const identity = parseCpuIdentity(cpu);
+      const adapter = new AmdReleaseAdapter(new FixtureClient({}));
+      const discovered = await adapter.discover([identity], syncOptions);
+      const result = await adapter.resolve(identity, discovered.get(identity.normalizedName) ?? []);
+      expect(result).toMatchObject({
+        effectivePeriodStart: start,
+        releaseEventType: eventType,
+        isOfficial: true,
+        matchScope: "exact_name",
+      });
+      expect(result?.sourceUrl).toMatch(/^https:\/\/www\.amd\.com\//);
+    },
+  );
+
+  it.each([
+    ["Intel(R) Core(TM) i3-10110U CPU @ 2.10GHz", "2019-07-01"],
+    ["Intel(R) Core(TM) i5-10210U CPU @ 1.60GHz", "2019-07-01"],
+    ["Intel(R) Core(TM) i5-1035G1 CPU @ 1.00GHz", "2019-07-01"],
+    ["11th Gen Intel(R) Core(TM) i5-11300H", "2021-01-01"],
+    ["11th Gen Intel(R) Core(TM) i5-1135G7", "2020-07-01"],
+    ["12th Gen Intel(R) Core(TM) i5-12450H", "2022-01-01"],
+    ["12th Gen Intel(R) Core(TM) i7-1250U", "2022-01-01"],
+    ["12th Gen Intel(R) Core(TM) i7-1255U", "2022-01-01"],
+    ["12th Gen Intel(R) Core(TM) i7-1260P", "2022-01-01"],
+    ["13th Gen Intel(R) Core(TM) i5-1334U", "2023-01-01"],
+    ["13th Gen Intel(R) Core(TM) i5-1335U", "2023-01-01"],
+    ["13th Gen Intel(R) Core(TM) i5-13420H", "2023-01-01"],
+    ["13th Gen Intel(R) Core(TM) i7-1355U", "2023-01-01"],
+    ["Intel(R) Core(TM) 7 150U", "2024-01-01"],
+    ["Intel(R) Core(TM) i5-7200U", "2016-07-01"],
+    ["Intel(R) Core(TM) i5-8250U", "2017-07-01"],
+    ["Intel(R) Core(TM) Ultra 5 125H", "2023-10-01"],
+    ["Intel(R) Core(TM) Ultra 5 226V", "2024-07-01"],
+    ["Intel(R) Core(TM) Ultra 7 155H", "2023-10-01"],
+    ["Intel(R) Core(TM) Ultra 7 165U", "2023-10-01"],
+    ["Intel(R) Core(TM) Ultra 7 256V", "2024-07-01"],
+    ["Intel(R) Core(TM) Ultra 7 258V", "2024-07-01"],
+    ["Intel(R) Core(TM) Ultra 9 288V", "2024-07-01"],
+  ] as const)("retains the verified Intel manufacturer quarter for %s when ARK is unavailable", async (cpu, start) => {
+    const identity = parseCpuIdentity(cpu);
+    const adapter = new IntelReleaseAdapter(new FixtureClient({}));
+    const discovered = await adapter.discover([identity], syncOptions);
+    const result = await adapter.resolve(identity, discovered.get(identity.normalizedName) ?? []);
+    expect(result).toMatchObject({
+      effectivePeriodStart: start,
+      releasePrecision: "quarter",
+      releaseEventType: "launch",
+      isOfficial: true,
+      matchScope: "exact_name",
+    });
+    expect(result?.sourceUrl).toMatch(/^https:\/\/www\.intel\.com\//);
+  });
+
   it("matches Intel Core i5-1135G7 by exact processor number", async () => {
     const url = "https://www.intel.com/i5-1135g7/specifications.html";
     const result = await new IntelReleaseAdapter(

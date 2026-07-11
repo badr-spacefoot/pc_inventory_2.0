@@ -1708,6 +1708,23 @@ async function lookupCpuReleaseDate(
   const cleanCpu = safeString(cpuName, 260);
   const vendor = cpuVendor(cleanCpu);
   const searchUrl = officialCpuSearchUrl(cleanCpu, vendor);
+  const catalogRelease = await catalogCpuRelease(cleanCpu);
+  const catalogReleaseYear = catalogRelease
+    ? releaseYear(catalogRelease.period)
+    : null;
+  if (catalogRelease?.isOfficial && catalogReleaseYear) {
+    return {
+      releaseYear: catalogReleaseYear,
+      releasePeriod: catalogRelease.period.displayValue,
+      generation: inferCpuGeneration(cleanCpu) || undefined,
+      category: "mobile",
+      source: `official-${catalogRelease.sourceVendor}-catalog`,
+      confidence: catalogRelease.matchScope === "part_number"
+        ? "official-part-number"
+        : "official-exact-name",
+      searchUrl: catalogRelease.sourceUrl ?? searchUrl,
+    };
+  }
   const knownReference = knownCpuReleaseReference(cleanCpu);
   const knownOfficial = knownReference?.source.startsWith("official-")
     ? knownReference
@@ -5291,6 +5308,7 @@ async function handleAdminRefreshCpuReleaseDates(request: Request) {
       lookup.category || reference?.category || existing?.category,
       80,
     ) || null;
+    const lookupIsOfficial = lookup.source.startsWith("official-");
     rows.push({
       cpu_name: safeString(existing?.cpu_name || candidateCpuName, 260),
       normalized_name: normalizedName,
@@ -5298,8 +5316,12 @@ async function handleAdminRefreshCpuReleaseDates(request: Request) {
       release_year: lookup.releaseYear,
       generation,
       category,
-      source: existingSource || lookup.source,
-      source_url: existingSourceUrl || null,
+      source: lookupIsOfficial
+        ? lookup.source
+        : existingSource || lookup.source,
+      source_url: lookupIsOfficial
+        ? safeExternalUrl(lookup.searchUrl)
+        : existingSourceUrl || safeExternalUrl(lookup.searchUrl) || null,
       updated_at: now,
     });
     resultRows.push({
