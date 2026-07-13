@@ -47,6 +47,14 @@ export class InventoryApi {
     return this.transport.request("/auth/admin", jsonRequest("POST", credentials));
   }
 
+  getAdminUserInvite(token: string): Promise<ApiResponse> {
+    return this.transport.request(`/auth/user-invitations/${encodePathSegment(token)}`);
+  }
+
+  acceptAdminUserInvite(token: string, payload: JsonObject): Promise<ApiResponse> {
+    return this.transport.request(`/auth/user-invitations/${encodePathSegment(token)}`, jsonRequest("POST", payload));
+  }
+
   listAccessTokens(): Promise<ApiResponse> {
     return this.transport.request("/admin/access-tokens");
   }
@@ -81,6 +89,18 @@ export class InventoryApi {
 
   listAdminUsers(): Promise<ApiResponse> {
     return this.transport.request("/admin/users");
+  }
+
+  listAdminUserInvites(): Promise<ApiResponse> {
+    return this.transport.request("/admin/user-invitations");
+  }
+
+  createAdminUserInvite(payload: JsonObject): Promise<ApiResponse> {
+    return this.transport.request("/admin/user-invitations", jsonRequest("POST", payload));
+  }
+
+  revokeAdminUserInvite(id: string): Promise<ApiResponse> {
+    return this.transport.request(`/admin/user-invitations/${encodePathSegment(id)}/revoke`, jsonRequest("POST"));
   }
 
   saveAdminUser(id: string, payload: JsonObject): Promise<ApiResponse> {

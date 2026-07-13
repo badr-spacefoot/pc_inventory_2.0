@@ -767,6 +767,206 @@ select:focus {
   grid-column: 1 / -1;
 }
 
+body.account-invite-mode #collect,
+body.account-invite-mode #admin,
+body.account-invite-mode .topbar-actions {
+  display: none !important;
+}
+
+.account-invite-page {
+  width: min(760px, 100%);
+  margin: clamp(16px, 5vh, 64px) auto 0;
+}
+
+.account-invite-panel {
+  padding: clamp(20px, 4vw, 36px);
+}
+
+.account-invite-state {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+}
+
+.account-invite-state.is-error {
+  border-color: color-mix(in srgb, var(--danger) 36%, var(--line));
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+}
+
+.account-invite-state.is-success {
+  border-color: color-mix(in srgb, var(--brand) 42%, var(--line));
+  background: color-mix(in srgb, var(--brand) 8%, var(--surface));
+}
+
+.loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--line);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: account-invite-spin 0.8s linear infinite;
+}
+
+@keyframes account-invite-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner {
+    animation-duration: 1.6s;
+  }
+}
+
+.account-invite-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 14px;
+}
+
+.account-invite-summary > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+}
+
+.account-invite-summary dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.account-invite-summary dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 800;
+}
+
+.role-description,
+.role-guidance {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.role-description {
+  padding: 12px 14px;
+  border-left: 3px solid var(--brand);
+  background: color-mix(in srgb, var(--brand) 6%, var(--surface));
+}
+
+.account-password-visibility {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.account-password-visibility input {
+  width: 18px;
+  height: 18px;
+}
+
+.account-management-section {
+  padding-block: 22px;
+  border-top: 1px solid var(--line);
+}
+
+.account-management-section:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.section-heading.inline {
+  align-items: center;
+}
+
+.section-heading h4 {
+  margin: 0 0 4px;
+}
+
+.account-invite-composer .form-grid {
+  align-items: end;
+}
+
+.role-guidance {
+  min-height: 44px;
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--brand);
+}
+
+.role-guidance strong {
+  color: var(--ink);
+}
+
+.invite-link-result {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--brand) 44%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--brand) 7%, var(--surface));
+}
+
+.invite-link-result > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.invite-link-result span {
+  color: var(--muted);
+}
+
+.account-invites-table,
+.users-table {
+  min-width: 920px;
+}
+
+.account-manual-editor > summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  color: var(--ink);
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.account-manual-editor[open] > summary {
+  margin-bottom: 14px;
+}
+
+.token-state.pending {
+  color: var(--warning, #a75f00);
+}
+
+.token-state.accepted {
+  color: var(--brand);
+}
+
 pre {
   margin: 16px 0;
   overflow: auto;
@@ -3774,6 +3974,16 @@ tbody tr.is-selected {
   .fleet-health-layout,
   .fleet-value-grid {
     grid-template-columns: 1fr;
+  }
+
+  .account-invite-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .section-heading,
+  .section-heading.inline {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .fleet-card-head {

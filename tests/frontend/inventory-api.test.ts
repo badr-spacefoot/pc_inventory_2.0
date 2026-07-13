@@ -35,6 +35,39 @@ describe("InventoryApi", () => {
     });
   });
 
+  it("encodes account invitation tokens and activation payloads", async () => {
+    const { api, request } = setup();
+
+    await api.acceptAdminUserInvite("token with/slash", {
+      password: "strong-password",
+      passwordConfirmation: "strong-password",
+    });
+
+    expect(request).toHaveBeenCalledWith("/auth/user-invitations/token%20with%2Fslash", {
+      method: "POST",
+      body: JSON.stringify({
+        password: "strong-password",
+        passwordConfirmation: "strong-password",
+      }),
+    });
+  });
+
+  it("uses the dedicated admin invitation endpoints", async () => {
+    const { api, request } = setup();
+
+    await api.createAdminUserInvite({ username: "alex", role: "VIEWER" });
+    await api.revokeAdminUserInvite("invite-1");
+
+    expect(request).toHaveBeenNthCalledWith(1, "/admin/user-invitations", {
+      method: "POST",
+      body: JSON.stringify({ username: "alex", role: "VIEWER" }),
+    });
+    expect(request).toHaveBeenNthCalledWith(2, "/admin/user-invitations/invite-1/revoke", {
+      method: "POST",
+      body: "{}",
+    });
+  });
+
   it("keeps cancellation on address autocomplete requests", async () => {
     const { api, request } = setup();
     const controller = new AbortController();

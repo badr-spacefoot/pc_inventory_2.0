@@ -109,6 +109,7 @@ const allowedEmailDomains = (Deno.env.get("ALLOWED_EMAIL_DOMAINS") ?? "")
   .split(",")
   .map((domain) => domain.trim().toLowerCase().replace(/^@/, ""))
   .filter(Boolean);
+const accountInviteRoles = new Set(["ADMIN", "MANAGER", "VIEWER", "READ_ONLY"]);
 const ebayBrowseApiToken = Deno.env.get("EBAY_BROWSE_API_TOKEN") ?? "";
 const ebayClientId = Deno.env.get("EBAY_CLIENT_ID") ?? "";
 const ebayClientSecret = Deno.env.get("EBAY_CLIENT_SECRET") ?? "";
@@ -468,6 +469,45 @@ function publicAdminUser(user: Json) {
     updatedAt: user.updated_at,
     lastLoginAt: user.last_login_at,
   };
+}
+
+function adminUserInviteStatus(invite: Json) {
+  if (invite.accepted_at) return "accepted";
+  if (invite.revoked_at) return "revoked";
+  if (new Date(safeString(invite.expires_at)).getTime() <= Date.now()) {
+    return "expired";
+  }
+  return "pending";
+}
+
+function publicAdminUserInvite(invite: Json) {
+  return {
+    id: invite.id,
+    username: invite.username,
+    displayName: invite.display_name,
+    email: invite.email,
+    role: invite.role,
+    tokenPrefix: invite.token_prefix,
+    expiresAt: invite.expires_at,
+    createdAt: invite.created_at,
+    acceptedAt: invite.accepted_at,
+    acceptedUserId: invite.accepted_user_id,
+    revokedAt: invite.revoked_at,
+    status: adminUserInviteStatus(invite),
+  };
+}
+
+function validAccountInviteRole(value: unknown) {
+  const role = safeString(value, 40).toUpperCase();
+  return accountInviteRoles.has(role) ? role : "";
+}
+
+function usernameValidationError(username: string) {
+  if (!username) return "Identifiant requis.";
+  if (!/^[a-z0-9][a-z0-9._-]{2,79}$/.test(username)) {
+    return "L'identifiant doit contenir entre 3 et 80 caractères : lettres minuscules, chiffres, point, tiret ou underscore.";
+  }
+  return "";
 }
 
 const deviceHistoryFields: Array<{ field: string; eventType: string }> = [
@@ -2568,6 +2608,134 @@ async function handleLegacyScan(request: Request) {
   return await persistScan(request, user, body);
 }
 
+async function findAdminUserInvite(rawToken: string) {
+  const token = safeString(rawToken, 500);
+  if (!token.startsWith("sfui_") || token.length < 32) return null;
+  const tokenHash = await sha256(token);
+  const { data, error } = await supabase
+    .from("admin_user_invites")
+    .select(
+      "id,token_prefix,username,display_name,email,role,expires_at,created_by,accepted_at,accepted_user_id,revoked_at,created_at",
+    )
+    .eq("token_hash", tokenHash)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+function unavailableAdminUserInviteResponse(
+  request: Request,
+  invite: Json | null,
+) {
+  if (!invite) {
+    return badRequest(request, "Invitation de compte introuvable.", 404);
+  }
+  const status = adminUserInviteStatus(invite);
+  if (status === "accepted") {
+    return badRequest(request, "Invitation de compte déjà utilisée.", 410);
+  }
+  if (status === "revoked") {
+    return badRequest(request, "Invitation de compte révoquée.", 410);
+  }
+  if (status === "expired") {
+    return badRequest(request, "Invitation de compte expirée.", 410);
+  }
+  return null;
+}
+
+async function handleGetAdminUserInvite(request: Request, rawToken: string) {
+  const invite = await findAdminUserInvite(rawToken);
+  const unavailable = unavailableAdminUserInviteResponse(request, invite);
+  if (unavailable) return unavailable;
+  return json(request, { invite: publicAdminUserInvite(invite as Json) });
+}
+
+async function handleAcceptAdminUserInvite(request: Request, rawToken: string) {
+  const invite = await findAdminUserInvite(rawToken);
+  const unavailable = unavailableAdminUserInviteResponse(request, invite);
+  if (unavailable) return unavailable;
+
+  const body = await request.json().catch(() => ({}));
+  const password = safeString(body.password, 500);
+  const passwordConfirmation = safeString(body.passwordConfirmation, 500);
+  if (!password) return badRequest(request, "Mot de passe requis.");
+  if (password.length < 10) {
+    return badRequest(
+      request,
+      "Mot de passe trop court : 10 caractères minimum.",
+    );
+  }
+  if (password !== passwordConfirmation) {
+    return badRequest(request, "Les mots de passe ne correspondent pas.");
+  }
+
+  const now = new Date().toISOString();
+  const values = {
+    username: safeString(invite?.username, 80),
+    display_name: safeString(invite?.display_name, 120),
+    email: safeString(invite?.email, 255).toLowerCase(),
+    role: validAccountInviteRole(invite?.role) || "VIEWER",
+    password_hash: await pbkdf2Hash(password),
+    is_active: true,
+    updated_at: now,
+  };
+  const { data: user, error: userError } = await supabase
+    .from("admin_users")
+    .insert(values)
+    .select(
+      "id,username,display_name,email,role,is_active,created_at,updated_at,last_login_at",
+    )
+    .single();
+  if (userError) {
+    if (userError.code === "23505") {
+      return badRequest(
+        request,
+        "Un compte utilise déjà cet identifiant ou email.",
+        409,
+      );
+    }
+    throw userError;
+  }
+
+  const { data: acceptedInvite, error: acceptError } = await supabase
+    .from("admin_user_invites")
+    .update({ accepted_at: now, accepted_user_id: user.id })
+    .eq("id", invite?.id)
+    .is("accepted_at", null)
+    .is("revoked_at", null)
+    .gt("expires_at", now)
+    .select("id")
+    .maybeSingle();
+  if (acceptError || !acceptedInvite) {
+    await supabase.from("admin_users").delete().eq("id", user.id);
+    if (acceptError) throw acceptError;
+    return badRequest(request, "Invitation de compte indisponible.", 409);
+  }
+
+  await audit(
+    "admin_user_invite_accepted",
+    "admin_user_invite",
+    safeString(invite?.id),
+    {
+      username: user.username,
+      role: user.role,
+      accepted_user_id: user.id,
+    },
+  );
+  await notify(
+    "ADMIN_USER_INVITE_ACCEPTED",
+    "Invitation de compte acceptée",
+    `${user.display_name} (${user.username}) a activé son compte ${user.role}.`,
+    {
+      severity: "SUCCESS",
+      targetRole: "ADMIN",
+      relatedEntityType: "admin_user",
+      relatedEntityId: user.id,
+    },
+  );
+  return json(request, { accepted: true, user: publicAdminUser(user) }, 201);
+}
+
 async function handleAdminListUsers(request: Request) {
   const auth = await requireAction(request, "USER_MANAGE");
   if (auth.response) return auth.response;
@@ -2579,6 +2747,164 @@ async function handleAdminListUsers(request: Request) {
     .order("created_at", { ascending: false });
   if (error) throw error;
   return json(request, { users: (data ?? []).map(publicAdminUser) });
+}
+
+async function handleAdminListUserInvites(request: Request) {
+  const auth = await requireAction(request, "USER_MANAGE");
+  if (auth.response) return auth.response;
+  const { data, error } = await supabase
+    .from("admin_user_invites")
+    .select(
+      "id,token_prefix,username,display_name,email,role,expires_at,created_by,accepted_at,accepted_user_id,revoked_at,created_at",
+    )
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (error) throw error;
+  return json(request, { invites: (data ?? []).map(publicAdminUserInvite) });
+}
+
+async function activeAdminUserInviteExists(
+  field: "username" | "email",
+  value: string,
+) {
+  const { data, error } = await supabase
+    .from("admin_user_invites")
+    .select("id")
+    .eq(field, value)
+    .is("accepted_at", null)
+    .is("revoked_at", null)
+    .gt("expires_at", new Date().toISOString())
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data?.id);
+}
+
+async function adminUserExists(field: "username" | "email", value: string) {
+  const { data, error } = await supabase
+    .from("admin_users")
+    .select("id")
+    .eq(field, value)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return Boolean(data?.id);
+}
+
+async function handleAdminCreateUserInvite(request: Request) {
+  const auth = await requireAction(request, "USER_MANAGE");
+  if (auth.response) return auth.response;
+  const body = await request.json().catch(() => ({}));
+  const username = safeString(body.username, 80).toLowerCase();
+  const displayName = safeString(body.displayName, 120);
+  const email = safeString(body.email, 255).toLowerCase();
+  const role = validAccountInviteRole(body.role);
+  const durationHours = Math.max(
+    1,
+    Math.min(Number(body.durationHours || 168), 720),
+  );
+
+  const usernameError = usernameValidationError(username);
+  if (usernameError) return badRequest(request, usernameError);
+  if (!displayName) return badRequest(request, "Nom affiché requis.");
+  if (!email) return badRequest(request, "Email requis.");
+  const emailError = emailValidationError(email);
+  if (emailError) return badRequest(request, emailError);
+  if (!role) return badRequest(request, "Rôle invalide.");
+  if (!Number.isFinite(durationHours)) {
+    return badRequest(request, "Durée invalide.");
+  }
+
+  if (
+    (await adminUserExists("username", username)) ||
+    (await adminUserExists("email", email))
+  ) {
+    return badRequest(
+      request,
+      "Un compte utilise déjà cet identifiant ou email.",
+      409,
+    );
+  }
+  if (
+    (await activeAdminUserInviteExists("username", username)) ||
+    (await activeAdminUserInviteExists("email", email))
+  ) {
+    return badRequest(
+      request,
+      "Une invitation active existe déjà pour cet utilisateur.",
+      409,
+    );
+  }
+
+  const rawToken = `sfui_${
+    base64Url(crypto.getRandomValues(new Uint8Array(32)))
+  }`;
+  const expiresAt = new Date(Date.now() + durationHours * 60 * 60 * 1000)
+    .toISOString();
+  const sessionId = safeString(auth.session?.id, 80);
+  const createdBy =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+        .test(
+          sessionId,
+        )
+      ? sessionId
+      : null;
+  const { data, error } = await supabase
+    .from("admin_user_invites")
+    .insert({
+      token_hash: await sha256(rawToken),
+      token_prefix: rawToken.slice(0, 13),
+      username,
+      display_name: displayName,
+      email,
+      role,
+      expires_at: expiresAt,
+      created_by: createdBy,
+    })
+    .select(
+      "id,token_prefix,username,display_name,email,role,expires_at,created_by,accepted_at,accepted_user_id,revoked_at,created_at",
+    )
+    .single();
+  if (error) throw error;
+
+  await audit("admin_user_invite_created", "admin_user_invite", data.id, {
+    username,
+    email,
+    role,
+    expires_at: expiresAt,
+    actor: auth.session?.username,
+  });
+  const inviteUrl = accountInvitePublicUrl(request, rawToken);
+  return json(request, {
+    invite: {
+      ...publicAdminUserInvite(data),
+      inviteUrl,
+      invite_url: inviteUrl,
+    },
+  }, 201);
+}
+
+async function handleAdminRevokeUserInvite(request: Request, id: string) {
+  const auth = await requireAction(request, "USER_MANAGE");
+  if (auth.response) return auth.response;
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("admin_user_invites")
+    .update({ revoked_at: now })
+    .eq("id", id)
+    .is("accepted_at", null)
+    .is("revoked_at", null)
+    .select("id,username,email,role,revoked_at")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) {
+    return badRequest(request, "Invitation de compte indisponible.", 409);
+  }
+  await audit("admin_user_invite_revoked", "admin_user_invite", id, {
+    username: data.username,
+    actor: auth.session?.username,
+  });
+  return json(request, { invite: data });
 }
 
 async function handleAdminSaveUser(request: Request, id?: string) {
@@ -2842,7 +3168,11 @@ async function handleAdminCreateAccessToken(request: Request) {
   return json(request, { token: rawToken, record: data }, 201);
 }
 
-function invitePublicUrl(request: Request, inviteCode: string) {
+function applicationPublicUrl(
+  request: Request,
+  parameter: string,
+  value: string,
+) {
   const origin = request.headers.get("origin") ||
     "https://badr-spacefoot.github.io";
   try {
@@ -2850,13 +3180,21 @@ function invitePublicUrl(request: Request, inviteCode: string) {
     url.pathname = url.hostname.includes("github.io")
       ? "/pc_inventory_2.0/"
       : "/";
-    url.searchParams.set("invite", inviteCode);
+    url.searchParams.set(parameter, value);
     return url.toString();
   } catch {
-    return `https://badr-spacefoot.github.io/pc_inventory_2.0/?invite=${
-      encodeURIComponent(inviteCode)
-    }`;
+    const url = new URL("https://badr-spacefoot.github.io/pc_inventory_2.0/");
+    url.searchParams.set(parameter, value);
+    return url.toString();
   }
+}
+
+function invitePublicUrl(request: Request, inviteCode: string) {
+  return applicationPublicUrl(request, "invite", inviteCode);
+}
+
+function accountInvitePublicUrl(request: Request, token: string) {
+  return applicationPublicUrl(request, "accountInvite", token);
 }
 
 async function handleAdminListCollectionInvites(request: Request) {
@@ -6392,6 +6730,21 @@ Deno.serve(async (request) => {
     if (request.method === "POST" && path.endsWith("/auth/admin")) {
       return await handleAdminLogin(request);
     }
+    const adminUserInviteTokenMatch = path.match(
+      /\/auth\/user-invitations\/([A-Za-z0-9_-]+)$/,
+    );
+    if (request.method === "GET" && adminUserInviteTokenMatch) {
+      return await handleGetAdminUserInvite(
+        request,
+        adminUserInviteTokenMatch[1],
+      );
+    }
+    if (request.method === "POST" && adminUserInviteTokenMatch) {
+      return await handleAcceptAdminUserInvite(
+        request,
+        adminUserInviteTokenMatch[1],
+      );
+    }
     if (
       request.method === "GET" && path.endsWith("/organization") &&
       !path.includes("/admin/")
@@ -6439,6 +6792,21 @@ Deno.serve(async (request) => {
     }
     if (request.method === "GET" && path.endsWith("/admin/users")) {
       return await handleAdminListUsers(request);
+    }
+    if (request.method === "GET" && path.endsWith("/admin/user-invitations")) {
+      return await handleAdminListUserInvites(request);
+    }
+    if (request.method === "POST" && path.endsWith("/admin/user-invitations")) {
+      return await handleAdminCreateUserInvite(request);
+    }
+    const adminUserInviteMatch = path.match(
+      /\/admin\/user-invitations\/([0-9a-f-]+)\/revoke$/i,
+    );
+    if (request.method === "POST" && adminUserInviteMatch) {
+      return await handleAdminRevokeUserInvite(
+        request,
+        adminUserInviteMatch[1],
+      );
     }
     if (request.method === "POST" && path.endsWith("/admin/users")) {
       return await handleAdminSaveUser(request);

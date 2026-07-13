@@ -231,8 +231,12 @@ function applyLanguage(language, persist = true) {
   renderValuation();
   renderOrganization();
   renderAccessTokens();
+  renderAdminUserInvites();
+  renderAdminUsers();
   renderNotifications();
   syncAdminUserActiveLabel();
+  updateAdminInviteRoleGuidance();
+  renderCurrentAdminUserInvite();
   updateWeatherDisplay();
   if (state.selectedDetail) renderDetail(state.selectedDetail, state.selectedScans, state.selectedHistory);
   translateElement(document.body);
@@ -366,13 +370,50 @@ function roleIcon(role) {
 
 function formatRoleLabel(role) {
   const labels = {
-    ADMIN: "Admin",
-    MANAGER: "Manager",
-    VIEWER: "Viewer",
-    READ_ONLY: "Read only",
-    COLLECTOR_USER: "Collector",
+    fr: {
+      ADMIN: "Administrateur",
+      MANAGER: "Gestionnaire",
+      VIEWER: "Consultation",
+      READ_ONLY: "Lecture seule",
+      COLLECTOR_USER: "Collecteur",
+    },
+    en: {
+      ADMIN: "Admin",
+      MANAGER: "Manager",
+      VIEWER: "Viewer",
+      READ_ONLY: "Read only",
+      COLLECTOR_USER: "Collector",
+    },
   };
-  return labels[role] || role || "Viewer";
+  return labels[state.language]?.[role] || role || labels[state.language].VIEWER;
+}
+
+function accountRoleDescription(role) {
+  const descriptions = {
+    fr: {
+      ADMIN: "Accès complet, y compris les comptes, la sécurité et toute la configuration du parc.",
+      MANAGER: "Gestion du parc, de l'organisation, des validations et des exports, sans gestion des comptes.",
+      VIEWER: "Consultation du parc, de l'historique, de la valorisation et des notifications.",
+      READ_ONLY: "Consultation uniquement, sans action de modification ni de validation.",
+    },
+    en: {
+      ADMIN: "Full access, including accounts, security, and all fleet settings.",
+      MANAGER: "Manages the fleet, organization, approvals, and exports, without account management.",
+      VIEWER: "Can view the fleet, history, valuation, and notifications.",
+      READ_ONLY: "View-only access, with no editing or approval actions.",
+    },
+  };
+  return descriptions[state.language]?.[role] || descriptions[state.language]?.VIEWER || "";
+}
+
+function updateAdminInviteRoleGuidance() {
+  const form = $("#admin-user-invite-form");
+  if (!form) return;
+  const role = form.elements.role.value || "VIEWER";
+  const label = $("#admin-user-invite-role-label");
+  const help = $("#admin-user-invite-role-help");
+  if (label) label.textContent = formatRoleLabel(role);
+  if (help) help.textContent = accountRoleDescription(role);
 }
 
 function renderSessionRole(user) {
@@ -1508,21 +1549,214 @@ async function loadAccessTokens() {
   renderAccessTokens();
 }
 
+function displayAccountInviteUrl(inviteUrl) {
+  if (!inviteUrl || !window.IT_INVENTORY_LOCAL_LIVE) return inviteUrl || "";
+  try {
+    const url = new URL(inviteUrl, window.location.href);
+    const token = url.searchParams.get("accountInvite") || "";
+    const localUrl = new URL(window.location.href);
+    localUrl.pathname = "/";
+    localUrl.search = "";
+    localUrl.hash = "";
+    localUrl.searchParams.set("accountInvite", token);
+    return localUrl.toString();
+  } catch {
+    return inviteUrl || "";
+  }
+}
+
+function adminUserInviteState(invite) {
+  const labels = {
+    pending: state.language === "en" ? "Pending" : "En attente",
+    accepted: state.language === "en" ? "Accepted" : "Acceptée",
+    expired: state.language === "en" ? "Expired" : "Expirée",
+    revoked: state.language === "en" ? "Revoked" : "Révoquée",
+  };
+  const key = ["pending", "accepted", "expired", "revoked"].includes(invite?.status) ? invite.status : "pending";
+  return { key, label: labels[key] };
+}
+
+function renderAdminUserInvites() {
+  const table = $("#admin-user-invites-table");
+  if (!table) return;
+  table.innerHTML =
+    state.adminUserInvites
+      .map((invite) => {
+        const status = adminUserInviteState(invite);
+        const rawUrl = state.rawAdminUserInviteUrls[invite.id] || "";
+        const copyAction = rawUrl
+          ? `<button class="secondary copy-admin-user-invite" type="button" data-id="${escapeHtml(invite.id)}">${translate("Copier")}</button>`
+          : "";
+        const revokeAction =
+          status.key === "pending"
+            ? `<button class="secondary revoke-admin-user-invite" type="button" data-id="${escapeHtml(invite.id)}">${translate("Révoquer")}</button>`
+            : "";
+        const regenerateAction =
+          status.key !== "accepted" && !rawUrl
+            ? `<button class="secondary regenerate-admin-user-invite" type="button" data-id="${escapeHtml(invite.id)}">${translate("Régénérer le lien")}</button>`
+            : "";
+        return `
+          <tr>
+            <td><span class="cell-primary">${escapeHtml(invite.displayName || "-")}</span><span class="cell-secondary">${escapeHtml(invite.email || "-")}</span></td>
+            <td><code>${escapeHtml(invite.username || "-")}</code></td>
+            <td><span class="role-badge role-${escapeHtml(String(invite.role || "VIEWER").toLowerCase())}">${escapeHtml(formatRoleLabel(invite.role))}</span></td>
+            <td>${formatDate(invite.expiresAt)}</td>
+            <td><span class="token-state ${status.key}">${escapeHtml(status.label)}</span></td>
+            <td><div class="token-actions">${copyAction}${revokeAction}${regenerateAction}</div></td>
+          </tr>
+        `;
+      })
+      .join("") || `<tr><td colspan="6" class="helper">${translate("Aucune invitation de compte.")}</td></tr>`;
+
+  $$(".copy-admin-user-invite").forEach((button) => {
+    button.addEventListener("click", async () => {
+      await copyText(state.rawAdminUserInviteUrls[button.dataset.id], "Lien copié.", "Aucun lien à copier");
+    });
+  });
+  $$(".revoke-admin-user-invite").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const invite = state.adminUserInvites.find((item) => item.id === button.dataset.id);
+      const confirmed = await confirmAction({
+        message:
+          state.language === "en"
+            ? `Revoke the invitation for ${invite?.displayName || invite?.username || "this user"}?`
+            : `Révoquer l'invitation de ${invite?.displayName || invite?.username || "cet utilisateur"} ?`,
+      });
+      if (!confirmed) return;
+      button.disabled = true;
+      try {
+        await inventoryApi.revokeAdminUserInvite(button.dataset.id);
+        delete state.rawAdminUserInviteUrls[button.dataset.id];
+        await loadAdminUserInvites();
+        toast("Invitation de compte révoquée.", "success");
+      } catch (error) {
+        toast(error.message, "error");
+        button.disabled = false;
+      }
+    });
+  });
+  $$(".regenerate-admin-user-invite").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const invite = state.adminUserInvites.find((item) => item.id === button.dataset.id);
+      if (!invite) return;
+      const confirmed = await confirmAction({
+        message:
+          state.language === "en"
+            ? `Create a new invitation link for ${invite.displayName || invite.username}? The previous pending link will be revoked.`
+            : `Créer un nouveau lien pour ${invite.displayName || invite.username} ? L'ancien lien encore actif sera révoqué.`,
+      });
+      if (!confirmed) return;
+      button.disabled = true;
+      try {
+        if (adminUserInviteState(invite).key === "pending") {
+          await inventoryApi.revokeAdminUserInvite(invite.id);
+        }
+        const result = await inventoryApi.createAdminUserInvite({
+          username: invite.username,
+          displayName: invite.displayName,
+          email: invite.email,
+          role: invite.role,
+          durationHours: 168,
+        });
+        showGeneratedAdminUserInvite(result.invite);
+        await loadAdminUserInvites();
+        toast("Nouveau lien d'invitation créé.", "success");
+      } catch (error) {
+        toast(error.message, "error");
+        button.disabled = false;
+      }
+    });
+  });
+}
+
+async function loadAdminUserInvites() {
+  if (!canPerformAction("USER_MANAGE")) return;
+  const data = await inventoryApi.listAdminUserInvites();
+  state.adminUserInvites = data.invites || [];
+  renderAdminUserInvites();
+}
+
+function showGeneratedAdminUserInvite(invite) {
+  const inviteUrl = displayAccountInviteUrl(invite?.inviteUrl || invite?.invite_url || "");
+  if (!invite?.id || !inviteUrl) return;
+  state.rawAdminUserInviteUrls[invite.id] = inviteUrl;
+  $("#generated-admin-user-invite-url").textContent = inviteUrl;
+  $("#admin-user-invite-result").classList.remove("is-hidden");
+}
+
+function accountInviteTokenFromUrl() {
+  return new URLSearchParams(window.location.search).get("accountInvite") || "";
+}
+
+function renderCurrentAdminUserInvite() {
+  const invite = state.currentAdminUserInvite;
+  if (!invite) return;
+  $("#account-invite-name").textContent = invite.displayName || "-";
+  $("#account-invite-email").textContent = invite.email || "-";
+  $("#account-invite-username").textContent = invite.username || "-";
+  $("#account-invite-role").textContent = formatRoleLabel(invite.role);
+  $("#account-invite-role-description").textContent = accountRoleDescription(invite.role);
+}
+
+function leaveAccountInviteMode() {
+  const username = state.currentAdminUserInvite?.username || "";
+  document.body.classList.remove("account-invite-mode");
+  $("#account-invite").classList.add("is-hidden");
+  const url = new URL(window.location.href);
+  url.searchParams.delete("accountInvite");
+  url.searchParams.set("view", "admin");
+  url.searchParams.set("admin", "fleet");
+  window.history.replaceState({}, "", url);
+  setMainView("admin", { updateUrl: false });
+  if (!state.adminToken) {
+    $("#admin-login").classList.remove("is-hidden");
+    $("#admin-dashboard").classList.add("is-hidden");
+  }
+  const loginForm = $("#admin-login-form");
+  if (username && loginForm?.elements.username) loginForm.elements.username.value = username;
+  loginForm?.elements.password?.focus();
+}
+
+async function loadAdminUserInviteFromUrl() {
+  const token = accountInviteTokenFromUrl();
+  if (!token) return false;
+  document.body.classList.add("account-invite-mode");
+  $("#account-invite").classList.remove("is-hidden");
+  $("#account-invite-loading").classList.remove("is-hidden");
+  $("#account-invite-error").classList.add("is-hidden");
+  $("#account-invite-content").classList.add("is-hidden");
+  $("#account-invite-success").classList.add("is-hidden");
+  try {
+    const result = await inventoryApi.getAdminUserInvite(token);
+    state.currentAdminUserInvite = result.invite || null;
+    renderCurrentAdminUserInvite();
+    $("#account-invite-loading").classList.add("is-hidden");
+    $("#account-invite-content").classList.remove("is-hidden");
+  } catch (error) {
+    state.currentAdminUserInvite = null;
+    $("#account-invite-loading").classList.add("is-hidden");
+    $("#account-invite-error-message").textContent = translate(error.message);
+    $("#account-invite-error").classList.remove("is-hidden");
+  }
+  return true;
+}
+
 function renderAdminUsers() {
   $("#admin-users-table").innerHTML =
     state.adminUsers
       .map(
         (user) => `
     <tr data-id="${user.id}">
-      <td><span class="cell-primary">${escapeHtml(user.username)}</span><span class="cell-secondary">${escapeHtml(user.displayName || user.email || "-")}</span></td>
-      <td><span class="role-badge role-${escapeHtml(String(user.role || "").toLowerCase())}">${escapeHtml(user.role)}</span></td>
+      <td><span class="cell-primary">${escapeHtml(user.username)}</span><span class="cell-secondary">${escapeHtml(user.displayName || "-")}</span></td>
+      <td>${escapeHtml(user.email || "-")}</td>
+      <td><span class="role-badge role-${escapeHtml(String(user.role || "").toLowerCase())}">${escapeHtml(formatRoleLabel(user.role))}</span></td>
       <td>${user.isActive ? translate("Actif") : translate("Desactive")}</td>
       <td>${formatDate(user.createdAt)}</td>
       <td>${formatDate(user.lastLoginAt)}</td>
     </tr>
   `,
       )
-      .join("") || `<tr><td colspan="5">${translate("Aucune donnée.")}</td></tr>`;
+      .join("") || `<tr><td colspan="6">${translate("Aucune donnée.")}</td></tr>`;
   $$("#admin-users-table tr[data-id]").forEach((row) =>
     row.addEventListener("click", () => editAdminUser(row.dataset.id)),
   );
@@ -1545,6 +1779,7 @@ function resetAdminUserForm() {
   $("#admin-user-created-at").textContent = `${translate("Création")} : -`;
   syncAdminUserActiveLabel();
   $("#delete-admin-user").classList.add("is-hidden");
+  $("#manual-account-editor").open = true;
 }
 
 function editAdminUser(id) {
@@ -1562,6 +1797,8 @@ function editAdminUser(id) {
   $("#admin-user-created-at").textContent = `${translate("Création")} : ${formatDate(user.createdAt)}`;
   syncAdminUserActiveLabel();
   $("#delete-admin-user").classList.toggle("is-hidden", user.id === state.currentAdmin?.id);
+  $("#manual-account-editor").open = true;
+  $("#manual-account-editor").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function notificationMarkup(item, { compact = false } = {}) {
@@ -4581,6 +4818,11 @@ async function loadAdminData() {
     renderCollectionInvites();
     toast(`Module invitations indisponible: ${error.message}`);
   });
+  loadAdminUserInvites().catch((error) => {
+    state.adminUserInvites = [];
+    renderAdminUserInvites();
+    toast(`Module invitations de compte indisponible: ${error.message}`, "error");
+  });
   loadAdminUsers().catch((error) => toast(`Module utilisateurs indisponible: ${error.message}`, "error"));
   loadNotifications().catch((error) => toast(`Module notifications indisponible: ${error.message}`, "error"));
   loadPendingChanges().catch((error) => toast(`Module validations indisponible: ${error.message}`, "error"));
@@ -5243,6 +5485,40 @@ function bindEvents() {
     });
   });
 
+  const accountInviteForm = $("#account-invite-accept-form");
+  accountInviteForm.elements.showPasswords.addEventListener("change", () => {
+    const type = accountInviteForm.elements.showPasswords.checked ? "text" : "password";
+    accountInviteForm.elements.password.type = type;
+    accountInviteForm.elements.passwordConfirmation.type = type;
+  });
+  accountInviteForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const token = accountInviteTokenFromUrl();
+    const password = accountInviteForm.elements.password.value;
+    const passwordConfirmation = accountInviteForm.elements.passwordConfirmation.value;
+    if (password !== passwordConfirmation) {
+      toast("Les mots de passe ne correspondent pas.", "error");
+      accountInviteForm.elements.passwordConfirmation.focus();
+      return;
+    }
+    const submit = accountInviteForm.querySelector('button[type="submit"]');
+    submit.disabled = true;
+    try {
+      await inventoryApi.acceptAdminUserInvite(token, { password, passwordConfirmation });
+      accountInviteForm.reset();
+      $("#account-invite-content").classList.add("is-hidden");
+      $("#account-invite-success").classList.remove("is-hidden");
+      const url = new URL(window.location.href);
+      url.searchParams.delete("accountInvite");
+      window.history.replaceState({}, "", url);
+    } catch (error) {
+      toast(error.message, "error");
+      submit.disabled = false;
+    }
+  });
+  $("#account-invite-sign-in").addEventListener("click", leaveAccountInviteMode);
+  $("#account-invite-error-sign-in").addEventListener("click", leaveAccountInviteMode);
+
   $("#collect-form").addEventListener("input", () => {
     toggleProposalFields();
     saveCollectionDraft();
@@ -5675,6 +5951,47 @@ function bindEvents() {
   $("#copy-token").addEventListener("click", async () => {
     await copyText($("#generated-token").textContent, "Token copié.", "Aucun token à copier");
   });
+  const adminUserInviteForm = $("#admin-user-invite-form");
+  adminUserInviteForm.elements.role.addEventListener("change", updateAdminInviteRoleGuidance);
+  adminUserInviteForm.elements.email.addEventListener("blur", () => {
+    if (adminUserInviteForm.elements.username.value.trim()) return;
+    const localPart = adminUserInviteForm.elements.email.value.split("@")[0] || "";
+    adminUserInviteForm.elements.username.value = localPart
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]+/g, ".")
+      .replace(/^[._-]+|[._-]+$/g, "")
+      .slice(0, 80);
+  });
+  adminUserInviteForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form));
+    const submit = form.querySelector('button[type="submit"]');
+    submit.disabled = true;
+    try {
+      const result = await inventoryApi.createAdminUserInvite({
+        username: values.username,
+        displayName: values.displayName,
+        email: values.email,
+        role: values.role,
+        durationHours: Number(values.durationHours),
+      });
+      showGeneratedAdminUserInvite(result.invite);
+      form.reset();
+      form.elements.role.value = "VIEWER";
+      form.elements.durationHours.value = "168";
+      updateAdminInviteRoleGuidance();
+      await loadAdminUserInvites();
+      toast("Invitation de compte créée.", "success");
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      submit.disabled = false;
+    }
+  });
+  $("#copy-admin-user-invite-url").addEventListener("click", async () => {
+    await copyText($("#generated-admin-user-invite-url").textContent, "Lien copié.", "Aucun lien à copier");
+  });
   $("#new-admin-user").addEventListener("click", resetAdminUserForm);
   $("#generate-admin-password").addEventListener("click", () => {
     const passwordInput = $("#admin-user-form").elements.password;
@@ -5825,6 +6142,11 @@ function bootstrapApplication() {
   bindEvents();
   restoreRoute();
   applyLanguage(state.language, false);
+  loadAdminUserInviteFromUrl().catch((error) => {
+    $("#account-invite-loading").classList.add("is-hidden");
+    $("#account-invite-error-message").textContent = translate(error.message);
+    $("#account-invite-error").classList.remove("is-hidden");
+  });
   languageObserver.observe(document.body, { childList: true, subtree: true });
   updateTimeFormatButton();
   setInterval(updateClock, 30000);

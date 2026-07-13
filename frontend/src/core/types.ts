@@ -98,6 +98,9 @@ export interface AppState {
   users: UserRecord[];
   cpuBenchmarkStats: JsonObject | null;
   adminUsers: JsonObject[];
+  adminUserInvites: JsonObject[];
+  currentAdminUserInvite: JsonObject | null;
+  rawAdminUserInviteUrls: Record<string, string>;
   notifications: JsonObject[];
   unreadNotifications: number;
   pendingChanges: JsonObject[];

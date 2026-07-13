@@ -214,6 +214,25 @@ create table if not exists public.admin_users (
   last_login_at timestamptz
 );
 
+create table if not exists public.admin_user_invites (
+  id uuid primary key default gen_random_uuid(),
+  token_hash text not null unique,
+  token_prefix text not null,
+  username text not null,
+  display_name text not null,
+  email text not null,
+  role text not null default 'VIEWER'
+    check (role in ('ADMIN', 'MANAGER', 'VIEWER', 'READ_ONLY')),
+  expires_at timestamptz not null,
+  created_by uuid references public.admin_users(id) on delete set null,
+  accepted_at timestamptz,
+  accepted_user_id uuid references public.admin_users(id) on delete set null,
+  revoked_at timestamptz,
+  created_at timestamptz not null default now(),
+  constraint admin_user_invites_terminal_state_check
+    check (accepted_at is null or revoked_at is null)
+);
+
 create table if not exists public.notifications (
   id uuid primary key default gen_random_uuid(),
   type text not null,
@@ -509,6 +528,11 @@ create index if not exists idx_teams_abbreviation on public.teams(lower(abbrevia
 create index if not exists idx_establishments_abbreviation on public.establishments(lower(abbreviation));
 create index if not exists idx_admin_users_username on public.admin_users(username);
 create index if not exists idx_admin_users_role_active on public.admin_users(role, is_active);
+create index if not exists idx_admin_user_invites_status_expiry on public.admin_user_invites(accepted_at, revoked_at, expires_at desc);
+create index if not exists idx_admin_user_invites_username on public.admin_user_invites(lower(username));
+create index if not exists idx_admin_user_invites_email on public.admin_user_invites(lower(email));
+create index if not exists idx_admin_user_invites_created_by on public.admin_user_invites(created_by);
+create index if not exists idx_admin_user_invites_accepted_user_id on public.admin_user_invites(accepted_user_id);
 create index if not exists idx_notifications_created on public.notifications(created_at desc);
 create index if not exists idx_notifications_unread_role on public.notifications(target_role, is_read, created_at desc);
 create index if not exists idx_notifications_target_user on public.notifications(target_user_id, is_read, created_at desc);
@@ -716,6 +740,7 @@ alter table public.collection_invites enable row level security;
 alter table public.audit_logs enable row level security;
 alter table public.enrichment_jobs enable row level security;
 alter table public.admin_users enable row level security;
+alter table public.admin_user_invites enable row level security;
 alter table public.notifications enable row level security;
 alter table public.pending_changes enable row level security;
 alter table public.device_history enable row level security;
@@ -747,5 +772,6 @@ on conflict (id) do update set
 revoke all privileges on all tables in schema public from anon, authenticated;
 revoke all privileges on all sequences in schema public from anon, authenticated;
 revoke all privileges on public.device_inventory_view from anon, authenticated;
+grant select, insert, update, delete on public.admin_user_invites to service_role;
 revoke execute on function public.consume_collection_access_token(text) from public, anon, authenticated;
 revoke execute on function public.set_updated_at() from public, anon, authenticated;
