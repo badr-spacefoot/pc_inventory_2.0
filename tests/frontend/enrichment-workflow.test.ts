@@ -34,6 +34,35 @@ describe("enrichment workflow", () => {
     expect(steps[0]?.result).toEqual({ updated: 2 });
   });
 
+  it("infers completed stages when an active backend job has no local workflow state", () => {
+    const steps = resumedEnrichmentStepStates(
+      ["benchmarks", "scores", "releaseDates", "enrichDevices", "values", "dashboard"],
+      "enrichDevices",
+    );
+
+    expect(steps.map((step) => step.status)).toEqual([
+      "success",
+      "success",
+      "success",
+      "running",
+      "pending",
+      "pending",
+    ]);
+  });
+
+  it("preserves a known failed stage while resuming a later stage", () => {
+    const steps = resumedEnrichmentStepStates(["benchmarks", "scores", "devices"], "devices", [
+      { id: "benchmarks", status: "success" },
+      { id: "scores", status: "failed", error: "provider unavailable" },
+    ]);
+
+    expect(steps).toEqual([
+      { id: "benchmarks", status: "success" },
+      { id: "scores", status: "failed", error: "provider unavailable" },
+      { id: "devices", status: "running" },
+    ]);
+  });
+
   it("merges completed stages into a resumed partial workflow", () => {
     expect(
       mergeSuccessfulEnrichmentSteps(
@@ -48,6 +77,24 @@ describe("enrichment workflow", () => {
       ),
     ).toEqual([
       { id: "benchmarks", status: "success", result: { updated: 3 } },
+      { id: "devices", status: "running" },
+    ]);
+  });
+
+  it("keeps known failures visible in a resumed partial workflow", () => {
+    expect(
+      mergeSuccessfulEnrichmentSteps(
+        [
+          { id: "scores", status: "skipped" },
+          { id: "devices", status: "running" },
+        ],
+        [
+          { id: "scores", status: "failed", error: "provider unavailable" },
+          { id: "devices", status: "running" },
+        ],
+      ),
+    ).toEqual([
+      { id: "scores", status: "failed", error: "provider unavailable" },
       { id: "devices", status: "running" },
     ]);
   });

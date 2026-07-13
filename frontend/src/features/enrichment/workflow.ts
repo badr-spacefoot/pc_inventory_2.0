@@ -57,15 +57,13 @@ export function resumedEnrichmentStepStates(
 ): EnrichmentStepState[] {
   const currentIndex = stepIds.indexOf(currentStepId);
   const storedById = new Map(storedSteps.map((step) => [step.id, step]));
-  const hasStoredWorkflow = storedById.size > 0;
   return stepIds.map((id, index) => {
     if (id === currentStepId) return { id, status: "running" };
     const stored = storedById.get(id);
-    if (stored?.status === "success") {
+    if (stored && ["success", "failed"].includes(stored.status)) {
       return stored.result ? { ...stored, result: { ...stored.result } } : { ...stored };
     }
-    if (!hasStoredWorkflow) return { id, status: "skipped" };
-    return { id, status: index < currentIndex ? "success" : "pending" };
+    return { id, status: currentIndex >= 0 && index < currentIndex ? "success" : "pending" };
   });
 }
 
@@ -76,7 +74,9 @@ export function mergeSuccessfulEnrichmentSteps(
   const previousById = new Map(previousSteps.map((step) => [step.id, step]));
   return steps.map((step) => {
     const previous = previousById.get(step.id);
-    if (step.status !== "skipped" || previous?.status !== "success") return { ...step };
+    if (step.status !== "skipped" || !previous || !["success", "failed"].includes(previous.status)) {
+      return { ...step };
+    }
     return previous.result ? { ...previous, result: { ...previous.result } } : { ...previous };
   });
 }
