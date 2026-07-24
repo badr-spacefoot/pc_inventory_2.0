@@ -31,13 +31,17 @@ jobs:
             pyinstaller_bundle_id: ""
             pyinstaller_extra: ""
           - name: macos
-            os: macos-latest
+            # Build the default macOS package for Intel. The x86_64 app runs
+            # natively on Intel Macs and through Rosetta on Apple Silicon,
+            # which gives one download the broadest hardware coverage.
+            os: macos-15-intel
             artifact: spacefoot-it-collector-macos
             separator: ":"
             pyinstaller_mode: --onefile
             pyinstaller_icon: --icon build/app-icon.icns
             pyinstaller_bundle_id: "--osx-bundle-identifier com.spacefoot.itcollector"
-            pyinstaller_extra: "--argv-emulation"
+            pyinstaller_extra: "--argv-emulation --target-arch x86_64"
+            macos_deployment_target: "13.0"
           - name: linux
             os: ubuntu-latest
             artifact: spacefoot-it-collector-linux
@@ -150,6 +154,8 @@ jobs:
           iconutil -c icns build/app-icon.iconset -o build/app-icon.icns
 
       - name: Build collector
+        env:
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macos_deployment_target }}
         run: >
           pyinstaller
           ${{ matrix.pyinstaller_mode }}
@@ -196,6 +202,7 @@ jobs:
           plist["CFBundleIdentifier"] = "com.spacefoot.itcollector"
           plist["CFBundleName"] = "Spacefoot IT Collector"
           plist["CFBundleDisplayName"] = "Spacefoot IT Collector"
+          plist["LSMinimumSystemVersion"] = "13.0"
           plist["CFBundleURLTypes"] = [
               entry
               for entry in plist.get("CFBundleURLTypes", [])
@@ -210,6 +217,30 @@ jobs:
           with plist_path.open("wb") as handle:
               plistlib.dump(plist, handle)
           PY
+
+      - name: Verify macOS compatibility
+        if: matrix.name == 'macos'
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="dist/${{ matrix.artifact }}.app"
+          executable="$app/Contents/MacOS/${{ matrix.artifact }}"
+          if [ ! -x "$executable" ]; then
+            echo "The macOS app executable is missing or is not executable: $executable"
+            exit 1
+          fi
+          architectures="$(lipo -archs "$executable")"
+          minimum_version="$(plutil -extract LSMinimumSystemVersion raw "$app/Contents/Info.plist")"
+          echo "Collector architectures: $architectures"
+          echo "Minimum macOS version: $minimum_version"
+          if [[ " $architectures " != *" x86_64 "* ]]; then
+            echo "The default macOS package must include the x86_64 architecture."
+            exit 1
+          fi
+          if [ "$minimum_version" != "13.0" ]; then
+            echo "Unexpected minimum macOS version: $minimum_version"
+            exit 1
+          fi
 
       - name: Sign Windows collector
         if: matrix.name == 'windows'

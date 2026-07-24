@@ -50,8 +50,12 @@ export function macosInstallCommand(asset?: CollectorAsset | null): string {
   return [
     `app="$HOME/Applications/${appName}"`,
     `if [ ! -d "$app" ]; then app="$HOME/Downloads/${appName}"; fi`,
+    `if [ ! -d "$app" ]; then app="$HOME/Téléchargements/${appName}"; fi`,
     'if [ ! -d "$app" ]; then app="/Applications/spacefoot-it-collector-macos.app"; fi',
     'if [ ! -d "$app" ]; then app="$HOME/Downloads/spacefoot-it-collector-macos.app"; fi',
+    'if [ ! -d "$app" ]; then app="$HOME/Téléchargements/spacefoot-it-collector-macos.app"; fi',
+    'if [ ! -d "$app" ]; then echo "Application Spacefoot introuvable. Décompressez le téléchargement puis relancez cette commande."; exit 1; fi',
+    'chmod +x "$app/Contents/MacOS/"*',
     'xattr -dr com.apple.quarantine "$app"',
     'open "$app"',
   ].join("\n");

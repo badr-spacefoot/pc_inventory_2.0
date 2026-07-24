@@ -29,6 +29,10 @@ describe("collector platform helpers", () => {
     expect(ubuntuInstallCommand({ fileName: "collector-1.2.3.deb" })).toContain(
       "sudo apt install ./collector-1.2.3.deb",
     );
-    expect(macosInstallCommand({ version: "collector-v1.2.3" })).toContain("spacefoot-it-collector-macos-1.2.3.app");
+    const macosCommand = macosInstallCommand({ version: "collector-v1.2.3" });
+    expect(macosCommand).toContain("spacefoot-it-collector-macos-1.2.3.app");
+    expect(macosCommand).toContain("$HOME/Téléchargements");
+    expect(macosCommand).toContain('chmod +x "$app/Contents/MacOS/"*');
+    expect(macosCommand).toContain("Application Spacefoot introuvable");
   });
 });
