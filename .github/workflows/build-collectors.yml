@@ -166,6 +166,7 @@ jobs:
           ${{ matrix.pyinstaller_icon }}
           ${{ matrix.pyinstaller_bundle_id }}
           ${{ matrix.pyinstaller_extra }}
+          --paths "collectors/desktop_collector"
           --add-data "scripts/collect-cross-platform.py${{ matrix.separator }}scripts"
           --add-data "frontend/assets/brand/app-icon.png${{ matrix.separator }}assets/brand"
           --add-data "installer-assets/bundled-tools${{ matrix.separator }}bundled-tools"
@@ -173,6 +174,7 @@ jobs:
           --hidden-import certifi
           --hidden-import ctypes
           --hidden-import datetime
+          --hidden-import diagnostics
           --hidden-import getpass
           --hidden-import os
           --hidden-import platform
