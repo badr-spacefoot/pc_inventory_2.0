@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 DEFAULT_API_URL = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
-COLLECTOR_VERSION = "0.1.49"
+COLLECTOR_VERSION = "0.1.50"
 COLLECTOR_BUILD_CHANNEL = "github-release"
 COLLECTOR_RELEASES_URL = (
     "https://badr-spacefoot.github.io/pc_inventory_2.0/collector-releases.json"

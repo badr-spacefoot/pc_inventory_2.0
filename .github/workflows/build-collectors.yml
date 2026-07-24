@@ -37,7 +37,9 @@ jobs:
             os: macos-15-intel
             artifact: spacefoot-it-collector-macos
             separator: ":"
-            pyinstaller_mode: --onefile
+            # A standard onedir .app avoids the temporary onefile extraction
+            # process that can terminate silently on older supported Macs.
+            pyinstaller_mode: --onedir
             pyinstaller_icon: --icon build/app-icon.icns
             pyinstaller_bundle_id: "--osx-bundle-identifier com.spacefoot.itcollector"
             pyinstaller_extra: "--argv-emulation --target-arch x86_64"
@@ -241,6 +243,8 @@ jobs:
             echo "Unexpected minimum macOS version: $minimum_version"
             exit 1
           fi
+          SPACEFOOT_COLLECTOR_STARTUP_PROBE=1 "$executable"
+          echo "Collector startup probe completed successfully."
 
       - name: Sign Windows collector
         if: matrix.name == 'windows'

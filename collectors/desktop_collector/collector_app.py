@@ -6,14 +6,33 @@ from __future__ import annotations
 import ctypes
 import datetime
 import json
+import os
 import platform
 import sys
 import threading
-import tkinter as tk
 from pathlib import Path
-from tkinter import messagebox, scrolledtext, ttk
 import urllib.parse
 import urllib.request
+
+try:
+    from .diagnostics import (
+        default_log_path,
+        install_startup_diagnostics,
+        write_diagnostic,
+        write_exception,
+    )
+except ImportError:  # Supports direct execution and PyInstaller entry points.
+    from diagnostics import (
+        default_log_path,
+        install_startup_diagnostics,
+        write_diagnostic,
+        write_exception,
+    )
+
+install_startup_diagnostics()
+
+import tkinter as tk
+from tkinter import messagebox, scrolledtext, ttk
 
 try:
     from .config import (
@@ -244,6 +263,7 @@ TRANSLATIONS = {
 class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk.Tk):
     def __init__(self) -> None:
         super().__init__()
+        write_diagnostic("Tk window initialized.")
         self.title(f"Spacefoot IT Collector {COLLECTOR_VERSION}")
         self._set_window_icon()
         self.geometry("1180x840")
@@ -305,6 +325,25 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
         else:
             self.after(700, self.auto_load_prefill_file)
         self.after(1200, self.start_prefill_file_watch)
+
+    def report_callback_exception(
+        self,
+        exception_type: type[BaseException],
+        exception: BaseException,
+        traceback_value,
+    ) -> None:
+        write_exception(exception_type, exception, traceback_value)
+        try:
+            messagebox.showerror(
+                self.t("Collector unavailable"),
+                (
+                    f"{self.t('Unable to load collector')}: {exception}\n\n"
+                    f"Diagnostic: {default_log_path()}"
+                ),
+                parent=self,
+            )
+        except tk.TclError:
+            pass
 
     def register_macos_url_handler(self) -> None:
         if platform.system() != "Darwin":
@@ -1455,5 +1494,35 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
             self.after(0, self.update_primary_action)
 
 
+def run_collector() -> None:
+    app: CollectorApp | None = None
+    try:
+        write_diagnostic("Initializing collector interface.")
+        app = CollectorApp()
+        if os.environ.get("SPACEFOOT_COLLECTOR_STARTUP_PROBE") == "1":
+            write_diagnostic("Startup probe initialized successfully.")
+            app.after(1200, app.destroy)
+        write_diagnostic("Entering collector event loop.")
+        app.mainloop()
+        write_diagnostic("Collector event loop closed normally.")
+    except BaseException as exc:
+        write_exception(type(exc), exc, exc.__traceback__)
+        try:
+            if app is None:
+                error_root = tk.Tk()
+                error_root.withdraw()
+            messagebox.showerror(
+                "Spacefoot IT Collector",
+                (
+                    "The collector could not start.\n\n"
+                    f"{exc}\n\nDiagnostic: {default_log_path()}"
+                ),
+                parent=app,
+            )
+        except tk.TclError:
+            pass
+        raise
+
+
 if __name__ == "__main__":
-    CollectorApp().mainloop()
+    run_collector()
