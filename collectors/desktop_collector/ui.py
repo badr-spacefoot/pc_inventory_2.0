@@ -77,16 +77,23 @@ class ThemedButton(tk.Label):
 
     def _hover(self, _event=None) -> None:
         if self._state != "disabled":
-            tk.Label.configure(self, bg=self.hover_bg)
+            self._safe_configure(bg=self.hover_bg)
 
     def _leave(self, _event=None) -> None:
         self._sync_visual()
 
     def _sync_visual(self) -> None:
         if self._state == "disabled":
-            tk.Label.configure(self, bg=self.disabled_bg, fg=self.disabled_fg, cursor="")
+            self._safe_configure(bg=self.disabled_bg, fg=self.disabled_fg, cursor="")
         else:
-            tk.Label.configure(self, bg=self.normal_bg, fg=self.normal_fg, cursor="hand2")
+            self._safe_configure(bg=self.normal_bg, fg=self.normal_fg, cursor="hand2")
+
+    def _safe_configure(self, **options) -> None:
+        try:
+            if self.winfo_exists():
+                tk.Label.configure(self, **options)
+        except tk.TclError:
+            return
 
     def configure(self, cnf=None, **kwargs):
         options = {}
@@ -98,9 +105,9 @@ class ThemedButton(tk.Label):
         if "command" in options:
             self.command = options.pop("command")
         if "text" in options:
-            tk.Label.configure(self, text=options.pop("text"))
+            self._safe_configure(text=options.pop("text"))
         if options:
-            tk.Label.configure(self, **options)
+            self._safe_configure(**options)
         self._sync_visual()
 
     config = configure

@@ -15,6 +15,12 @@ from typing import TextIO
 _FAULT_LOG: TextIO | None = None
 
 
+def is_stale_widget_error(exception: BaseException) -> bool:
+    """Return whether Tk is reporting work queued for a destroyed widget."""
+    message = str(exception or "").lower()
+    return "bad window path name" in message or "invalid command name" in message
+
+
 def default_log_path(system: str | None = None, home: Path | None = None) -> Path:
     system = system or platform.system()
     home = home or Path.home()

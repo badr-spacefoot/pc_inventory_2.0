@@ -1,7 +1,10 @@
 from pathlib import Path
 import unittest
 
-from collectors.desktop_collector.diagnostics import default_log_path
+from collectors.desktop_collector.diagnostics import (
+    default_log_path,
+    is_stale_widget_error,
+)
 
 
 class CollectorDiagnosticsTests(unittest.TestCase):
@@ -28,6 +31,19 @@ class CollectorDiagnosticsTests(unittest.TestCase):
             / "spacefoot-it-collector"
             / "collector.log",
         )
+
+    def test_recognizes_callbacks_for_destroyed_tk_widgets(self) -> None:
+        self.assertTrue(
+            is_stale_widget_error(
+                RuntimeError('bad window path name ".!frame.!label5"')
+            )
+        )
+        self.assertTrue(
+            is_stale_widget_error(
+                RuntimeError('invalid command name ".!frame.!label5"')
+            )
+        )
+        self.assertFalse(is_stale_widget_error(RuntimeError("API unavailable")))
 
 
 if __name__ == "__main__":

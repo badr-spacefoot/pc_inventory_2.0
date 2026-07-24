@@ -18,6 +18,7 @@ try:
     from .diagnostics import (
         default_log_path,
         install_startup_diagnostics,
+        is_stale_widget_error,
         write_diagnostic,
         write_exception,
     )
@@ -25,6 +26,7 @@ except ImportError:  # Supports direct execution and PyInstaller entry points.
     from diagnostics import (
         default_log_path,
         install_startup_diagnostics,
+        is_stale_widget_error,
         write_diagnostic,
         write_exception,
     )
@@ -270,6 +272,10 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
         self.minsize(1040, 760)
         self.configure(bg=COLORS["bg"])
         self.payload: dict = {}
+        self.startup_probe = os.environ.get("SPACEFOOT_COLLECTOR_STARTUP_PROBE") == "1"
+        self.callback_exception_count = 0
+        self.reported_callback_errors: set[str] = set()
+        self.callback_error_dialog_visible = False
         self.submitted = False
         self.submission_device_id = ""
         self.collection_token = ""
@@ -333,6 +339,17 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
         traceback_value,
     ) -> None:
         write_exception(exception_type, exception, traceback_value)
+        self.callback_exception_count += 1
+        if is_stale_widget_error(exception):
+            write_diagnostic("Ignored a callback queued for an interface element that was already refreshed.")
+            return
+        signature = f"{exception_type.__name__}: {exception}"
+        if signature in self.reported_callback_errors or self.callback_error_dialog_visible:
+            return
+        self.reported_callback_errors.add(signature)
+        if os.environ.get("SPACEFOOT_COLLECTOR_STARTUP_PROBE") == "1":
+            return
+        self.callback_error_dialog_visible = True
         try:
             messagebox.showerror(
                 self.t("Collector unavailable"),
@@ -344,6 +361,8 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
             )
         except tk.TclError:
             pass
+        finally:
+            self.callback_error_dialog_visible = False
 
     def register_macos_url_handler(self) -> None:
         if platform.system() != "Darwin":
@@ -496,6 +515,7 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
     def _build_ui(self) -> None:
         self.apply_theme_colors()
         current_step = self.step_index
+        self._reset_conditional_widget_refs()
         for child in self.winfo_children():
             child.destroy()
         self.columnconfigure(0, weight=1)
@@ -597,6 +617,26 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
         self.after(0, self.restore_dynamic_content)
         self.show_step(current_step)
         self.after(50, self.apply_title_bar_theme)
+
+    def _reset_conditional_widget_refs(self) -> None:
+        for name in (
+            "team_combo",
+            "establishment_combo",
+            "other_team_label",
+            "other_team_entry",
+            "other_site_label",
+            "other_site_entry",
+        ):
+            setattr(self, name, None)
+
+    @staticmethod
+    def widget_exists(widget) -> bool:
+        if widget is None:
+            return False
+        try:
+            return bool(widget.winfo_exists())
+        except tk.TclError:
+            return False
 
     def language_label(self) -> str:
         return "FR" if self.language.get() == "en" else "EN"
@@ -1203,15 +1243,23 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
         team_other = self.org_name_from_label(self.team.get().strip(), self.teams) == "Other"
         site_other = self.org_name_from_label(self.establishment.get().strip(), self.establishments) == "Other"
         for widget in (getattr(self, "other_team_label", None), getattr(self, "other_team_entry", None)):
-            if not widget:
+            if not self.widget_exists(widget):
                 continue
-            widget.grid() if team_other else widget.grid_remove()
+            try:
+                widget.grid() if team_other else widget.grid_remove()
+            except tk.TclError:
+                continue
         for widget in (getattr(self, "other_site_label", None), getattr(self, "other_site_entry", None)):
-            if not widget:
+            if not self.widget_exists(widget):
                 continue
-            widget.grid() if site_other else widget.grid_remove()
+            try:
+                widget.grid() if site_other else widget.grid_remove()
+            except tk.TclError:
+                continue
 
     def persist_draft(self) -> None:
+        if self.startup_probe:
+            return
         save_draft({
             "apiUrl": normalize_api_url(self.api_url.get()),
             "accessToken": self.access_token.get().strip(),
@@ -1320,9 +1368,9 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
     def update_org_controls(self) -> None:
         team_values = [self.org_label(item) for item in self.teams if item.get("name")] + [self.t("Other")]
         site_values = [self.org_label(item) for item in self.establishments if item.get("name")] + [self.t("Other")]
-        if hasattr(self, "team_combo"):
+        if self.widget_exists(getattr(self, "team_combo", None)):
             self.team_combo.configure(values=team_values)
-        if hasattr(self, "establishment_combo"):
+        if self.widget_exists(getattr(self, "establishment_combo", None)):
             self.establishment_combo.configure(values=site_values)
         self.normalize_selected_org_labels()
         self.status.set(f"{self.t('Loaded')} {len(self.teams)} {self.t('teams and')} {len(self.establishments)} {self.t('locations.')}")
@@ -1496,17 +1544,25 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
 
 def run_collector() -> None:
     app: CollectorApp | None = None
+    startup_probe = os.environ.get("SPACEFOOT_COLLECTOR_STARTUP_PROBE") == "1"
     try:
         write_diagnostic("Initializing collector interface.")
         app = CollectorApp()
-        if os.environ.get("SPACEFOOT_COLLECTOR_STARTUP_PROBE") == "1":
+        if startup_probe:
             write_diagnostic("Startup probe initialized successfully.")
-            app.after(1200, app.destroy)
+            app.after(250, lambda: _exercise_startup_probe(app))
+            app.after(1800, app.destroy)
         write_diagnostic("Entering collector event loop.")
         app.mainloop()
+        if startup_probe and app.callback_exception_count:
+            raise RuntimeError(
+                f"Startup probe recorded {app.callback_exception_count} callback exception(s)."
+            )
         write_diagnostic("Collector event loop closed normally.")
     except BaseException as exc:
         write_exception(type(exc), exc, exc.__traceback__)
+        if startup_probe:
+            raise
         try:
             if app is None:
                 error_root = tk.Tk()
@@ -1522,6 +1578,18 @@ def run_collector() -> None:
         except tk.TclError:
             pass
         raise
+
+
+def _exercise_startup_probe(app: CollectorApp) -> None:
+    """Rebuild the profile as complete to catch stale conditional widgets."""
+    app.first_name.set("Startup")
+    app.last_name.set("Probe")
+    app.email.set("startup.probe@spacefoot.test")
+    app.team.set("Probe team")
+    app.establishment.set("Probe location")
+    app.access_token.set("startup-probe-token")
+    app.profile_visible.set(False)
+    app._build_ui()
 
 
 if __name__ == "__main__":
