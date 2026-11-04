@@ -105,7 +105,7 @@ export interface FleetValuationSnapshot {
 }
 
 const DETACHED_STATUSES = new Set(["retired", "stock"]);
-const NON_ACTIONABLE_STATUSES = new Set(["retired", "stock", "lost"]);
+const NON_ACTIONABLE_STATUSES = new Set(["retired", "stock", "lost", "in_repair"]);
 const DAY_MS = 86_400_000;
 
 function normalizeText(value: unknown): string {
@@ -222,6 +222,10 @@ export function ageBucket(device: FleetDevice, context: FleetEvaluationContext):
 
 export function activeFleetDevices(items: readonly FleetDevice[]): FleetDevice[] {
   return items.filter(isActionableDevice);
+}
+
+export function valuationFleetDevices(items: readonly FleetDevice[]): FleetDevice[] {
+  return items.filter((device) => isActionableDevice(device) || device.status === "in_repair");
 }
 
 export function filterFleetDevices(
@@ -394,7 +398,7 @@ export function sumStats<T>(
 export function fleetKpiSnapshot(items: readonly FleetDevice[], context: FleetEvaluationContext): FleetKpiSnapshot {
   const actionableItems = activeFleetDevices(items);
   const ageSummary = fleetAgeSummary(items, evaluationYear(context));
-  const value = actionableItems.reduce((sum, device) => sum + estimatedValue(device), 0);
+  const value = valuationFleetDevices(items).reduce((sum, device) => sum + estimatedValue(device), 0);
   return {
     total: items.length,
     actionable: actionableItems.length,
@@ -454,14 +458,15 @@ export function fleetValuationSnapshot(
   fallbackLabel: string,
 ): FleetValuationSnapshot {
   const actionableItems = activeFleetDevices(items);
-  const total = actionableItems.reduce((sum, device) => sum + estimatedValue(device), 0);
+  const valuedItems = valuationFleetDevices(items);
+  const total = valuedItems.reduce((sum, device) => sum + estimatedValue(device), 0);
   const replaceItems = actionableItems.filter((device) => isReplacementSignal(device, context));
   return {
     total,
-    average: actionableItems.length ? total / actionableItems.length : 0,
+    average: valuedItems.length ? total / valuedItems.length : 0,
     replaceValue: replaceItems.reduce((sum, device) => sum + estimatedValue(device), 0),
     byLocation: sumStats(
-      actionableItems,
+      valuedItems,
       (device) => String(device.establishment_name || ""),
       estimatedValue,
       fallbackLabel,

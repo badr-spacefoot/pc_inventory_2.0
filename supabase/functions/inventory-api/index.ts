@@ -6617,7 +6617,14 @@ async function handleAdminDeviceStatus(request: Request, id: string) {
   const body = await request.json().catch(() => ({}));
   const status = safeString(body.status, 40);
   const note = safeString(body.note, 2000);
-  const allowed = ["active", "replace", "stock", "lost", "retired"];
+  const allowed = [
+    "active",
+    "replace",
+    "stock",
+    "lost",
+    "retired",
+    "in_repair",
+  ];
   if (!allowed.includes(status)) return badRequest(request, "Statut invalide.");
   if (status === "retired" && !note) {
     return badRequest(request, "Note de sortie du parc requise.");

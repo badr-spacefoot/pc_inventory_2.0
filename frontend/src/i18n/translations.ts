@@ -320,6 +320,7 @@ export const englishTranslations = {
   Statut: "Status",
   Actif: "Active",
   "En stock": "In stock",
+  "En réparation": "In repair",
   Perdu: "Lost",
   "Sorti du parc": "Retired",
   "Plateforme CPU": "CPU platform",
@@ -738,7 +739,8 @@ export const englishTranslations = {
   "Valeur des postes à remplacer": "Replacement-device value",
   "Somme des valeurs estimées des candidats au remplacement": "Sum of estimated values for replacement candidates",
   "Âge moyen du parc": "Average fleet age",
-  "postes actuels, hors stock, perdus et sortis du parc": "current devices, excluding stock, lost, and retired records",
+  "postes actuels, hors stock, en réparation, perdus et sortis du parc":
+    "current devices, excluding stock, in-repair, lost, and retired records",
   "À traiter en priorité": "Priority actions",
   "Bon état": "Healthy",
   "Modèles présents": "Models in the fleet",

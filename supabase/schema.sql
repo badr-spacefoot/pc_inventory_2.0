@@ -89,7 +89,7 @@ create table if not exists public.devices (
   script_version text,
   last_seen_at timestamptz,
   hardware_age_score integer not null default 0 check (hardware_age_score between 0 and 100),
-  status text not null default 'active' check (status in ('active', 'replace', 'stock', 'lost', 'retired')),
+  status text not null default 'active' check (status in ('active', 'replace', 'stock', 'lost', 'retired', 'in_repair')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

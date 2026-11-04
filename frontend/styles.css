@@ -2520,6 +2520,10 @@ tbody tr.is-selected {
   --row-accent: #c48a18;
 }
 
+#devices-table tr.device-row-status-in_repair {
+  --row-accent: #7c3aed;
+}
+
 #devices-table tr.device-row-status-lost {
   --row-accent: #b45309;
 }
@@ -2790,6 +2794,10 @@ tbody tr.is-selected {
   color: #9a6500;
 }
 
+.status.in_repair {
+  color: #6d28d9;
+}
+
 .status.retired {
   color: #667067;
 }
@@ -2806,6 +2814,10 @@ tbody tr.is-selected {
 
 :root[data-theme="dark"] .status.stock {
   color: #f0c35b;
+}
+
+:root[data-theme="dark"] .status.in_repair {
+  color: #c4b5fd;
 }
 
 :root[data-theme="dark"] .status.retired {

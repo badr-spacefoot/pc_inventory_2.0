@@ -86,9 +86,10 @@ const DEVICE_FAMILIES: Readonly<Record<string, readonly string[]>> = {
 const STATUS_RANKS: Readonly<Record<string, number>> = {
   active: 0,
   replace: 1,
-  lost: 2,
-  stock: 3,
-  retired: 4,
+  in_repair: 2,
+  lost: 3,
+  stock: 4,
+  retired: 5,
 };
 
 function localeNumber(value: number, locale: string, maximumFractionDigits: number): string {
@@ -213,7 +214,7 @@ export function detectDeviceFamily(manufacturer: string, modelValue: unknown): s
 }
 
 export function deviceStatusRank(status: unknown): number {
-  return STATUS_RANKS[String(status || "active")] ?? 5;
+  return STATUS_RANKS[String(status || "active")] ?? 6;
 }
 
 export function deviceRowStatusClass(status: unknown): string {

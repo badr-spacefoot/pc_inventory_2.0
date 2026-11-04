@@ -44,8 +44,22 @@ let unifiedEnrichmentRunActive = false;
 let pendingFilterFrame = null;
 
 const statusLabels = {
-  fr: { active: "Actif", replace: "Remplacement planifié", stock: "En stock", lost: "Perdu", retired: "Sorti du parc" },
-  en: { active: "Active", replace: "Planned replacement", stock: "In stock", lost: "Lost", retired: "Retired" },
+  fr: {
+    active: "Actif",
+    replace: "Remplacement planifié",
+    in_repair: "En réparation",
+    stock: "En stock",
+    lost: "Perdu",
+    retired: "Sorti du parc",
+  },
+  en: {
+    active: "Active",
+    replace: "Planned replacement",
+    in_repair: "In repair",
+    stock: "In stock",
+    lost: "Lost",
+    retired: "Retired",
+  },
 };
 
 const $ = queryElement;
@@ -2277,7 +2291,7 @@ function computeFleetKpis(items = state.filtered) {
       id: "total",
       label: "Total des postes",
       value: formatFleetNumber(snapshot.total),
-      helper: `${formatFleetNumber(snapshot.actionable)} ${translate("postes actuels, hors stock, perdus et sortis du parc")}`,
+      helper: `${formatFleetNumber(snapshot.actionable)} ${translate("postes actuels, hors stock, en réparation, perdus et sortis du parc")}`,
       level: "info",
     },
     {
@@ -2709,7 +2723,7 @@ function renderFleetDashboard() {
 function renderValuation() {
   const metricsTarget = $("#valuation-metrics");
   if (!metricsTarget) return;
-  const devices = activeFleetDevices(state.filtered);
+  const devices = fleetDomain.valuationFleetDevices(state.filtered);
   const launchValue = devices.reduce((sum, device) => sum + Number(device.estimated_launch_price || 0), 0);
   const currentValue = devices.reduce((sum, device) => sum + estimatedValue(device), 0);
   const depreciation = launchValue > 0 ? Math.round((1 - currentValue / launchValue) * 100) : 0;
@@ -2722,7 +2736,7 @@ function renderValuation() {
       Number(device.cpu_benchmark_score || device.cpu_score || 0) > 0 &&
       Number(device.cpu_benchmark_score || device.cpu_score || 0) < 8000,
   ).length;
-  const highPriority = devices.filter(
+  const highPriority = activeFleetDevices(devices).filter(
     (device) => Number(device.replacement_priority || device.obsolescence_index || 0) >= 70,
   ).length;
   const marketObserved = devices.filter((device) => Number(device.market_observation_count || 0) > 0).length;
@@ -2803,7 +2817,7 @@ function renderValuation() {
     else performance.Bon += 1;
   });
   const priorities = { Faible: 0, Moyen: 0, Élevée: 0 };
-  devices.forEach((device) => {
+  activeFleetDevices(devices).forEach((device) => {
     const priority = Number(device.replacement_priority || device.obsolescence_index || 0);
     if (priority >= 70) priorities.Élevée += 1;
     else if (priority >= 45) priorities.Moyen += 1;
@@ -2964,6 +2978,9 @@ function legacyHistorySummary(value) {
 function historyValueDisplay(event, side) {
   const value = side === "old" ? event.old_value : event.new_value;
   if (event.field_name === "legacy_google_sheets_history") return legacyHistorySummary(value);
+  if (event.field_name === "status" && value && Object.hasOwn(currentStatusLabels(), value)) {
+    return currentStatusLabels()[value];
+  }
   return cleanImportedText(value || "-");
 }
 

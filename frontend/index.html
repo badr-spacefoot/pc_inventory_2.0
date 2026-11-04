@@ -13,7 +13,7 @@
           : null) || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
       document.documentElement.lang = localStorage.getItem("it_inventory_language") || "fr";
     </script>
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=20261104-repair-status" />
   </head>
   <body>
     <header class="topbar">
@@ -1266,6 +1266,7 @@
                   <option value="">Tous</option>
                   <option value="active">Actif</option>
                   <option value="replace">Remplacement planifié</option>
+                  <option value="in_repair">En réparation</option>
                   <option value="stock">En stock</option>
                   <option value="lost">Perdu</option>
                   <option value="retired">Sorti du parc</option>
@@ -1425,7 +1426,7 @@
     </dialog>
     <div id="toast" role="status" aria-live="polite"></div>
 
-    <script src="./core.js?v=20260711-cpu-sync-retry"></script>
-    <script src="./app.js?v=20260711-cpu-sync-retry"></script>
+    <script src="./core.js?v=20261104-repair-status"></script>
+    <script src="./app.js?v=20261104-repair-status"></script>
   </body>
 </html>

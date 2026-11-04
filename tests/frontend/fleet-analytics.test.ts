@@ -7,6 +7,7 @@ import {
   fleetKpiSnapshot,
   fleetValuationSnapshot,
   riskScoreForDevice,
+  replacementCandidates,
   type FleetDevice,
 } from "../../frontend/src/features/fleet/analytics";
 
@@ -33,6 +34,35 @@ function device(overrides: Partial<FleetDevice> = {}): FleetDevice {
 }
 
 describe("fleet analytics", () => {
+  it("filters PCs in repair without removing them from their team or fleet valuation", () => {
+    const active = device();
+    const repairing = device({
+      id: "repairing",
+      status: "in_repair",
+      resale_value: 500,
+      replacement_priority: 95,
+      last_seen_at: "2020-01-01T00:00:00Z",
+      storage_free_gb: 0,
+    });
+    const filtered = filterFleetDevices(
+      [active, repairing],
+      { status: "in_repair", team: "IT" },
+      "last_seen",
+      context,
+      "en-US",
+    );
+
+    expect(filtered).toEqual([repairing]);
+    expect(fleetKpiSnapshot(filtered, context)).toMatchObject({
+      value: 500,
+      actionable: 0,
+      replace: 0,
+      stale: 0,
+      lowStorage: 0,
+    });
+    expect(replacementCandidates(filtered, context)).toEqual([]);
+  });
+
   it("keeps detached inventory out of team filters and age-only views", () => {
     const active = device();
     const stock = device({ id: "stock", status: "stock", hostname: "STOCK-1" });
