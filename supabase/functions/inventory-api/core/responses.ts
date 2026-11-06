@@ -21,6 +21,8 @@ export function createResponseHelpers(
         "authorization, x-client-info, apikey, content-type, x-collection-access-token, x-cpu-benchmark-sync-token, x-cpu-release-sync-token, x-enrichment-sync-token",
       "Access-Control-Allow-Methods": "GET,POST,DELETE,OPTIONS",
       Vary: "Origin",
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
     };
   }
 

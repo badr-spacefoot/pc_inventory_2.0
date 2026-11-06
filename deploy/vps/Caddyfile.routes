@@ -1,0 +1,22 @@
+# Import into the existing Caddy configuration AFTER staging verification.
+# Existing piqa-caddy must join parc_proxy; never attach parc-db to the Atlas network.
+parc.piqa.fr {
+	reverse_proxy parc-web:8080
+}
+parc-api.piqa.fr {
+	header {
+		X-Content-Type-Options nosniff
+		Cache-Control "no-store"
+		Referrer-Policy no-referrer
+	}
+	request_body {
+		max_size 15MB
+	}
+	@application path /functions/v1/inventory-api /functions/v1/inventory-api/* /storage/v1/object/sign/*
+	handle @application {
+		reverse_proxy parc-gateway:8000
+	}
+	handle {
+		respond "Not found" 404
+	}
+}

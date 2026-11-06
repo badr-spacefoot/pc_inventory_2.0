@@ -12,6 +12,7 @@ import socket
 import subprocess
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -1239,7 +1240,7 @@ def windows_info():
       powershellCollector='cim'
     } | ConvertTo-Json -Compress -Depth 6
     """
-    raw = run([shell, "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], timeout=30)
+    raw = run([shell, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script], timeout=30)
     parsed = parse_json_object(raw)
     fallback = windows_python_fallback()
     if not parsed:
@@ -1320,12 +1321,24 @@ def collect(include_mac):
     }
 
 
+class NoApiRedirect(urllib.request.HTTPRedirectHandler):
+    """Do not forward an inventory bearer credential to another destination."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.HTTPError(req.full_url, code, "Use the canonical inventory endpoint; redirects are refused", headers, fp)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Collect and send Spacefoot hardware inventory.")
     parser.add_argument("--api-url", required=True)
     parser.add_argument("--token", required=True)
     parser.add_argument("--include-mac", action="store_true")
     args = parser.parse_args()
+    endpoint = urllib.parse.urlsplit(args.api_url)
+    if endpoint.username or endpoint.password or endpoint.query or endpoint.fragment or not endpoint.hostname or not (
+        endpoint.scheme == "https" or endpoint.scheme == "http" and endpoint.hostname in {"127.0.0.1", "localhost", "::1"}
+    ):
+        parser.error("API URL must use HTTPS (except loopback development)")
     payload = json.dumps(collect(args.include_mac)).encode("utf-8")
     request = urllib.request.Request(
         f"{args.api_url.rstrip('/')}/collect/scan",
@@ -1334,14 +1347,22 @@ def main():
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=20) as response:
-            result = json.loads(response.read().decode("utf-8"))
+        opener = urllib.request.build_opener(NoApiRedirect())
+        with opener.open(request, timeout=20) as response:
+            raw = response.read(1024 * 1024 + 1)
+            if len(raw) > 1024 * 1024:
+                raise ValueError("Inventory response exceeds size limit")
+            result = json.loads(raw.decode("utf-8"))
         print(f"Inventory sent successfully. Device: {result.get('deviceId', 'unknown')}")
     except urllib.error.HTTPError as error:
-        print(f"Inventory upload failed: {error.read().decode('utf-8', errors='ignore')}")
+        print(f"Inventory upload failed: HTTP {error.code}")
+        error.close()
         raise SystemExit(1)
     except urllib.error.URLError as error:
         print(f"Inventory upload failed: {error.reason}")
+        raise SystemExit(1)
+    except (OSError, ValueError):
+        print("Inventory upload failed: invalid response or interrupted connection")
         raise SystemExit(1)
 
 

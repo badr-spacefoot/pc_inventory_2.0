@@ -1,0 +1,66 @@
+{
+  "date": "2026-09-15T13:01:06.208Z",
+  "syntheticOnly": true,
+  "externalRequestsBlocked": [
+    "https://api.open-meteo.com"
+  ],
+  "errors": [],
+  "checks": {
+    "bootstrap": {
+      "hasCore": true,
+      "hasApp": true,
+      "title": "Spacefoot IT Inventory"
+    },
+    "xssInertMarker": {
+      "htmlInterpreted": true,
+      "markerTag": "B",
+      "executablePayloadUsed": false
+    },
+    "selectionRace": {
+      "selectedId": "B",
+      "detailId": "A",
+      "title": "Fixture B"
+    },
+    "stockValuation": {
+      "filteredIds": [
+        "S"
+      ],
+      "metrics": "Total launch value\n€1,000\nSum of estimated launch prices for filtered devices\nEstimated current fleet value\n€300\nSum of the latest estimated values for filtered devices\nEstimated average depreciation\n70%\nDifference between total launch value and estimated current value\nAverage fleet age\n5 years\n1 device with usable age data\nDevices older than four years\n1\nCurrent devices with a usable release date and an age strictly greater than four years\nLow-performance CPU devices\n0\nDevices whose known CPU score is below 8,000\nHigh-priority replacement devices\n0\nDevices whose calculated replacement priority is 70 or higher\nObserved market prices\n0\nDevices with at least one external market-price observation\nA–B confidence level\n0\nDevices whose estimate reaches confidence level A or B",
+      "replacementCandidates": 0
+    },
+    "keyboardDeviceRows": [
+      {
+        "id": "A",
+        "tabIndex": -1,
+        "role": null,
+        "focusableChildren": 0
+      },
+      {
+        "id": "B",
+        "tabIndex": -1,
+        "role": null,
+        "focusableChildren": 0
+      },
+      {
+        "id": "S",
+        "tabIndex": -1,
+        "role": null,
+        "focusableChildren": 0
+      }
+    ],
+    "overflow": [
+      {
+        "viewport": 1440,
+        "documentWidth": 1440,
+        "bodyWidth": 1440,
+        "overflowing": false
+      },
+      {
+        "viewport": 375,
+        "documentWidth": 375,
+        "bodyWidth": 375,
+        "overflowing": false
+      }
+    ]
+  }
+}

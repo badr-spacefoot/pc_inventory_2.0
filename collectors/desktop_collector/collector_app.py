@@ -263,6 +263,23 @@ TRANSLATIONS = {
 
 
 class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk.Tk):
+    def after(self, ms, func=None, *args):
+        if getattr(self, "_closing", False):
+            return None
+        def guarded():
+            if not getattr(self, "_closing", False):
+                func(*args)
+        try:
+            return super().after(ms, guarded if func else None)
+        except (tk.TclError, RuntimeError):
+            if not getattr(self, "_closing", False):
+                raise
+            return None
+
+    def destroy(self):
+        self._closing = True
+        super().destroy()
+
     def __init__(self) -> None:
         super().__init__()
         write_diagnostic("Tk window initialized.")
@@ -281,17 +298,23 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
         self.collection_token = ""
         self.handled_launch_urls: set[str] = set()
         self.prefill_watch_active = False
-        register_linux_url_scheme()
+        if not self.startup_probe:
+            register_linux_url_scheme()
         self.teams: list[dict] = []
         self.establishments: list[dict] = []
         self.step_index = 0
         self.step_frames: list[tk.Frame] = []
-        draft = load_draft()
-        launch_prefill = launch_prefill_from_args(sys.argv)
+        draft = {} if self.startup_probe else load_draft()
+        launch_prefill = {} if self.startup_probe else launch_prefill_from_args(sys.argv)
         self.launch_prefill_url = str(launch_prefill.get("launchUrl") or "")
         draft_profile = {} if launch_prefill.get("prefillCode") else draft
 
         self.api_url = tk.StringVar(value=normalize_api_url(launch_prefill.get("apiUrl") or draft.get("apiUrl") or DEFAULT_API_URL))
+        if not self.confirm_api_endpoint(self.api_url.get()):
+            self.api_url.set(DEFAULT_API_URL)
+            launch_prefill = {}
+            draft_profile = {}
+            self.launch_prefill_url = ""
         self.access_token = tk.StringVar(value=draft_profile.get("accessToken") or "")
         self.first_name = tk.StringVar(value=draft_profile.get("firstName") or "")
         self.last_name = tk.StringVar(value=draft_profile.get("lastName") or "")
@@ -324,6 +347,8 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
         self.register_macos_url_handler()
         self._build_ui()
         self._bind_draft_saves()
+        if self.startup_probe:
+            return
         self.after(300, self.load_organization_background)
         if self.launch_prefill_requested:
             self.status.set(self.t("Prefill link received. Loading profile..."))
@@ -393,10 +418,12 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
         prefill_code = str(launch_prefill.get("prefillCode") or "").strip()
         if not prefill_code:
             return
-        self.handled_launch_urls.add(launch_url)
-        self.launch_prefill_url = str(launch_prefill.get("launchUrl") or launch_url)
         api_url = normalize_api_url(launch_prefill.get("apiUrl") or self.api_url.get() or DEFAULT_API_URL)
+        if not self.confirm_api_endpoint(api_url):
+            return
+        self.handled_launch_urls.add(launch_url)
         self.api_url.set(api_url)
+        self.launch_prefill_url = str(launch_prefill.get("launchUrl") or launch_url)
         self.prefill_code.set(prefill_code)
         self.launch_prefill_requested = True
         self.profile_visible.set(False)
@@ -1228,6 +1255,8 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
             self.raw_toggle.configure(text=self.t("Show Advanced / Raw JSON"))
 
     def _bind_draft_saves(self) -> None:
+        self._profile_api_url = self.api_url.get()
+        self.api_url.trace_add("write", self.reset_profile_on_endpoint_change)
         variables = [
             self.api_url, self.access_token, self.first_name, self.last_name, self.email, self.team,
             self.establishment, self.proposed_team, self.proposed_establishment, self.comment, self.prefill_code,
@@ -1238,6 +1267,20 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
         self.auto_update.trace_add("write", lambda *_: self.persist_draft())
         self.team.trace_add("write", lambda *_: self.update_proposal_visibility())
         self.establishment.trace_add("write", lambda *_: self.update_proposal_visibility())
+
+    def reset_profile_on_endpoint_change(self, *_args) -> None:
+        endpoint = self.api_url.get()
+        if endpoint == self._profile_api_url:
+            return
+        self._profile_api_url = endpoint
+        self.launch_prefill_url = ""
+        self.collection_token = ""
+        self.payload = {}
+        self.submitted = False
+        for name in ("access_token", "prefill_code", "first_name", "last_name", "email", "team", "establishment", "proposed_team", "proposed_establishment", "comment"):
+            getattr(self, name).set("")
+        self.teams = []
+        self.establishments = []
 
     def update_proposal_visibility(self) -> None:
         team_other = self.org_name_from_label(self.team.get().strip(), self.teams) == "Other"
@@ -1260,8 +1303,13 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
     def persist_draft(self) -> None:
         if self.startup_probe:
             return
+        try:
+            api_url = normalize_api_url(self.api_url.get())
+        except ValueError:
+            # A user may be midway through editing the URL; validate on use.
+            return
         save_draft({
-            "apiUrl": normalize_api_url(self.api_url.get()),
+            "apiUrl": api_url,
             "accessToken": self.access_token.get().strip(),
             "firstName": self.first_name.get().strip(),
             "lastName": self.last_name.get().strip(),
@@ -1363,7 +1411,7 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
             self.establishments = data.get("establishments") or []
             self.after(0, self.update_org_controls)
         except Exception as exc:
-            self.after(0, lambda: self.status.set(api_error_message(exc)))
+            self.after(0, lambda error=api_error_message(exc): self.status.set(error))
 
     def update_org_controls(self) -> None:
         team_values = [self.org_label(item) for item in self.teams if item.get("name")] + [self.t("Other")]
@@ -1420,7 +1468,7 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
             self.after(0, lambda: self.connection_status.set(f"{self.t('Token valid')}: {label}"))
             self._load_organization()
         except Exception as exc:
-            self.after(0, lambda: self.connection_status.set(self.friendly_token_error(exc)))
+            self.after(0, lambda error=self.friendly_token_error(exc): self.connection_status.set(error))
 
     def friendly_token_error(self, exc: Exception) -> str:
         message = api_error_message(exc)
@@ -1463,8 +1511,8 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
             self.after(0, self.render_scan_summary)
             self.after(0, self.update_primary_action)
         except Exception as exc:
-            self.after(0, lambda: self.append_scan_log(f"Scan failed: {exc}"))
-            self.after(0, lambda: messagebox.showerror(self.t("Scan failed"), str(exc)))
+            self.after(0, lambda error=str(exc): self.append_scan_log(f"Scan failed: {error}"))
+            self.after(0, lambda error=str(exc): messagebox.showerror(self.t("Scan failed"), error))
             self.after(0, lambda: self.status.set(self.t("Scan failed")))
             self.after(0, self.update_primary_action)
 
@@ -1502,7 +1550,8 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
         self.status.set(self.t("Creating collection profile..."))
         if hasattr(self, "next_button"):
             self.next_button.configure(state="disabled", text=self.t("Creating collection profile..."))
-        threading.Thread(target=self._submit_background, daemon=True).start()
+        request_context = (self.api_url.get(), body, self.access_token.get().strip(), dict(self.payload))
+        threading.Thread(target=self._submit_background, args=request_context, daemon=True).start()
 
     def show_submission_success(self) -> None:
         self.status.set(self.t("Submission sent"))
@@ -1511,34 +1560,35 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
         if hasattr(self, "content_canvas"):
             self.content_canvas.yview_moveto(0)
 
-    def _submit_background(self) -> None:
+    def _submit_background(self, api_url: str, body: dict, access_token: str, payload: dict) -> None:
         try:
             profile = api_request(
-                self.api_url.get().strip(),
+                api_url,
                 "/collect/profile",
                 method="POST",
-                headers={"X-Collection-Access-Token": self.access_token.get().strip()},
-                body=self.profile_body(),
+                headers={"X-Collection-Access-Token": access_token},
+                body=body,
             )
             token = profile.get("collectionToken")
             if not token:
                 raise RuntimeError(self.t("API did not return a collection token."))
-            request_body = json.dumps(self.payload).encode("utf-8")
-            request = urllib.request.Request(
-                f"{normalize_api_url(self.api_url.get()).rstrip('/')}/collect/scan",
-                data=request_body,
+            result = api_request(
+                api_url,
+                "/collect/scan",
+                body=payload,
                 headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
                 method="POST",
             )
-            with urllib.request.urlopen(request, timeout=25, context=http_ssl_context()) as response:
-                result = json.loads(response.read().decode("utf-8"))
+            if self.api_url.get() != api_url:
+                return
             clear_sensitive_draft()
             self.submitted = True
             self.submission_device_id = str(result.get("deviceId") or "")
             self.after(0, self.show_submission_success)
         except Exception as exc:
-            self.after(0, lambda: self.status.set(f"{self.t('Submission failed')}: {api_error_message(exc)}"))
-            self.after(0, lambda: messagebox.showerror(self.t("Submission failed"), api_error_message(exc)))
+            error = api_error_message(exc)
+            self.after(0, lambda error=error: self.status.set(f"{self.t('Submission failed')}: {error}"))
+            self.after(0, lambda error=error: messagebox.showerror(self.t("Submission failed"), error))
             self.after(0, self.update_primary_action)
 
 
@@ -1593,4 +1643,7 @@ def _exercise_startup_probe(app: CollectorApp) -> None:
 
 
 if __name__ == "__main__":
-    run_collector()
+    if "--version" in sys.argv[1:]:
+        print(COLLECTOR_VERSION)
+    else:
+        run_collector()

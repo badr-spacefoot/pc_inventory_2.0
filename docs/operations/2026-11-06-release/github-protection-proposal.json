@@ -1,0 +1,24 @@
+{
+  "kind": "proposal-only-not-applied",
+  "repository": "badr-spacefoot/pc_inventory_2.0",
+  "observedMain": "4ac6d8d77e982409f00809f7a25640e77ad720c0",
+  "branch": {
+    "name": "main",
+    "required_status_checks": { "strict": true, "contexts": ["quality"] },
+    "enforce_admins": true,
+    "required_pull_request_reviews": { "required_approving_review_count": 0, "dismiss_stale_reviews": true },
+    "restrictions": null,
+    "allow_force_pushes": false,
+    "allow_deletions": false,
+    "required_conversation_resolution": true
+  },
+  "environments": [
+    { "name": "production", "purpose": "Collector tag releases", "requiredReview": "Repository owner approval; verify an available reviewer and self-review policy before applying", "allowedRefs": "Reviewed collector-v* release tags" },
+    { "name": "production-supabase", "purpose": "Hosted API/database deployment until cutover", "requiredReview": "Repository owner approval; verify an available reviewer and self-review policy before applying", "allowedRefs": "main only" }
+  ],
+  "notes": [
+    "A pull request remains required; zero external approving reviews avoids inventing a second maintainer for this repository.",
+    "Environment approval is separate from branch protection and does not certify native signing or staging acceptance.",
+    "Confirm the full proposal and reviewer availability before any remote policy change."
+  ]
+}

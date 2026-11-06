@@ -1,0 +1,87 @@
+# Apply to the reviewed official self-hosted/v0.8.1 Docker stack with Compose >=2.24.4.
+# No service may retain the upstream global container names or host database ports.
+name: parc
+x-bounded-logs: &bounded-logs
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+services:
+  studio:
+    container_name: parc-studio
+    logging: *bounded-logs
+  api-gw:
+    container_name: parc-gateway
+    logging: *bounded-logs
+    ports: !reset []
+    networks:
+      default:
+        aliases: [envoy, kong]
+      proxy:
+        aliases: [parc-gateway]
+  auth:
+    container_name: parc-auth
+    logging: *bounded-logs
+    networks: [default, egress]
+  rest:
+    container_name: parc-rest
+    logging: *bounded-logs
+  realtime:
+    container_name: parc-realtime
+    logging: *bounded-logs
+  storage:
+    container_name: parc-storage
+    logging: *bounded-logs
+  imgproxy:
+    container_name: parc-imgproxy
+    logging: *bounded-logs
+  meta:
+    container_name: parc-meta
+    logging: *bounded-logs
+  functions:
+    container_name: parc-functions
+    logging: *bounded-logs
+    networks: [default, egress]
+    env_file:
+      - ./inventory-api.env
+    environment:
+      VERIFY_JWT: "false"
+      ALLOWED_ORIGINS: https://parc.piqa.fr
+      SUPABASE_PUBLIC_URL: https://parc-api.piqa.fr
+  db:
+    container_name: parc-db
+    logging: *bounded-logs
+    ports: !reset []
+  supavisor:
+    container_name: parc-pooler
+    logging: *bounded-logs
+    ports: !reset []
+  web:
+    image: caddy:2.11.9-alpine@sha256:71d41fe4b1ae92a058abc87afe614178b996d8a6b96d0f4c71ae30606e5927e3
+    container_name: parc-web
+    logging: *bounded-logs
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp, /config, /data]
+    volumes:
+      - ./site:/srv:ro
+      - ./Caddyfile.static:/etc/caddy/Caddyfile:ro
+    networks:
+      proxy:
+        aliases: [parc-web]
+    healthcheck:
+      test: [CMD, wget, -q, --spider, http://127.0.0.1:8080/health.txt]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+networks:
+  default:
+    name: parc_backend
+    internal: true
+  egress:
+    name: parc_egress
+  proxy:
+    name: parc_proxy
+    external: true

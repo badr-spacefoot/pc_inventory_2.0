@@ -76,6 +76,7 @@ export class ApiClient {
   }
 
   async request<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+    options.signal?.throwIfAborted();
     const method = String(options.method || "GET").toUpperCase();
     const retries = options.retries ?? (IDEMPOTENT_METHODS.has(method) ? this.defaultRetries : 0);
     const retryDelayMs = options.retryDelayMs ?? 250;
@@ -85,6 +86,8 @@ export class ApiClient {
     if (token && !headers.has("Authorization")) headers.set("Authorization", `Bearer ${token}`);
 
     for (let attempt = 0; attempt <= retries; attempt += 1) {
+      options.signal?.throwIfAborted();
+      if (token !== this.getAuthToken()) throw new DOMException("Session changed", "AbortError");
       const requestSignal = createRequestSignal(options.signal, options.timeoutMs ?? this.defaultTimeoutMs);
       try {
         const response = await this.fetcher(`${this.baseUrl}${path}`, {
@@ -93,6 +96,7 @@ export class ApiClient {
           signal: requestSignal.signal,
         });
         const body = await parseResponse(response);
+        if (token !== this.getAuthToken()) throw new DOMException("Session changed", "AbortError");
         if (response.ok) return body as T;
 
         if (attempt < retries && isRetryableResponse(response.status, body)) {
@@ -101,6 +105,7 @@ export class ApiClient {
         }
         throw new ApiError(errorMessage(body), response.status, isJsonObject(body) ? body : {});
       } catch (error) {
+        if (token !== this.getAuthToken()) throw error;
         if (error instanceof ApiError) throw error;
         if (options.signal?.aborted) throw error;
         if (attempt >= retries) throw error;

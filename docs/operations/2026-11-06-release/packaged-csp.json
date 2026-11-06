@@ -1,0 +1,17 @@
+{
+  "syntheticOnly": true,
+  "errors": [],
+  "violations": [],
+  "mockedExternal": [
+    "https://api.open-meteo.com",
+    "https://parc-api.piqa.fr",
+    "https://www.openstreetmap.org"
+  ],
+  "boot": {
+    "core": true,
+    "api": "https://parc-api.piqa.fr/functions/v1/inventory-api",
+    "script": "https://parc.piqa.fr/scripts/collect-windows.ps1",
+    "hasApp": true
+  },
+  "passed": true
+}

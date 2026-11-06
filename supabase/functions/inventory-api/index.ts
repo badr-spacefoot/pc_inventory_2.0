@@ -12,6 +12,15 @@ import {
 } from "./core/input.ts";
 import { canPerformAction, normalizedRole } from "./core/permissions.ts";
 import { createResponseHelpers } from "./core/responses.ts";
+import {
+  collectKeysetRows,
+  fetchBoundedText,
+  HttpInputError,
+  invoiceMimeMatches,
+  publicStorageSignedUrl,
+  readBoundedBytes,
+  sessionIsCurrent,
+} from "./core/security.ts";
 import type {
   Action,
   AdminSession,
@@ -74,6 +83,7 @@ import type { CpuReleaseAliasRow } from "./domain/cpu-release/resolver.ts";
 import { hasCpuReleaseSyncToken } from "./domain/cpu-release/authorization.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+const supabasePublicUrl = Deno.env.get("SUPABASE_PUBLIC_URL") ?? "";
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const adminPassword = Deno.env.get("ADMIN_PASSWORD") ?? "";
 const adminSessionSecret = Deno.env.get("ADMIN_SESSION_SECRET") ?? "";
@@ -330,9 +340,16 @@ async function verifyPassword(password: string, storedHash: string) {
   return await pbkdf2Hash(password, salt, Number(iterations)) === storedHash;
 }
 
-async function createAdminToken(user: AdminSession) {
-  const payload = btoa(
-    JSON.stringify({ ...user, exp: Date.now() + 12 * 60 * 60 * 1000 }),
+async function createAdminToken(user: AdminSession, passwordHash: string) {
+  const exp = Date.now() + 12 * 60 * 60 * 1000;
+  const { data, error } = await supabase.rpc("create_admin_session", {
+    p_user: user.id,
+    p_password_hash: passwordHash,
+    p_expiry: new Date(exp).toISOString(),
+  });
+  if (error) throw error;
+  const payload = base64Url(
+    new TextEncoder().encode(JSON.stringify({ sessionId: data, exp })),
   );
   return `${payload}.${await hmac(payload)}`;
 }
@@ -346,24 +363,33 @@ async function getAdminSession(request: Request): Promise<AdminSession | null> {
     const [payload, signature] = token.split(".");
     if (!payload || !signature) return null;
     if ((await hmac(payload)) !== signature) return null;
-    const parsed = JSON.parse(atob(payload));
-    if (Number(parsed.exp) <= Date.now()) return null;
-    if (parsed.role === "admin") {
-      return {
-        id: "legacy-admin",
-        username: "legacy-admin",
-        displayName: "Legacy Admin",
-        role: "ADMIN",
-        legacy: true,
-      };
-    }
+    const parsed = JSON.parse(
+      new TextDecoder().decode(
+        Uint8Array.from(
+          atob(payload.replaceAll("-", "+").replaceAll("_", "/")),
+          (c) => c.charCodeAt(0),
+        ),
+      ),
+    );
+    if (
+      !Number.isFinite(parsed.exp) || parsed.exp <= Date.now() ||
+      !parsed.sessionId
+    ) return null;
+    const { data: session, error } = await supabase.from("admin_sessions")
+      .select("id,user_id,expires_at").eq("id", parsed.sessionId).maybeSingle();
+    if (error || !session) return null;
+    const { data: user, error: userError } = await supabase.from("admin_users")
+      .select("id,username,display_name,role,is_active").eq(
+        "id",
+        session.user_id,
+      ).maybeSingle();
+    if (userError || !sessionIsCurrent(session, user)) return null;
     return {
-      id: safeString(parsed.id) || "legacy-admin",
-      username: safeString(parsed.username) || "admin",
-      displayName: safeString(parsed.displayName) ||
-        safeString(parsed.username) || "Admin",
-      role: normalizedRole(parsed.role),
-      legacy: Boolean(parsed.legacy),
+      id: user!.id,
+      username: user!.username,
+      displayName: user!.display_name,
+      role: normalizedRole(user!.role),
+      sessionId: session.id,
     };
   } catch {
     return null;
@@ -431,12 +457,13 @@ async function audit(
   entityId: string | null,
   details: Json = {},
 ) {
-  await supabase.from("audit_logs").insert({
+  const { error } = await supabase.from("audit_logs").insert({
     action,
     entity_type: entityType,
     entity_id: entityId,
     details,
   });
+  if (error) throw error;
 }
 
 async function notify(
@@ -445,7 +472,7 @@ async function notify(
   message: string,
   options: Json = {},
 ) {
-  await supabase.from("notifications").insert({
+  const { error } = await supabase.from("notifications").insert({
     type,
     title,
     message,
@@ -455,6 +482,7 @@ async function notify(
     related_entity_type: safeString(options.relatedEntityType, 80) || null,
     related_entity_id: safeString(options.relatedEntityId) || null,
   });
+  if (error) throw error;
 }
 
 function publicAdminUser(user: Json) {
@@ -706,30 +734,11 @@ async function consumeCollectionAccessToken(token: string) {
 }
 
 async function consumeCollectionInvite(code: string) {
-  const inviteCode = safeString(code, 120);
-  if (!inviteCode) return null;
-  const { data, error } = await supabase
-    .from("collection_invites")
-    .select("id,expires_at,max_uses,use_count,revoked_at")
-    .eq("invite_code", inviteCode)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc("consume_collection_invite", {
+    p_code: safeString(code, 120),
+  });
   if (error) throw error;
-  if (!data) return null;
-  const maxUses = data.max_uses === null || data.max_uses === undefined
-    ? null
-    : Number(data.max_uses);
-  const useCount = Number(data.use_count ?? 0);
-  if (data.revoked_at) return null;
-  if (new Date(safeString(data.expires_at)).getTime() <= Date.now()) {
-    return null;
-  }
-  if (maxUses !== null && useCount >= maxUses) return null;
-  const { error: updateError } = await supabase
-    .from("collection_invites")
-    .update({ use_count: useCount + 1, last_used_at: new Date().toISOString() })
-    .eq("id", data.id);
-  if (updateError) throw updateError;
-  return `invite:${data.id}`;
+  return data ? `invite:${data}` : null;
 }
 
 async function upsertUserProfile(body: Json) {
@@ -740,9 +749,18 @@ async function upsertUserProfile(body: Json) {
   );
   const email = firstPresent(body, "email").toLowerCase();
 
+  // A collector may refer to an existing profile, but cannot edit its identity or organization.
+  const { data: existing, error: existingError } = await supabase.from("users")
+    .select("id,first_name,last_name,email,team_id,establishment_id").eq(
+      "email",
+      email,
+    ).maybeSingle();
+  if (existingError) throw existingError;
+  if (existing) return existing;
+
   const { data: user, error: userError } = await supabase
     .from("users")
-    .upsert(
+    .insert(
       {
         first_name: titleCase(firstPresent(body, "firstName")),
         last_name: firstPresent(body, "lastName").toUpperCase(),
@@ -752,7 +770,6 @@ async function upsertUserProfile(body: Json) {
         service: firstPresent(body, "service") || "Deprecated",
         comment: firstPresent(body, "comment", "notes", "Notes").slice(0, 1000),
       },
-      { onConflict: "email" },
     )
     .select("id,first_name,last_name,email,team_id,establishment_id")
     .single();
@@ -817,6 +834,27 @@ async function handleAdminLogin(request: Request) {
   const username = safeString(body.username, 80).toLowerCase();
   const password = safeString(body.password, 500);
   if (!password) return badRequest(request, "Mot de passe requis.", 400);
+  for (
+    const [key, limit, seconds] of [["global", 300, 60], [
+      await sha256(username || "legacy"),
+      8,
+      900,
+    ]] as const
+  ) {
+    const { data: allowed, error } = await supabase.rpc("take_login_attempt", {
+      p_key: key,
+      p_limit: limit,
+      p_seconds: seconds,
+    });
+    if (error) throw error;
+    if (!allowed) {
+      return badRequest(
+        request,
+        "Trop de tentatives. Réessayez plus tard.",
+        429,
+      );
+    }
+  }
 
   if (username) {
     const { data: user, error } = await supabase
@@ -828,9 +866,11 @@ async function handleAdminLogin(request: Request) {
       .maybeSingle();
     if (error) throw error;
     if (user) {
-      if (!user.is_active) return badRequest(request, "Compte desactive.", 403);
       if (
-        !(await verifyPassword(password, safeString(user.password_hash, 1000)))
+        !(await verifyPassword(
+          password,
+          safeString(user.password_hash, 1000),
+        )) || !user.is_active
       ) {
         return badRequest(request, "Identifiants incorrects.", 401);
       }
@@ -844,7 +884,7 @@ async function handleAdminLogin(request: Request) {
         role: normalizedRole(user.role),
       };
       return json(request, {
-        token: await createAdminToken(session),
+        token: await createAdminToken(session, user.password_hash),
         user: session,
       });
     }
@@ -893,24 +933,18 @@ async function handleAdminLogin(request: Request) {
         role: "ADMIN",
       };
       return json(request, {
-        token: await createAdminToken(session),
+        token: await createAdminToken(session, passwordHash),
         user: session,
       }, 201);
     }
   }
 
   if (!username && allowLegacyAdminLogin && password === adminPassword) {
-    const session: AdminSession = {
-      id: "legacy-admin",
-      username: "legacy-admin",
-      displayName: "Legacy Admin",
-      role: "ADMIN",
-      legacy: true,
-    };
-    return json(request, {
-      token: await createAdminToken(session),
-      user: session,
-    });
+    return badRequest(
+      request,
+      "Utilisez votre compte administrateur nominatif.",
+      401,
+    );
   }
 
   return badRequest(request, "Identifiants incorrects.", 401);
@@ -918,6 +952,7 @@ async function handleAdminLogin(request: Request) {
 
 async function handleProfile(request: Request) {
   const accessToken = request.headers.get("x-collection-access-token") ?? "";
+  let enrolledDeviceId: string | null = null;
   const body = await request.json().catch(() => ({}));
   const required = ["firstName", "lastName", "email"];
   for (const field of required) {
@@ -950,6 +985,19 @@ async function handleProfile(request: Request) {
     safeString(body.email, 255).toLowerCase(),
   );
   if (emailError) return badRequest(request, emailError);
+  if (accessToken.startsWith("invite_")) {
+    const invite = await validateCollectionInviteValue(accessToken.slice(7));
+    const payload = invite?.payload as Json | undefined;
+    enrolledDeviceId = safeString(payload?.deviceId) || null;
+    const invitedEmail = safeString(payload?.email).toLowerCase();
+    if (invitedEmail && invitedEmail !== safeString(body.email).toLowerCase()) {
+      return badRequest(
+        request,
+        "Cette invitation est réservée à son destinataire.",
+        403,
+      );
+    }
+  }
   const accessTokenId = await consumeCollectionAccessToken(accessToken);
   if (!accessTokenId) {
     return badRequest(
@@ -986,11 +1034,14 @@ async function handleProfile(request: Request) {
   const token = crypto.randomUUID().replaceAll("-", "") +
     crypto.randomUUID().replaceAll("-", "");
   const tokenHash = await sha256(token);
-  await supabase.from("collection_tokens").insert({
-    user_id: user.id,
-    token_hash: tokenHash,
-    expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-  });
+  const { error: tokenInsertError } = await supabase.from("collection_tokens")
+    .insert({
+      user_id: user.id,
+      device_id: enrolledDeviceId,
+      token_hash: tokenHash,
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+  if (tokenInsertError) throw tokenInsertError;
   await audit("collection_profile_created", "user", user.id, {
     email,
     access_token_id: accessTokenId,
@@ -1702,11 +1753,15 @@ function parseLaunchYearFromOfficialText(text: string) {
 
 async function fetchCpuReferenceText(url: string) {
   if (!url) return "";
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
   try {
-    const response = await fetch(url, {
-      signal: controller.signal,
+    const { response, body } = await fetchBoundedText(url, [
+      "cpubenchmark.net",
+      "intel.com",
+      "amd.com",
+      "apple.com",
+      "qualcomm.com",
+    ], {
+      maxBytes: 500_000,
       headers: {
         "accept": "text/html,application/xhtml+xml",
         "accept-language": "en-US,en;q=0.9,fr;q=0.8",
@@ -1715,14 +1770,12 @@ async function fetchCpuReferenceText(url: string) {
       },
     });
     if (!response.ok) return "";
-    return (await response.text()).slice(0, 500_000).replace(
+    return body.replace(
       /<script[\s\S]*?<\/script>/gi,
       " ",
     ).replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ");
   } catch {
     return "";
-  } finally {
-    clearTimeout(timeout);
   }
 }
 
@@ -2324,6 +2377,26 @@ async function persistScan(
   ]);
   if (previousDeviceError) throw previousDeviceError;
   if (previousAssignmentError) throw previousAssignmentError;
+  {
+    const { data: enrollment, error: enrollmentError } = tokenId
+      ? await supabase.from("collection_tokens").select("device_id").eq(
+        "id",
+        tokenId,
+      ).maybeSingle()
+      : { data: null, error: null };
+    if (enrollmentError) throw enrollmentError;
+    if (
+      (previousDevice &&
+        (!enrollment || enrollment.device_id !== previousDevice.id)) ||
+      (enrollment?.device_id && enrollment.device_id !== previousDevice?.id)
+    ) {
+      return badRequest(
+        request,
+        "Machine déjà enregistrée. Un administrateur doit autoriser ce collecteur avant de modifier sa fiche.",
+        409,
+      );
+    }
+  }
   const eventSource = safeString(rawBody.importedFrom) ? "IMPORT" : "COLLECTOR";
   const updateAssignmentFromScan = eventSource === "COLLECTOR";
   const previousStatus = safeString(previousDevice?.status);
@@ -2372,12 +2445,28 @@ async function persistScan(
     ...dedupe,
   };
 
-  const { data: device, error: deviceError } = await supabase
-    .from("devices")
-    .upsert(deviceValues, { onConflict: "dedupe_key" })
-    .select("id")
-    .single();
+  const { data: device, error: deviceError } =
+    await (previousDevice
+      ? supabase.from("devices").update(deviceValues).eq(
+        "id",
+        previousDevice.id,
+      )
+      : supabase.from("devices").insert(deviceValues))
+      .select("id")
+      .single();
+  if (deviceError?.code === "23505") {
+    return badRequest(
+      request,
+      "Machine déjà enregistrée. Réessayez avec une invitation autorisée.",
+      409,
+    );
+  }
   if (deviceError) throw deviceError;
+  if (tokenId) {
+    const { error: bindingError } = await supabase.from("collection_tokens")
+      .update({ device_id: device.id }).eq("id", tokenId);
+    if (bindingError) throw bindingError;
+  }
   const userAssignmentChanged = Boolean(previousAssignment) &&
     historyValue(previousAssignment?.assigned_user_id) !==
       historyValue(deviceValues.assigned_user_id);
@@ -2669,49 +2758,19 @@ async function handleAcceptAdminUserInvite(request: Request, rawToken: string) {
     return badRequest(request, "Les mots de passe ne correspondent pas.");
   }
 
-  const now = new Date().toISOString();
-  const values = {
-    username: safeString(invite?.username, 80),
-    display_name: safeString(invite?.display_name, 120),
-    email: safeString(invite?.email, 255).toLowerCase(),
-    role: validAccountInviteRole(invite?.role) || "VIEWER",
-    password_hash: await pbkdf2Hash(password),
-    is_active: true,
-    updated_at: now,
-  };
-  const { data: user, error: userError } = await supabase
-    .from("admin_users")
-    .insert(values)
-    .select(
-      "id,username,display_name,email,role,is_active,created_at,updated_at,last_login_at",
-    )
-    .single();
-  if (userError) {
-    if (userError.code === "23505") {
-      return badRequest(
-        request,
-        "Un compte utilise déjà cet identifiant ou email.",
-        409,
-      );
+  const { data: user, error: acceptError } = await supabase.rpc(
+    "accept_admin_invitation",
+    {
+      p_token_hash: await sha256(rawToken),
+      p_password_hash: await pbkdf2Hash(password),
+    },
+  );
+  if (acceptError) {
+    if (["23505", "P0001"].includes(acceptError.code)) {
+      return badRequest(request, "Invitation ou compte indisponible.", 409);
     }
-    throw userError;
+    throw acceptError;
   }
-
-  const { data: acceptedInvite, error: acceptError } = await supabase
-    .from("admin_user_invites")
-    .update({ accepted_at: now, accepted_user_id: user.id })
-    .eq("id", invite?.id)
-    .is("accepted_at", null)
-    .is("revoked_at", null)
-    .gt("expires_at", now)
-    .select("id")
-    .maybeSingle();
-  if (acceptError || !acceptedInvite) {
-    await supabase.from("admin_users").delete().eq("id", user.id);
-    if (acceptError) throw acceptError;
-    return badRequest(request, "Invitation de compte indisponible.", 409);
-  }
-
   await audit(
     "admin_user_invite_accepted",
     "admin_user_invite",
@@ -3240,6 +3299,18 @@ async function handleAdminCreateCollectionInvite(request: Request) {
     return badRequest(request, "Nombre d'utilisations invalide.");
   }
   const payload = prefillPayload(body);
+  const authorizedDeviceId = safeString(body.deviceId);
+  if (authorizedDeviceId) {
+    if (
+      !payload.email || !(await recordExists("devices", authorizedDeviceId))
+    ) {
+      return badRequest(
+        request,
+        "Une autorisation de collecte requiert une machine existante et un destinataire.",
+      );
+    }
+    Object.assign(payload, { deviceId: authorizedDeviceId });
+  }
   if (payload.email) {
     const emailError = emailValidationError(payload.email);
     if (emailError) return badRequest(request, emailError);
@@ -3413,11 +3484,15 @@ async function handleAdminDevices(request: Request) {
   if (!(await isAdmin(request, "DEVICE_VIEW"))) {
     return badRequest(request, "Action non autorisee pour ce role.", 403);
   }
-  const { data, error } = await supabase.from("device_inventory_view").select(
-    "*",
-  ).order("last_seen_at", { ascending: false });
-  if (error) throw error;
-  return json(request, { devices: data });
+  const devices = await collectKeysetRows(async (after) => {
+    let query = supabase.from("device_inventory_view").select("*").order("id")
+      .limit(500);
+    if (after) query = query.gt("id", after);
+    const { data, error } = await query;
+    if (error) throw error;
+    return data ?? [];
+  });
+  return json(request, { devices, complete: true });
 }
 
 function normalizeMacKey(value: unknown) {
@@ -4363,6 +4438,7 @@ async function handleAdminDeleteDevice(request: Request, id: string) {
     },
   );
 
+  await cleanupInvoiceFiles();
   return json(request, { deleted: true, id });
 }
 
@@ -4978,14 +5054,17 @@ async function fetchCpuBenchmarkRowsFromSource(
   wantedNames?: Set<string>,
 ) {
   const source = cpuBenchmarkSourceName(url);
-  const response = await fetch(url, {
+  const { response, body: text } = await fetchBoundedText(url, [
+    "cpubenchmark.net",
+    "raw.githubusercontent.com",
+  ], {
+    maxBytes: 5_000_000,
     headers: {
       "Accept": "text/csv,text/plain,text/html;q=0.9,*/*;q=0.8",
       "User-Agent": "Spacefoot IT Inventory CPU benchmark sync",
     },
   });
   if (!response.ok) throw new Error(`${source} HTTP ${response.status}`);
-  const text = await response.text();
   const htmlRows = /cpu(?:_lookup)?\.php\?cpu=|CPU Mark/i.test(text)
     ? parsePassMarkCpuHtml(text, source, now, url, wantedNames)
     : [];
@@ -5891,110 +5970,56 @@ async function handleProcessEnrichmentJob(request: Request) {
   ) {
     return badRequest(request, "Action non autorisee pour ce role.", 403);
   }
-
   const body = await request.json().catch(() => ({}));
   const jobId = safeString(body.jobId);
   const limit = Math.max(1, Math.min(Number(body.limit || 10), 25));
-  if (!jobId) return badRequest(request, "Job enrichissement manquant.");
-
-  const { data: job, error: jobError } = await supabase
-    .from("enrichment_jobs")
-    .select("*")
-    .eq("id", jobId)
-    .single();
+  if (!jobId || !Number.isFinite(limit)) {
+    return badRequest(request, "Job enrichissement invalide.");
+  }
+  const { data: job, error: jobError } = await supabase.from("enrichment_jobs")
+    .select("*").eq("id", jobId).single();
   if (jobError) throw jobError;
-  if (!job) return badRequest(request, "Job enrichissement introuvable.", 404);
-
-  const status = safeString(job.status);
-  if (!["queued", "running"].includes(status)) {
+  if (!["queued", "running"].includes(job.status)) {
     return json(request, { job: serializeEnrichmentJob(job), results: [] });
   }
-
-  const totalCount = Number(job.total_count || 0);
-  const processedBefore = Number(job.processed_count || 0);
-  if (processedBefore >= totalCount) {
-    const { data: completed, error } = await supabase
-      .from("enrichment_jobs")
-      .update({
-        status: "completed",
-        updated_at: new Date().toISOString(),
-        finished_at: new Date().toISOString(),
-      })
-      .eq("id", jobId)
-      .select("*")
-      .single();
+  const { error: initError } = await supabase.rpc("initialize_enrichment_job", {
+    p_job: jobId,
+  });
+  if (initError) throw initError;
+  const { data: items, error: claimError } = await supabase.rpc(
+    "claim_enrichment_items",
+    { p_job: jobId, p_limit: limit },
+  );
+  if (claimError) throw claimError;
+  const results: Json[] = [];
+  for (const item of items ?? []) {
+    const { data: device, error } = await supabase.from("device_inventory_view")
+      .select("*").eq("id", item.device_id).maybeSingle();
     if (error) throw error;
-    return json(request, {
-      job: serializeEnrichmentJob(completed),
-      results: [],
-    });
+    const batch = device
+      ? await enrichDeviceRows([device], {
+        force: Boolean(job.force),
+        useExternal: Boolean(job.use_external),
+      })
+      : { results: [{ deviceId: item.device_id, skipped: true }] };
+    const result = batch.results[0];
+    const { error: finishError } = await supabase.rpc(
+      "finish_enrichment_item",
+      {
+        p_job: jobId,
+        p_device: item.device_id,
+        p_claim: item.claim_id,
+        p_result: result,
+      },
+    );
+    if (finishError) throw finishError;
+    results.push(result);
   }
-
-  const { data: devices, error } = await supabase
-    .from("device_inventory_view")
-    .select("*")
-    .order("last_enriched_at", { ascending: true, nullsFirst: true })
-    .limit(Math.min(limit, totalCount - processedBefore));
-  if (error) throw error;
-
-  const batch = await enrichDeviceRows(devices ?? [], {
-    force: Boolean(job.force),
-    useExternal: Boolean(job.use_external),
-  });
-  const processedCount = processedBefore + batch.processed;
-  const completed = processedCount >= totalCount || batch.processed === 0;
-  const previousProviderStatuses =
-    job.provider_statuses && typeof job.provider_statuses === "object"
-      ? job.provider_statuses as Json
-      : {};
-  const previousEbayStatuses = Array.isArray(previousProviderStatuses.ebay)
-    ? previousProviderStatuses.ebay.map((status) => safeString(status, 80))
-      .filter(Boolean)
-    : [];
-  const batchEbayStatuses = Array.isArray((batch.providerStatuses as Json).ebay)
-    ? ((batch.providerStatuses as Json).ebay as unknown[]).map((status) =>
-      safeString(status, 80)
-    ).filter(Boolean)
-    : [];
-  const updateValues = {
-    status: completed ? "completed" : "running",
-    processed_count: processedCount,
-    enriched_count: Number(job.enriched_count || 0) + batch.enriched,
-    skipped_count: Number(job.skipped_count || 0) + batch.skipped,
-    failed_count: Number(job.failed_count || 0) + batch.failed,
-    ebay_result_count: Number(job.ebay_result_count || 0) +
-      batch.ebayResultCount,
-    provider_statuses: {
-      ...previousProviderStatuses,
-      ebay: Array.from(
-        new Set([...previousEbayStatuses, ...batchEbayStatuses]),
-      ),
-    },
-    updated_at: new Date().toISOString(),
-    finished_at: completed ? new Date().toISOString() : null,
-  };
-  const { data: updated, error: updateError } = await supabase
-    .from("enrichment_jobs")
-    .update(updateValues)
-    .eq("id", jobId)
-    .select("*")
-    .single();
-  if (updateError) throw updateError;
-
-  if (completed) {
-    await audit("hardware_enrichment_job_completed", "device", null, {
-      jobId,
-      processed: processedCount,
-      enriched: updateValues.enriched_count,
-      failed: updateValues.failed_count,
-      skipped: updateValues.skipped_count,
-    });
-  }
-
-  return json(request, {
-    job: serializeEnrichmentJob(updated),
-    results: batch.results,
-  });
+  const { data: updated, error: readError } = await supabase.from(
+    "enrichment_jobs",
+  ).select("*").eq("id", jobId).single();
+  if (readError) throw readError;
+  return json(request, { job: serializeEnrichmentJob(updated), results });
 }
 
 async function handleAdminEnrich(request: Request) {
@@ -6133,7 +6158,19 @@ async function syncLatestInvoiceValuation(deviceId: string) {
 
   const purchasePrice = safeNumber(invoice?.purchase_price);
 
-  if (!invoice || purchasePrice === null || purchasePrice <= 0) return;
+  if (!invoice || purchasePrice === null || purchasePrice <= 0) {
+    const { data: device, error } = await supabase.from("device_inventory_view")
+      .select("*").eq("id", deviceId).maybeSingle();
+    if (error) throw error;
+    if (
+      device &&
+      (device.valuation_method === "invoice_backed" ||
+        device.enrichment_source === "invoice_pending")
+    ) {
+      await enrichOneDevice(device, { force: true, useExternal: false });
+    }
+    return;
+  }
 
   const invoiceYear = safeString(invoice.invoice_date)
     ? new Date(`${safeString(invoice.invoice_date)}T00:00:00Z`).getUTCFullYear()
@@ -6290,6 +6327,12 @@ function decodeBase64File(value: unknown) {
   const raw = String(value || "").trim();
   if (!raw) return new Uint8Array();
   const base64 = raw.includes(",") ? raw.split(",").pop() || "" : raw;
+  if (base64.length > Math.ceil(maxInvoiceFileBytes / 3) * 4) {
+    throw new HttpInputError(
+      "Fichier facture trop volumineux. Maximum 10 Mo.",
+      413,
+    );
+  }
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) {
@@ -6304,7 +6347,11 @@ async function createSignedInvoiceUrl(path: unknown) {
   const { data, error } = await supabase.storage.from(invoiceStorageBucket)
     .createSignedUrl(filePath, 60 * 60);
   if (error) return "";
-  return data?.signedUrl || "";
+  return publicStorageSignedUrl(
+    data?.signedUrl || "",
+    supabaseUrl,
+    supabasePublicUrl,
+  );
 }
 
 async function signInvoiceRows(invoices: Json[] = []) {
@@ -6334,10 +6381,22 @@ async function uploadInvoiceFile(deviceId: string, body: Json) {
       "Format de facture non autorise. Utilisez PDF, PNG, JPG, WEBP ou HEIC.",
     );
   }
+  if (!invoiceMimeMatches(bytes, mimeType)) {
+    throw new HttpInputError(
+      "Le contenu du fichier ne correspond pas à son format déclaré.",
+    );
+  }
   const fileName = sanitizeInvoiceFileName(
     safeString(body.fileName ?? body.file_name, 255),
   );
   const filePath = `${deviceId}/${crypto.randomUUID()}-${fileName}`;
+  // If upload/insert crashes, the durable queue retains the cleanup obligation.
+  const { error: queueError } = await supabase.from("invoice_cleanup_queue")
+    .insert({
+      file_path: filePath,
+      ready_at: new Date(Date.now() + 86400000).toISOString(),
+    });
+  if (queueError) throw queueError;
   const { error } = await supabase.storage.from(invoiceStorageBucket).upload(
     filePath,
     bytes,
@@ -6365,6 +6424,25 @@ async function handleAdminDeviceInvoice(request: Request, id: string) {
   }
 
   const body = await request.json().catch(() => ({}));
+  const requestId = safeString(body.requestId || body.idempotencyKey);
+  if (
+    requestId &&
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      requestId,
+    )
+  ) {
+    return badRequest(request, "Identifiant de requête invalide.");
+  }
+  if (requestId) {
+    const { data: existing, error } = await supabase.from("device_invoices")
+      .select("*").eq("device_id", id).eq("request_id", requestId)
+      .maybeSingle();
+    if (error) throw error;
+    if (existing) {
+      await syncLatestInvoiceValuation(id);
+      return json(request, { invoice: (await signInvoiceRows([existing]))[0] });
+    }
+  }
 
   const invoiceType = safeString(body.invoiceType ?? body.invoice_type, 40) ||
     "purchase";
@@ -6458,6 +6536,7 @@ async function handleAdminDeviceInvoice(request: Request, id: string) {
 
   const values: Json = {
     device_id: id,
+    request_id: requestId || null,
 
     invoice_type: invoiceType,
 
@@ -6513,29 +6592,17 @@ async function handleAdminDeviceInvoice(request: Request, id: string) {
   const { data, error } = await supabase.from("device_invoices").insert(values)
     .select("*").single();
 
+  if (error?.code === "23505" && requestId) {
+    const { data: existing, error: readError } = await supabase.from(
+      "device_invoices",
+    ).select("*").eq("device_id", id).eq("request_id", requestId).single();
+    if (readError) throw readError;
+    await syncLatestInvoiceValuation(id);
+    return json(request, { invoice: (await signInvoiceRows([existing]))[0] });
+  }
   if (error) throw error;
 
   await syncLatestInvoiceValuation(id);
-
-  await appendDeviceHistory([{
-    device_id: id,
-
-    event_type: "INVOICE_ADDED",
-
-    field_name: "invoice",
-
-    old_value: null,
-
-    new_value: invoiceSummary(data),
-
-    changed_by: auth.session?.username || "admin",
-
-    source: "MANUAL_ADMIN",
-
-    notes: safeString(values.notes),
-
-    changed_at: new Date().toISOString(),
-  }]);
 
   await audit("device_invoice_added", "device", id, {
     invoice_id: data.id,
@@ -6576,11 +6643,7 @@ async function handleAdminDeleteDeviceInvoice(
 
   if (error) throw error;
 
-  if (invoice.file_path) {
-    await supabase.storage.from(invoiceStorageBucket).remove([
-      safeString(invoice.file_path, 2000),
-    ]);
-  }
+  await cleanupInvoiceFiles();
 
   await syncLatestInvoiceValuation(deviceId);
 
@@ -6723,6 +6786,47 @@ async function handleAdminDeviceStatus(request: Request, id: string) {
   return json(request, { device });
 }
 
+async function handleLogout(request: Request) {
+  const session = await getAdminSession(request);
+  if (session?.sessionId) {
+    const { error } = await supabase.from("admin_sessions").delete().eq(
+      "id",
+      session.sessionId,
+    );
+    if (error) throw error;
+  }
+  return json(request, { ok: true });
+}
+
+async function cleanupInvoiceFiles() {
+  const { data: queued, error } = await supabase.from("invoice_cleanup_queue")
+    .select("file_path,version").lte("ready_at", new Date().toISOString())
+    .order(
+      "ready_at",
+    ).limit(50);
+  if (error) throw error;
+  let cleaned = 0;
+  for (const item of queued ?? []) {
+    const { count, error: refError } = await supabase.from("device_invoices")
+      .select("id", { head: true, count: "exact" }).eq(
+        "file_path",
+        item.file_path,
+      );
+    if (refError) throw refError;
+    if (!count) {
+      const { error: removeError } = await supabase.storage.from(
+        invoiceStorageBucket,
+      ).remove([item.file_path]);
+      if (removeError) continue; // Durable queue is retried on the next maintenance run.
+      cleaned++;
+    }
+    const { error: deleteError } = await supabase.from("invoice_cleanup_queue")
+      .delete().eq("file_path", item.file_path).eq("version", item.version);
+    if (deleteError) throw deleteError;
+  }
+  return cleaned;
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders(request) });
@@ -6734,6 +6838,31 @@ Deno.serve(async (request) => {
   const path = url.pathname.replace(/\/inventory-api$/, "") || url.pathname;
 
   try {
+    if (request.method === "POST") {
+      const maxBytes = path.endsWith("/auth/admin")
+        ? 16384
+        : /\/invoices$/.test(path)
+        ? 14 * 1024 * 1024
+        : 1024 * 1024;
+      if (Number(request.headers.get("content-length")) > maxBytes) {
+        throw new HttpInputError("Requête trop volumineuse.", 413);
+      }
+      const body = await readBoundedBytes(request.body, maxBytes);
+      request = new Request(request, { body: new Uint8Array(body).buffer });
+    }
+    if (request.method === "POST" && path.endsWith("/auth/logout")) {
+      return await handleLogout(request);
+    }
+    if (
+      request.method === "POST" &&
+      path.endsWith("/admin/maintenance/storage-cleanup")
+    ) {
+      if (
+        !isEnrichmentSyncRequest(request) &&
+        !(await isAdmin(request, "USER_MANAGE"))
+      ) return badRequest(request, "Action non autorisée.", 403);
+      return json(request, { cleaned: await cleanupInvoiceFiles() });
+    }
     if (request.method === "POST" && path.endsWith("/auth/admin")) {
       return await handleAdminLogin(request);
     }
@@ -7010,6 +7139,9 @@ Deno.serve(async (request) => {
     }
     return badRequest(request, "Route inconnue.", 404);
   } catch (error) {
+    if (error instanceof HttpInputError) {
+      return badRequest(request, error.message, error.status);
+    }
     console.error(error);
     return badRequest(request, "Erreur serveur.", 500);
   }

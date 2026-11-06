@@ -7,6 +7,7 @@ import sys
 import threading
 import time
 import urllib.parse
+from pathlib import Path
 from tkinter import messagebox
 
 try:
@@ -16,6 +17,7 @@ try:
         api_request,
         launch_prefill_from_args,
         newest_prefill_file,
+        downloads_dirs,
         normalize_api_url,
     )
 except ImportError:  # Supports direct execution and PyInstaller entry points.
@@ -25,12 +27,24 @@ except ImportError:  # Supports direct execution and PyInstaller entry points.
         api_request,
         launch_prefill_from_args,
         newest_prefill_file,
+        downloads_dirs,
         normalize_api_url,
     )
 
 
 class PrefillMixin:
     """Loads prefill profiles from links, files, and the inventory API."""
+
+    def confirm_api_endpoint(self, url: str) -> bool:
+        host = urllib.parse.urlsplit(normalize_api_url(url)).hostname
+        trusted = {"oletfrcaptvardmdwacy.supabase.co", "parc.piqa.fr", "parc-api.piqa.fr", "api.parc.piqa.fr", "localhost", "127.0.0.1", "::1"}
+        approved = getattr(self, "approved_api_hosts", set())
+        if host in trusted or host in approved:
+            return True
+        if not messagebox.askyesno("Inventory server / Serveur d'inventaire", f"Send inventory and profile to this server?\nEnvoyer l'inventaire et le profil à ce serveur ?\n\n{url}"):
+            return False
+        self.approved_api_hosts = {*approved, host}
+        return True
 
     def load_prefill(self) -> None:
         if not self.prefill_code.get().strip():
@@ -56,6 +70,8 @@ class PrefillMixin:
             data = json.loads(path.read_text(encoding="utf-8-sig"))
         except (OSError, json.JSONDecodeError):
             return
+        if not isinstance(data, dict):
+            return
         code = str(data.get("prefillCode") or "").strip()
         launch_url = str(data.get("launchUrl") or "").strip()
         if launch_url.startswith("spacefoot-collector://"):
@@ -75,6 +91,8 @@ class PrefillMixin:
         if already_loaded:
             return
         if data.get("apiUrl"):
+            if not self.confirm_api_endpoint(str(data["apiUrl"])):
+                return
             self.api_url.set(normalize_api_url(str(data.get("apiUrl"))))
         self.prefill_code.set(code)
         self.last_loaded_prefill_file = str(path)
@@ -119,17 +137,21 @@ class PrefillMixin:
 
     def _load_prefill_background(self) -> None:
         try:
+            raw_endpoint = self.api_url.get()
+            endpoint = normalize_api_url(raw_endpoint)
             data = api_request(
-                normalize_api_url(self.api_url.get()),
+                endpoint,
                 f"/collect/prefill/{urllib.parse.quote(self.prefill_code.get().strip())}",
                 timeout=15,
             )
-            self.after(0, lambda: self.apply_prefill(data))
+            self.after(0, lambda: self.apply_prefill(data) if self.api_url.get() == raw_endpoint else None)
         except Exception as exc:
-            self.after(0, lambda: self.status.set(api_error_message(exc)))
+            self.after(0, lambda error=api_error_message(exc): self.status.set(error))
 
     def apply_prefill(self, data: dict) -> None:
         if data.get("apiUrl"):
+            if not self.confirm_api_endpoint(str(data["apiUrl"])):
+                return
             self.api_url.set(normalize_api_url(data.get("apiUrl")))
         if data.get("accessToken"):
             self.access_token.set(data.get("accessToken"))
@@ -159,3 +181,12 @@ class PrefillMixin:
             self.t("Prefilled from the web page. You can edit before submitting.")
         )
         self._build_ui()
+        # A consumed prefill is a temporary credential carrier, not a document.
+        loaded = str(getattr(self, "last_loaded_prefill_file", "") or "")
+        if loaded:
+            path = Path(loaded)
+            if path.name.startswith("spacefoot-collector-prefill") and path.suffix == ".json" and path.parent in downloads_dirs():
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    pass

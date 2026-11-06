@@ -18,8 +18,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: cpu-release-sync
+  cancel-in-progress: false
+
 jobs:
   sync:
+    if: vars.INVENTORY_JOBS_PAUSED != 'true'
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - name: Synchronize official CPU release catalog
@@ -32,7 +38,7 @@ jobs:
         run: |
           test -n "$API_URL" || { echo "Missing repository variable IT_INVENTORY_API_URL"; exit 1; }
           test -n "$SYNC_TOKEN" || { echo "Missing repository secret CPU_RELEASE_SYNC_TOKEN"; exit 1; }
-          payload=$(printf '{"limit":120,"unresolvedOnly":true,"staleOnly":false,"force":%s,"vendor":"%s"}' "${FORCE:-false}" "${VENDOR:-}")
+          payload=$(jq -n --arg vendor "${VENDOR:-}" --argjson force "${FORCE:-false}" '{limit:120, unresolvedOnly:true, staleOnly:false, force:$force, vendor:$vendor}')
           curl --fail-with-body --show-error --silent \
             --retry 2 --retry-delay 5 --max-time 300 \
             --request POST "$API_URL/admin/cpu-releases/sync" \

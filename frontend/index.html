@@ -5,15 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Spacefoot IT Inventory</title>
     <link rel="icon" type="image/svg+xml" href="./assets/brand/favicon.svg" />
-    <script>
-      document.documentElement.dataset.theme =
-        (localStorage.getItem("it_inventory_theme_preference") === "dark" ||
-        localStorage.getItem("it_inventory_theme_preference") === "light"
-          ? localStorage.getItem("it_inventory_theme_preference")
-          : null) || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-      document.documentElement.lang = localStorage.getItem("it_inventory_language") || "fr";
-    </script>
-    <link rel="stylesheet" href="./styles.css?v=20261104-repair-status" />
+    <script src="./theme-init.js"></script>
+    <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <header class="topbar">
@@ -641,6 +634,15 @@
                 <label>
                   E-mail d’invitation
                   <input name="email" type="email" placeholder="prénom.nom@spacefoot.com" />
+                </label>
+                <label>
+                  Poste à actualiser
+                  <select name="deviceId">
+                    <option value="">Nouveau poste</option>
+                  </select>
+                  <small
+                    >Pour actualiser un poste existant, sélectionnez-le et renseignez l’e-mail du destinataire.</small
+                  >
                 </label>
                 <label>
                   Prénom
@@ -1361,7 +1363,12 @@
       </section>
     </main>
 
-    <dialog id="confirm-dialog" class="confirm-dialog">
+    <dialog
+      id="confirm-dialog"
+      class="confirm-dialog"
+      aria-labelledby="confirm-title"
+      aria-describedby="confirm-message"
+    >
       <form method="dialog">
         <div class="confirm-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24">
@@ -1378,7 +1385,12 @@
       </form>
     </dialog>
 
-    <dialog id="retire-dialog" class="confirm-dialog">
+    <dialog
+      id="retire-dialog"
+      class="confirm-dialog"
+      aria-labelledby="retire-dialog-title"
+      aria-describedby="retire-dialog-message"
+    >
       <form method="dialog">
         <div class="confirm-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24">
@@ -1401,7 +1413,12 @@
         </div>
       </form>
     </dialog>
-    <dialog id="reassign-dialog" class="confirm-dialog reassign-dialog">
+    <dialog
+      id="reassign-dialog"
+      class="confirm-dialog reassign-dialog"
+      aria-labelledby="reassign-title"
+      aria-describedby="reassign-message"
+    >
       <form id="reassign-form">
         <div class="confirm-icon neutral" aria-hidden="true">
           <svg viewBox="0 0 24 24">
@@ -1410,7 +1427,7 @@
             <path d="M21 17H3"></path>
           </svg>
         </div>
-        <h3>Réaffecter les éléments liés</h3>
+        <h3 id="reassign-title">Réaffecter les éléments liés</h3>
         <p id="reassign-message"></p>
         <input name="entityType" type="hidden" />
         <input name="sourceId" type="hidden" />
@@ -1426,7 +1443,8 @@
     </dialog>
     <div id="toast" role="status" aria-live="polite"></div>
 
-    <script src="./core.js?v=20261104-repair-status"></script>
-    <script src="./app.js?v=20261104-repair-status"></script>
+    <script src="./config.js"></script>
+    <script src="./core.js?v=20260711-cpu-sync-retry"></script>
+    <script src="./app.js?v=20260711-cpu-sync-retry"></script>
   </body>
 </html>

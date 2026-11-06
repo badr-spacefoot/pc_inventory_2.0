@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  InvoiceSubmissionTracker,
   latestDatedPurchaseInvoice,
   latestWarrantyInvoice,
   standardWarrantyInvoiceFromPurchase,
@@ -8,6 +9,19 @@ import {
 } from "../../frontend/src/features/invoices/warranty";
 
 describe("invoice warranty rules", () => {
+  it("reuses an invoice request id only for unchanged retries until success", async () => {
+    const tracker = new InvoiceSubmissionTracker();
+    const payload = { purchasePrice: 100, fileDataBase64: "fixture-one" };
+    const first = await tracker.requestId("A", payload);
+    expect(await tracker.requestId("A", { ...payload })).toBe(first);
+    expect(await tracker.requestId("B", payload)).not.toBe(first);
+    const changedFile = await tracker.requestId("A", { ...payload, fileDataBase64: "fixture-two" });
+    expect(changedFile).not.toBe(first);
+    const changedForm = await tracker.requestId("A", { ...payload, purchasePrice: 200 });
+    expect(changedForm).not.toBe(changedFile);
+    tracker.clear("A");
+    expect(await tracker.requestId("A", { ...payload, purchasePrice: 200 })).not.toBe(changedForm);
+  });
   it("selects the latest warranty by end date", () => {
     const older = { id: "old", invoice_type: "warranty_extension", warranty_end_date: "2026-01-01" };
     const newer = { id: "new", invoice_type: "warranty_extension", warranty_end_date: "2027-01-01" };

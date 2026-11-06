@@ -47,6 +47,7 @@ export class PublicResourceService {
     parser: (response: Response) => Promise<T>,
     options: ResourceRequestOptions = {},
   ): Promise<T> {
+    options.signal?.throwIfAborted();
     const retries = Math.max(0, options.retries ?? 1);
     const controller = new AbortController();
     const abortFromCaller = () => controller.abort(options.signal?.reason);

@@ -9,6 +9,10 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$endpoint = [Uri]$ApiUrl
+if ($endpoint.UserInfo -or $endpoint.Query -or $endpoint.Fragment -or ($endpoint.Scheme -ne 'https' -and -not ($endpoint.Scheme -eq 'http' -and $endpoint.IsLoopback))) {
+  throw "API URL must use HTTPS (except loopback development)."
+}
 $ScriptVersion = "1.1.0"
 
 function Get-FirstValue {
@@ -87,7 +91,7 @@ $headers = @{
 }
 
 try {
-  $response = Invoke-RestMethod -Uri "$ApiUrl/collect/scan" -Method Post -Headers $headers -Body $json
+  $response = Invoke-RestMethod -Uri "$($ApiUrl.TrimEnd('/'))/collect/scan" -Method Post -Headers $headers -Body ([Text.Encoding]::UTF8.GetBytes($json)) -MaximumRedirection 0 -TimeoutSec 20
   Write-Host "Inventaire envoye avec succes." -ForegroundColor Green
   Write-Host "Machine: $($response.deviceId)"
 } catch {

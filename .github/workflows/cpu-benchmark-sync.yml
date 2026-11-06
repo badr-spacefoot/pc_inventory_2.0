@@ -8,8 +8,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: cpu-benchmark-sync
+  cancel-in-progress: false
+
 jobs:
   sync:
+    if: vars.INVENTORY_JOBS_PAUSED != 'true'
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - name: Sync CPU benchmarks
@@ -26,6 +32,7 @@ jobs:
             exit 1
           fi
           curl --fail --show-error --silent \
+            --connect-timeout 15 --max-time 300 \
             --request POST "$API_URL/admin/cpu-benchmarks/sync" \
             --header "content-type: application/json" \
             --header "x-cpu-benchmark-sync-token: $SYNC_TOKEN" \

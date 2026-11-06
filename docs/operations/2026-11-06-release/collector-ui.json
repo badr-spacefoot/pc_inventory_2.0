@@ -1,0 +1,14 @@
+{
+  "syntheticOnly": true,
+  "realHardwareScanned": false,
+  "networkRequests": 0,
+  "checks": {
+    "profile": true,
+    "scanSummary": true,
+    "submission": true,
+    "uiCallbacks": true
+  },
+  "errors": [],
+  "passed": true,
+  "callbackExceptions": 0
+}

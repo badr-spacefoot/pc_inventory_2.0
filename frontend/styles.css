@@ -637,6 +637,22 @@ select {
   padding: 11px 12px;
 }
 
+.device-open {
+  background: transparent;
+  border: 0;
+  padding: 2px;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.device-open:focus-visible {
+  outline: 3px solid var(--accent, #16735f);
+  outline-offset: 2px;
+}
+
 input:focus,
 textarea:focus,
 select:focus {

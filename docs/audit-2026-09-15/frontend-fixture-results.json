@@ -1,0 +1,98 @@
+{
+  "date": "2026-09-15T13:30:48.713Z",
+  "syntheticOnly": true,
+  "externalRequestsBlocked": [
+    "https://api.open-meteo.com"
+  ],
+  "errors": [],
+  "checks": {
+    "bootstrap": {
+      "hasCore": true,
+      "hasApp": true,
+      "title": "Spacefoot IT Inventory"
+    },
+    "xssInertMarker": {
+      "htmlInterpreted": false,
+      "executablePayloadUsed": false
+    },
+    "selectionRace": {
+      "selectedId": "B",
+      "detailId": "B",
+      "title": "Fixture B"
+    },
+    "stockValuation": {
+      "filteredIds": [
+        "S"
+      ],
+      "metrics": "Total launch value\n€1,000\nSum of estimated launch prices for filtered devices\nEstimated current fleet value\n€300\nSum of the latest estimated values for filtered devices\nEstimated average depreciation\n70%\nBased on 1 of 1 devices with both launch and current values\nAverage fleet age\n5 years\n1 device with usable age data\nDevices older than four years\n1\nCurrent devices with a usable release date and an age strictly greater than four years\nLow-performance CPU devices\n0\nDevices whose known CPU score is below 8,000\nHigh-priority replacement devices\n0\nDevices whose calculated replacement priority is 70 or higher\nObserved market prices\n0\nDevices with at least one external market-price observation\nA–B confidence level\n0\nDevices whose estimate reaches confidence level A or B",
+      "replacementCandidates": 0
+    },
+    "keyboardDeviceRows": [
+      {
+        "id": "A",
+        "tabIndex": -1,
+        "role": null,
+        "focusableChildren": 1
+      },
+      {
+        "id": "B",
+        "tabIndex": -1,
+        "role": null,
+        "focusableChildren": 1
+      },
+      {
+        "id": "S",
+        "tabIndex": -1,
+        "role": null,
+        "focusableChildren": 1
+      }
+    ],
+    "keyboardOpen": {
+      "selected": "A",
+      "detail": "A"
+    },
+    "languageDraft": {
+      "value": "Unsubmitted audit note"
+    },
+    "dialogNames": [
+      {
+        "id": "confirm-dialog",
+        "label": "Confirmer la suppression"
+      },
+      {
+        "id": "retire-dialog",
+        "label": "Sortir le poste du parc"
+      },
+      {
+        "id": "reassign-dialog",
+        "label": "Réaffecter les éléments liés"
+      }
+    ],
+    "notificationKeyboard": {
+      "read": 1,
+      "open": 0
+    },
+    "logoutPurge": {
+      "devices": 0,
+      "detail": null,
+      "tokens": 0,
+      "storedToken": null,
+      "rows": 0
+    },
+    "overflow": [
+      {
+        "viewport": 1440,
+        "documentWidth": 1440,
+        "bodyWidth": 1440,
+        "overflowing": false
+      },
+      {
+        "viewport": 375,
+        "documentWidth": 375,
+        "bodyWidth": 375,
+        "overflowing": false
+      }
+    ]
+  },
+  "assertionsPassed": true
+}

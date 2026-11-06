@@ -43,7 +43,7 @@ def apply_palette(palette: dict[str, str]) -> None:
     COLORS.update(palette)
 
 
-class ThemedButton(tk.Label):
+class ThemedButton(tk.Button):
     def __init__(self, parent, text, command, secondary=False):
         self.command = command
         self.secondary = secondary
@@ -63,9 +63,11 @@ class ThemedButton(tk.Label):
             font=("Segoe UI", 10, "bold"),
             cursor="hand2",
             borderwidth=0,
-            highlightthickness=0,
+            highlightthickness=2,
+            highlightcolor=COLORS["brand_2"],
+            takefocus=True,
+            command=command,
         )
-        self.bind("<Button-1>", self._click)
         self.bind("<Return>", self._click)
         self.bind("<Enter>", self._hover)
         self.bind("<Leave>", self._leave)
@@ -91,7 +93,7 @@ class ThemedButton(tk.Label):
     def _safe_configure(self, **options) -> None:
         try:
             if self.winfo_exists():
-                tk.Label.configure(self, **options)
+                tk.Button.configure(self, **options)
         except tk.TclError:
             return
 
@@ -102,8 +104,10 @@ class ThemedButton(tk.Label):
         options.update(kwargs)
         if "state" in options:
             self._state = str(options.pop("state") or "normal")
+            self._safe_configure(state=self._state)
         if "command" in options:
             self.command = options.pop("command")
+            self._safe_configure(command=self.command)
         if "text" in options:
             self._safe_configure(text=options.pop("text"))
         if options:
@@ -115,4 +119,4 @@ class ThemedButton(tk.Label):
     def cget(self, key):
         if key == "state":
             return self._state
-        return tk.Label.cget(self, key)
+        return tk.Button.cget(self, key)

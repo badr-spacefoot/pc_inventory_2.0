@@ -9,6 +9,7 @@ import re
 import shutil
 import ssl
 import time
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -48,14 +49,31 @@ def http_ssl_context() -> ssl.SSLContext:
 def load_draft() -> dict[str, Any]:
     try:
         value = json.loads(DRAFT_PATH.read_text(encoding="utf-8"))
-        return value if isinstance(value, dict) else {}
-    except (OSError, json.JSONDecodeError):
+        if not isinstance(value, dict) or time.time() - value.get("savedAt", 0) > 86400:
+            save_draft({})
+            return {}
+        safe = {key: item for key, item in value.items() if key in _DRAFT_FIELDS}
+        if safe != value:
+            save_draft(safe)
+        return safe
+    except (OSError, ValueError, TypeError):
         return {}
+
+
+_DRAFT_FIELDS = {"apiUrl", "includeMac", "autoUpdate", "language", "themePreference", "themePreferenceExplicit", "savedAt"}
 
 
 def save_draft(values: dict[str, Any]) -> None:
     try:
-        DRAFT_PATH.write_text(json.dumps(values, indent=2), encoding="utf-8")
+        safe = {key: value for key, value in values.items() if key in _DRAFT_FIELDS}
+        safe["savedAt"] = time.time()
+        descriptor, temporary = tempfile.mkstemp(prefix=".collector-draft-", dir=DRAFT_PATH.parent)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                json.dump(safe, handle)
+            os.replace(temporary, DRAFT_PATH)
+        finally:
+            Path(temporary).unlink(missing_ok=True)
     except OSError:
         pass
 
@@ -73,6 +91,12 @@ def normalize_api_url(value: object) -> str:
     if not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", text):
         text = f"https://{text}"
     parsed = urllib.parse.urlparse(text)
+    if parsed.username or parsed.password or not parsed.hostname:
+        raise ValueError("Invalid API address")
+    if parsed.scheme != "https" and not (
+        parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
+    ):
+        raise ValueError("API connections require HTTPS (except local development)")
     host = parsed.netloc.lower()
     scheme = parsed.scheme or "https"
     path = parsed.path.rstrip("/")
@@ -100,6 +124,7 @@ def version_label(value: object) -> str:
 
 
 def fetch_json_url(url: str, timeout: float = 10) -> dict[str, Any]:
+    validate_update_url(url)
     separator = "&" if "?" in url else "?"
     uncached_url = f"{url}{separator}v={int(time.time())}"
     request = urllib.request.Request(
@@ -110,27 +135,48 @@ def fetch_json_url(url: str, timeout: float = 10) -> dict[str, Any]:
             "Pragma": "no-cache",
         },
     )
-    with urllib.request.urlopen(
-        request,
-        timeout=timeout,
-        context=http_ssl_context(),
-    ) as response:
-        value = json.loads(response.read().decode("utf-8"))
+    with update_opener().open(request, timeout=timeout) as response:
+        validate_update_url(response.geturl())
+        payload = response.read(1024 * 1024 + 1)
+        if len(payload) > 1024 * 1024:
+            raise ValueError("Release metadata exceeds size limit")
+        value = json.loads(payload.decode("utf-8"))
         return value if isinstance(value, dict) else {}
 
 
-def download_file(url: str, destination: Path, timeout: float = 60) -> None:
+def download_file(url: str, destination: Path, timeout: float = 60, max_bytes: int = 512 * 1024 * 1024) -> None:
+    validate_update_url(url)
     request = urllib.request.Request(
         url,
         headers={"User-Agent": f"spacefoot-it-collector/{COLLECTOR_VERSION}"},
     )
-    with urllib.request.urlopen(
-        request,
-        timeout=timeout,
-        context=http_ssl_context(),
-    ) as response:
+    with update_opener().open(request, timeout=timeout) as response:
+        validate_update_url(response.geturl())
         with destination.open("wb") as output:
-            shutil.copyfileobj(response, output)
+            total = 0
+            while block := response.read(1024 * 1024):
+                total += len(block)
+                if total > max_bytes:
+                    raise ValueError("Update exceeds download limit")
+                output.write(block)
+
+
+def validate_update_url(url: str) -> None:
+    try:
+        from .update_security import https_url
+    except ImportError:
+        from update_security import https_url
+    https_url(url)
+
+
+class HttpsUpdateRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        validate_update_url(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def update_opener():
+    return urllib.request.build_opener(urllib.request.HTTPSHandler(context=http_ssl_context()), HttpsUpdateRedirect())
 
 
 def api_request(
@@ -149,21 +195,32 @@ def api_request(
         headers={"Content-Type": "application/json", **(headers or {})},
         method=method,
     )
-    with urllib.request.urlopen(
-        request,
-        timeout=timeout,
-        context=http_ssl_context(),
-    ) as response:
-        raw = response.read().decode("utf-8")
+    opener = urllib.request.build_opener(
+        urllib.request.HTTPSHandler(context=http_ssl_context()), NoApiRedirect()
+    )
+    with opener.open(request, timeout=timeout) as response:
+        payload = response.read(8 * 1024 * 1024 + 1)
+        if len(payload) > 8 * 1024 * 1024:
+            raise ValueError("Inventory API response exceeds size limit")
+        raw = payload.decode("utf-8")
         if not raw:
             return {}
         value = json.loads(raw)
         return value if isinstance(value, dict) else {}
 
 
+class NoApiRedirect(urllib.request.HTTPRedirectHandler):
+    """Never forward collector credentials/profile bodies to a redirect target."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise urllib.error.HTTPError(req.full_url, code, "API redirects are unsupported; use the canonical endpoint", headers, fp)
+
+
 def api_error_message(exc: Exception) -> str:
     if isinstance(exc, urllib.error.HTTPError):
-        detail = exc.read().decode("utf-8", errors="ignore")
+        try:
+            detail = exc.read(16384).decode("utf-8", errors="ignore")
+        finally:
+            exc.close()
         try:
             value = json.loads(detail)
             return value.get("error", detail) if isinstance(value, dict) else detail

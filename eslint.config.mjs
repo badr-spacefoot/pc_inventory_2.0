@@ -7,7 +7,7 @@ export default tseslint.config(
     ignores: ["build/**", "dist/**", "frontend/core.js", "reports/**", ".codex-remote-attachments/**"],
   },
   {
-    files: ["frontend/app.js"],
+    files: ["frontend/app.js", "frontend/theme-init.js", "frontend/config.js"],
     ...eslint.configs.recommended,
     languageOptions: {
       globals: {

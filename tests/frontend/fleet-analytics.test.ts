@@ -6,8 +6,10 @@ import {
   fleetHealthSnapshot,
   fleetKpiSnapshot,
   fleetValuationSnapshot,
+  isLowStorageDevice,
   riskScoreForDevice,
   replacementCandidates,
+  valuationFleetDevices,
   type FleetDevice,
 } from "../../frontend/src/features/fleet/analytics";
 
@@ -63,6 +65,14 @@ describe("fleet analytics", () => {
     expect(replacementCandidates(filtered, context)).toEqual([]);
   });
 
+  it("flags a full disk while keeping missing storage out of alerts", () => {
+    expect(isLowStorageDevice(device({ storage_free_gb: 0 }))).toBe(true);
+    expect(isLowStorageDevice(device({ storage_free_gb: "0" }))).toBe(true);
+    expect(isLowStorageDevice(device({ storage_free_gb: null }))).toBe(false);
+    expect(isLowStorageDevice(device({ storage_free_gb: "" }))).toBe(false);
+    expect(isLowStorageDevice(device({ storage_free_gb: 30 }))).toBe(false);
+    expect(isLowStorageDevice(device({ storage_free_gb: -1 }))).toBe(false);
+  });
   it("keeps detached inventory out of team filters and age-only views", () => {
     const active = device();
     const stock = device({ id: "stock", status: "stock", hostname: "STOCK-1" });
@@ -106,9 +116,9 @@ describe("fleet analytics", () => {
     const health = fleetHealthSnapshot([healthy, staleWindows10, stock], context);
 
     expect(kpis).toMatchObject({ total: 3, actionable: 2, active: 2, stale: 1, lowStorage: 1, windows10: 1 });
-    expect(kpis.value).toBe(800);
-    expect(kpis.averageAge).toBe(5);
-    expect(kpis.devicesWithAge).toBe(2);
+    expect(kpis.value).toBe(1700);
+    expect(kpis.averageAge).toBe(4);
+    expect(kpis.devicesWithAge).toBe(3);
     expect(kpis.olderThanFour).toBe(1);
     expect(health.stale).toBe(1);
     expect(health.replace).toBe(1);
@@ -126,12 +136,52 @@ describe("fleet analytics", () => {
     });
   });
 
-  it("uses the same actionable-device perimeter for dashboard and valuation totals", () => {
+  it("includes stock in dashboard and valuation totals while excluding lost and retired assets", () => {
     const active = device({ resale_value: 700 });
     const stock = device({ id: "stock", status: "stock", resale_value: 900 });
     const retired = device({ id: "retired", status: "retired", resale_value: 500 });
+    const lost = device({ id: "lost", status: "lost", resale_value: 400 });
+    const devices = [active, stock, retired, lost];
 
-    expect(fleetKpiSnapshot([active, stock, retired], context).value).toBe(700);
-    expect(fleetValuationSnapshot([active, stock, retired], context, "Unknown").total).toBe(700);
+    expect(fleetKpiSnapshot(devices, context).value).toBe(1600);
+    expect(fleetValuationSnapshot(devices, context, "Unknown")).toMatchObject({ total: 1600, average: 800 });
+    expect(valuationFleetDevices(devices)).toEqual([active, stock]);
+  });
+
+  it("preserves stock-only valuation and age without adding active replacement alerts", () => {
+    const stock = device({
+      id: "stock",
+      status: "stock",
+      resale_value: 900,
+      estimated_launch_price: 1800,
+      release_year: 2019,
+      replacement_priority: 90,
+      last_seen_at: "2020-01-01T00:00:00Z",
+    });
+    const filtered = filterFleetDevices([device(), stock], { status: "stock" }, "last_seen", context, "en-US");
+
+    expect(valuationFleetDevices(filtered)).toEqual([stock]);
+    expect(fleetKpiSnapshot(filtered, context)).toMatchObject({
+      value: 900,
+      averageAge: 7,
+      devicesWithAge: 1,
+      olderThanFour: 1,
+      actionable: 0,
+      replace: 0,
+      stale: 0,
+    });
+    expect(fleetValuationSnapshot(filtered, context, "Unknown")).toEqual({
+      total: 900,
+      average: 900,
+      replaceValue: 0,
+      byLocation: [{ label: "Paris", value: 900, percent: 100 }],
+    });
+    expect(replacementCandidates(filtered, context)).toEqual([]);
+    expect(fleetValuationSnapshot([], context, "Unknown")).toEqual({
+      total: 0,
+      average: 0,
+      replaceValue: 0,
+      byLocation: [],
+    });
   });
 });

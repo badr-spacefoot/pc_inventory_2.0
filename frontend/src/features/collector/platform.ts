@@ -35,7 +35,7 @@ export function downloadLabel(platform: string, translate: (value: string) => st
 }
 
 export function ubuntuInstallCommand(asset?: CollectorAsset | null): string {
-  const fileName = asset?.fileName || "spacefoot-it-collector-linux.deb";
+  const fileName = safeAssetFileName(asset?.fileName, ".deb", "spacefoot-it-collector-linux.deb");
   return [
     'downloads="$(xdg-user-dir DOWNLOAD 2>/dev/null || echo "$HOME/Téléchargements")"',
     'cd "$downloads" || cd "$HOME/Downloads"',
@@ -44,8 +44,9 @@ export function ubuntuInstallCommand(asset?: CollectorAsset | null): string {
 }
 
 export function macosInstallCommand(asset?: CollectorAsset | null): string {
-  const fileName = asset?.fileName || "spacefoot-it-collector-macos.app.zip";
-  const version = String(asset?.version || "").replace(/^collector-v/i, "");
+  const fileName = safeAssetFileName(asset?.fileName, ".app.zip", "spacefoot-it-collector-macos.app.zip");
+  const candidateVersion = String(asset?.version || "").replace(/^collector-v/i, "");
+  const version = /^\d+\.\d+\.\d+(?:-[A-Za-z0-9][A-Za-z0-9.-]*)?$/.test(candidateVersion) ? candidateVersion : "";
   const appName = version ? `spacefoot-it-collector-macos-${version}.app` : fileName.replace(/\.zip$/i, "");
   return [
     `app="$HOME/Applications/${appName}"`,
@@ -55,10 +56,15 @@ export function macosInstallCommand(asset?: CollectorAsset | null): string {
     'if [ ! -d "$app" ]; then app="$HOME/Downloads/spacefoot-it-collector-macos.app"; fi',
     'if [ ! -d "$app" ]; then app="$HOME/Téléchargements/spacefoot-it-collector-macos.app"; fi',
     'if [ ! -d "$app" ]; then echo "Application Spacefoot introuvable. Décompressez le téléchargement puis relancez cette commande."; exit 1; fi',
-    'chmod +x "$app/Contents/MacOS/"*',
-    'xattr -dr com.apple.quarantine "$app"',
+    'codesign --verify --deep --strict "$app" || exit 1',
+    'spctl --assess --type execute "$app" || exit 1',
     'open "$app"',
   ].join("\n");
+}
+
+function safeAssetFileName(value: unknown, suffix: string, fallback: string): string {
+  const candidate = String(value || "");
+  return /^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/.test(candidate) && candidate.endsWith(suffix) ? candidate : fallback;
 }
 
 export function osIconSvg(platform: string): string {

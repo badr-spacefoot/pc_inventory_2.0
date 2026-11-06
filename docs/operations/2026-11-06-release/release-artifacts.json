@@ -1,0 +1,18 @@
+{
+  "kind": "local-preparation-artifacts-not-published",
+  "date": "2026-11-06",
+  "artifacts": [
+    {
+      "path": "dist/parc-site-20261106.zip",
+      "size": 153200,
+      "sha256": "5b4767e4ae040b0ea4041eb3bbdf91ae35f431cb1ae856ef83c6521a21f8fb57"
+    },
+    {
+      "path": "dist/spacefoot-it-collector-source-0.1.53-dev.zip",
+      "size": 54709,
+      "sha256": "c08795db0a64deeb44db73342bb072dd33f91c8e50361ac4e5e156817a76a945"
+    }
+  ],
+  "frontendFiles": 32,
+  "collectorSourceFiles": 16
+}

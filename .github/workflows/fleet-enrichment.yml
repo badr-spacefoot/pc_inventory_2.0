@@ -14,6 +14,7 @@ concurrency:
 
 jobs:
   enrich:
+    if: vars.INVENTORY_JOBS_PAUSED != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -31,7 +32,7 @@ jobs:
             --header "x-enrichment-sync-token: $SYNC_TOKEN"
           )
           start=$(curl --fail-with-body --show-error --silent \
-            --retry 2 --retry-delay 5 --max-time 120 \
+            --connect-timeout 15 --max-time 120 \
             --request POST "$API_URL/admin/enrichment-jobs" \
             "${headers[@]}" \
             --data '{"mode":"refresh","force":true,"useExternal":true}')
@@ -39,9 +40,10 @@ jobs:
           test -n "$job_id" || { echo "The API did not return an enrichment job id"; exit 1; }
 
           status="running"
-          for attempt in $(seq 1 40); do
+          deadline=$((SECONDS + 2400))
+          while (( SECONDS < deadline )); do
             response=$(curl --fail-with-body --show-error --silent \
-              --retry 2 --retry-delay 5 --max-time 180 \
+              --connect-timeout 15 --max-time 180 \
               --request POST "$API_URL/admin/enrichment-jobs/process" \
               "${headers[@]}" \
               --data "{\"jobId\":\"$job_id\",\"limit\":5}")
@@ -53,13 +55,26 @@ jobs:
               break
             fi
             if [ "$status" = "failed" ]; then
-              jq . <<<"$response"
+              echo "Fleet enrichment failed; inspect the private application logs."
               exit 1
             fi
             sleep 2
           done
 
           test "$status" = "completed" || {
-            echo "Fleet enrichment did not complete within the batch limit"
+            echo "Fleet enrichment did not complete within the execution time budget"
             exit 1
           }
+
+      - name: Retry pending invoice storage cleanup
+        if: always()
+        env:
+          API_URL: ${{ vars.IT_INVENTORY_API_URL }}
+          SYNC_TOKEN: ${{ secrets.ENRICHMENT_SYNC_TOKEN }}
+        run: |
+          test -n "$API_URL" && test -n "$SYNC_TOKEN"
+          curl --fail --show-error --silent --connect-timeout 15 --max-time 120 \
+            --request POST "$API_URL/admin/maintenance/storage-cleanup" \
+            --header "content-type: application/json" \
+            --header "x-enrichment-sync-token: $SYNC_TOKEN" \
+            --data '{}'

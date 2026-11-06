@@ -1,6 +1,7 @@
 .tools/
 .pnpm-store/
 node_modules/
+.venv/
 frontend/core.js
 .codex-remote-attachments/
 reports/
@@ -15,3 +16,6 @@ installer-assets/
 .env.*
 !.env.example
 supabase/.temp/
+deploy/vps/inventory-api.env
+deploy/vps/backup.env
+_site/

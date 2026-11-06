@@ -1,0 +1,16 @@
+{
+	admin off
+	auto_https off
+}
+:8080 {
+	root * /srv
+	encode zstd gzip
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options DENY
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https://parc-api.piqa.fr https://api.open-meteo.com; frame-src https://www.google.com https://www.openstreetmap.org; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+		Cache-Control "no-cache"
+	}
+	file_server
+}

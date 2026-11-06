@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   compareVersions,
+  csvCell,
+  depreciationSummary,
+  estimatedValue,
   detectDeviceFamily,
   deviceAge,
   fleetDeviceAges,
@@ -15,6 +18,32 @@ import {
 } from "../../frontend/src/domain/inventory";
 
 describe("inventory normalization", () => {
+  it("preserves an explicit zero valuation and skips malformed candidates", () => {
+    expect(estimatedValue({ resale_value: 0, estimated_current_value: 800 })).toBe(0);
+    expect(estimatedValue({ resale_value: "", estimated_current_value: "bad", current_market_price_avg: 300 })).toBe(
+      300,
+    );
+  });
+
+  it("uses only paired launch/current observations for depreciation", () => {
+    expect(
+      depreciationSummary([
+        { estimated_launch_price: 1000, resale_value: 500 },
+        { resale_value: 1000 },
+        { estimated_launch_price: 900 },
+      ]),
+    ).toEqual({ percent: 50, count: 1 });
+    expect(depreciationSummary([{ estimated_launch_price: 900 }])).toEqual({ percent: null, count: 0 });
+    expect(depreciationSummary([{ estimated_launch_price: 900, resale_value: 0 }])).toEqual({ percent: 100, count: 1 });
+  });
+
+  it("neutralizes formula strings while preserving numeric values and CSV quoting", () => {
+    for (const value of ["=1+1", "+SUM(A1)", "-cmd", "@SUM(A1)", "\ttext", "\ntext", "  =1"]) {
+      expect(csvCell(value).startsWith("\"'")).toBe(true);
+    }
+    expect(csvCell(-42)).toBe('"-42"');
+    expect(csvCell('plain "text"')).toBe('"plain ""text"""');
+  });
   it("normalizes compact OS families and editions", () => {
     expect(normalizeOsInfo("Microsoft Windows 11 Famille 10.0.26200")).toMatchObject({
       osFamily: "Windows 11",
@@ -65,10 +94,11 @@ describe("inventory normalization", () => {
           { status: "active" },
           { status: "stock", release_year: 2015 },
           { status: "retired", release_year: 2010 },
+          { status: "lost", release_year: 2010 },
         ],
         2026,
       ),
-    ).toEqual({ averageAge: 6, devicesWithAge: 2, olderThanFour: 1 });
+    ).toEqual({ averageAge: 7.7, devicesWithAge: 3, olderThanFour: 2 });
   });
 
   it("returns the same eligible ages used by fleet summaries and charts", () => {
@@ -82,7 +112,7 @@ describe("inventory normalization", () => {
         ],
         2026,
       ),
-    ).toEqual([1, 5]);
+    ).toEqual([1, 5, 7]);
   });
 
   it("finds the latest valid fleet enrichment timestamp", () => {

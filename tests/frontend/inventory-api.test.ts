@@ -16,6 +16,11 @@ function setup() {
 }
 
 describe("InventoryApi", () => {
+  it("revokes the current session using a bounded logout request", async () => {
+    const { api, request } = setup();
+    await api.logoutAdmin();
+    expect(request).toHaveBeenCalledWith("/auth/logout", { method: "POST", body: "{}", timeoutMs: 5000 });
+  });
   it("encodes dynamic path segments", async () => {
     const { api, request } = setup();
 

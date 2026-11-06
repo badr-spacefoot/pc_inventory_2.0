@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 2,
+  "name": "Spacefoot IT audit and VPS readiness",
+  "catalog": {
+    "package": "agentic-awesome-skills",
+    "version": "16.1.0",
+    "integrity": "sha256-a43e19fc629713bda8bb1d36cf6bdaf99721c7f31b7c66f3d2f6c247220e3cce"
+  },
+  "targets": [
+    {
+      "host": "codex",
+      "scope": "project"
+    }
+  ],
+  "profile": {
+    "goals": [
+      "Audit architecture, languages, domain, data, integrations and quality",
+      "Audit security, privacy, UX, accessibility, operations and maintenance",
+      "Prepare full migration to existing OVH VPS at parc.piqa.fr"
+    ],
+    "projectType": "IT inventory web app and desktop collector",
+    "languages": [
+      "JavaScript",
+      "TypeScript",
+      "Python",
+      "SQL",
+      "PowerShell"
+    ],
+    "frameworks": [
+      "Vanilla DOM",
+      "Deno",
+      "Supabase",
+      "Tkinter",
+      "PyInstaller",
+      "GitHub Actions"
+    ],
+    "constraints": [
+      "Preserve stock valuation fix",
+      "No framework rewrite",
+      "Non-destructive live inspection",
+      "IT inventory catalog gap covered by domain modeling",
+      "React/native-mobile not applicable"
+    ]
+  },
+  "skills": [
+    {
+      "id": "comprehensive-review-full-review"
+    },
+    {
+      "id": "architect-review"
+    },
+    {
+      "id": "typescript-pro"
+    },
+    {
+      "id": "domain-modeling"
+    },
+    {
+      "id": "supabase"
+    },
+    {
+      "id": "api-integration"
+    },
+    {
+      "id": "testing-qa"
+    },
+    {
+      "id": "security-auditor"
+    },
+    {
+      "id": "accessibility-compliance-accessibility-audit"
+    },
+    {
+      "id": "deployment-procedures"
+    },
+    {
+      "id": "repo-maintainer"
+    },
+    {
+      "id": "python-pro"
+    },
+    {
+      "id": "privacy-by-design"
+    },
+    {
+      "id": "performance-profiling"
+    }
+  ]
+}

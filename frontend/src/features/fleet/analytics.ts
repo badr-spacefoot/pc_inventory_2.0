@@ -4,6 +4,8 @@ import {
   deviceStatusRank,
   estimatedValue,
   fleetAgeSummary,
+  isCurrentInventoryDevice,
+  knownEstimatedValue,
   normalizeManufacturer,
   normalizeOsInfo,
   valueBucket,
@@ -172,8 +174,10 @@ export function isActionableDevice(device: FleetDevice): boolean {
 }
 
 export function isLowStorageDevice(device: FleetDevice): boolean {
-  const free = finiteNumber(device.storage_free_gb);
-  return free > 0 && free < 30;
+  const raw = device.storage_free_gb;
+  if (raw === null || raw === undefined || String(raw).trim() === "") return false;
+  const free = Number(raw);
+  return Number.isFinite(free) && free >= 0 && free < 30;
 }
 
 export function isStaleDevice(device: FleetDevice, context: FleetEvaluationContext): boolean {
@@ -224,8 +228,8 @@ export function activeFleetDevices(items: readonly FleetDevice[]): FleetDevice[]
   return items.filter(isActionableDevice);
 }
 
-export function valuationFleetDevices(items: readonly FleetDevice[]): FleetDevice[] {
-  return items.filter((device) => isActionableDevice(device) || device.status === "in_repair");
+export function valuationFleetDevices<T extends FleetDevice>(items: readonly T[]): T[] {
+  return items.filter(isCurrentInventoryDevice);
 }
 
 export function filterFleetDevices(
@@ -457,16 +461,16 @@ export function fleetValuationSnapshot(
   context: FleetEvaluationContext,
   fallbackLabel: string,
 ): FleetValuationSnapshot {
-  const actionableItems = activeFleetDevices(items);
-  const valuedItems = valuationFleetDevices(items);
-  const total = valuedItems.reduce((sum, device) => sum + estimatedValue(device), 0);
-  const replaceItems = actionableItems.filter((device) => isReplacementSignal(device, context));
+  const valuationItems = valuationFleetDevices(items);
+  const total = valuationItems.reduce((sum, device) => sum + estimatedValue(device), 0);
+  const replaceItems = valuationItems.filter((device) => isReplacementSignal(device, context));
+  const valuedCount = valuationItems.filter((device) => knownEstimatedValue(device) !== null).length;
   return {
     total,
-    average: valuedItems.length ? total / valuedItems.length : 0,
+    average: valuedCount ? total / valuedCount : 0,
     replaceValue: replaceItems.reduce((sum, device) => sum + estimatedValue(device), 0),
     byLocation: sumStats(
-      valuedItems,
+      valuationItems,
       (device) => String(device.establishment_name || ""),
       estimatedValue,
       fallbackLabel,

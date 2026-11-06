@@ -47,6 +47,10 @@ export class InventoryApi {
     return this.transport.request("/auth/admin", jsonRequest("POST", credentials));
   }
 
+  logoutAdmin(): Promise<ApiResponse> {
+    return this.transport.request("/auth/logout", { ...jsonRequest("POST"), timeoutMs: 5000 });
+  }
+
   getAdminUserInvite(token: string): Promise<ApiResponse> {
     return this.transport.request(`/auth/user-invitations/${encodePathSegment(token)}`);
   }

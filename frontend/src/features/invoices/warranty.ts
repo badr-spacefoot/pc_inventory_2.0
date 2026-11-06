@@ -27,6 +27,26 @@ export interface WarrantyStatusSnapshot {
 
 const DAY_MS = 86_400_000;
 
+// Retain only a digest, never invoice bytes, while a submission can be retried.
+export class InvoiceSubmissionTracker {
+  private pending = new Map<string, { fingerprint: string; requestId: string }>();
+
+  async requestId(deviceId: string, payload: unknown): Promise<string> {
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(payload)));
+    const fingerprint = Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("");
+    const previous = this.pending.get(deviceId);
+    if (previous?.fingerprint === fingerprint) return previous.requestId;
+    const requestId = crypto.randomUUID();
+    this.pending.set(deviceId, { fingerprint, requestId });
+    return requestId;
+  }
+
+  clear(deviceId?: string): void {
+    if (deviceId) this.pending.delete(deviceId);
+    else this.pending.clear();
+  }
+}
+
 export function invoiceTypeValue(invoice: InvoiceRecord | null | undefined): InvoiceType {
   return String(invoice?.invoice_type || "purchase").trim() || "purchase";
 }

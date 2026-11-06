@@ -3,6 +3,16 @@ import { describe, expect, it, vi } from "vitest";
 import { PublicResourceService } from "../../frontend/src/services/public-resources";
 
 describe("PublicResourceService", () => {
+  it("does not fetch when the caller has already cancelled", async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    const service = new PublicResourceService(fetcher);
+    const controller = new AbortController();
+    controller.abort();
+    await expect(service.getText("https://example.test", { signal: controller.signal })).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
   it("retries a transient read failure", async () => {
     const fetchImplementation = vi
       .fn<typeof fetch>()

@@ -1,0 +1,25 @@
+{
+  "audit_date": "2026-09-15",
+  "source": "Two read-only SELECT queries through Supabase execute_sql; catalog and aggregate results only",
+  "project_id": "oletfrcaptvardmdwacy",
+  "production_mutations": false,
+  "public_table_count": 24,
+  "all_public_tables_rls_enabled": true,
+  "public_policies": [],
+  "storage_policies": [],
+  "public_tables": ["collection_tokens", "audit_logs", "market_price_history", "device_scans", "hardware_enrichment", "collection_access_tokens", "cpu_benchmarks", "teams", "device_history", "users", "devices", "establishments", "admin_users", "notifications", "pending_changes", "device_assignment_periods", "collection_invites", "collection_prefills", "device_invoices", "enrichment_jobs", "cpu_release_sync_runs", "cpu_release_catalog", "cpu_release_aliases", "admin_user_invites"],
+  "table_privileges": {
+    "all_tables_except_enrichment_jobs": {"anon_select": false, "anon_insert": false, "authenticated_select": false},
+    "enrichment_jobs": {"anon_select": true, "anon_insert": true, "authenticated_select": true},
+    "anon_authenticated_insert_update_delete_truncate_grants": {"enrichment_jobs": ["INSERT", "UPDATE", "DELETE", "TRUNCATE"]},
+    "other_anon_authenticated_insert_update_delete_truncate_grants": []
+  },
+  "inventory_view": {"security_invoker": true, "anon_select": false, "authenticated_select": false},
+  "functions": [
+    {"name": "set_updated_at", "security_definer": false, "anon_execute": false, "authenticated_execute": false, "service_role_execute": true},
+    {"name": "consume_collection_access_token", "security_definer": true, "anon_execute": false, "authenticated_execute": false, "service_role_execute": true}
+  ],
+  "invoice_bucket": {"public": false, "file_size_limit": 10485760, "allowed_mime_types": ["application/pdf", "image/png", "image/jpeg", "image/webp", "image/heic", "image/heif"]},
+  "aggregates": {"devices": 108, "invoice_rows": 17, "invoice_storage_objects": 15, "database_bytes": 34458771, "invoice_storage_bytes": 1457206, "orphan_invoice_objects": 0, "missing_invoice_objects": 0, "devices_with_duplicate_open_assignment_periods": 0},
+  "limitations": ["No personnel, credentials, document paths or document contents selected", "No destructive access tests", "RLS does not govern TRUNCATE; no arbitrary SQL or TRUNCATE route established", "Data API row limit, upstream rate limits, backups and restore not checked by these queries"]
+}

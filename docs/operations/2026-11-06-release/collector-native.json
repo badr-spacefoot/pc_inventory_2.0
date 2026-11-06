@@ -1,0 +1,9 @@
+{
+  "platform": "Windows",
+  "python": "3.14.6",
+  "version": "0.1.53-dev",
+  "signed": false,
+  "mode": "startup-probe-without-hardware-scan",
+  "exitCode": 0,
+  "sha256": "277d2a0ef24bf84e01dadb18d157370466a9b658c7d2a3a1e5d034f68137534c"
+}

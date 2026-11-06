@@ -32,7 +32,18 @@ describe("collector platform helpers", () => {
     const macosCommand = macosInstallCommand({ version: "collector-v1.2.3" });
     expect(macosCommand).toContain("spacefoot-it-collector-macos-1.2.3.app");
     expect(macosCommand).toContain("$HOME/Téléchargements");
-    expect(macosCommand).toContain('chmod +x "$app/Contents/MacOS/"*');
+    expect(macosCommand).toContain('codesign --verify --deep --strict "$app" || exit 1');
+    expect(macosCommand).toContain('spctl --assess --type execute "$app" || exit 1');
+    expect(macosCommand).not.toContain("xattr");
     expect(macosCommand).toContain("Application Spacefoot introuvable");
+  });
+
+  it("does not interpolate shell syntax or paths from release metadata", () => {
+    const malicious = { fileName: "../../$(touch /tmp/injected).deb", version: "1.2.3$(id)" };
+    expect(ubuntuInstallCommand(malicious)).toContain("sudo apt install ./spacefoot-it-collector-linux.deb");
+    const command = macosInstallCommand(malicious);
+    expect(command).not.toContain("$(id)");
+    expect(command).not.toContain("touch");
+    expect(command).toContain("$HOME/Applications/spacefoot-it-collector-macos.app");
   });
 });

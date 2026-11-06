@@ -10,6 +10,27 @@ function jsonResponse(body: object, status = 200): Response {
 }
 
 describe("ApiClient", () => {
+  it("does not send a request with an already aborted signal", async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    const client = new ApiClient({ baseUrl: "https://example.test", fetcher });
+    const controller = new AbortController();
+    controller.abort();
+    await expect(client.request("/devices", { signal: controller.signal })).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("discards an old session response after logout without retrying", async () => {
+    let token = "old-session";
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => {
+      token = "";
+      return jsonResponse({ devices: [{ id: "private" }] });
+    });
+    const client = new ApiClient({ baseUrl: "https://example.test", fetcher, getAuthToken: () => token });
+    await expect(client.request("/devices")).rejects.toMatchObject({ name: "AbortError" });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
   it("adds authentication and parses successful JSON", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse({ ok: true }));
     const client = new ApiClient({ baseUrl: "https://example.test/api", getAuthToken: () => "token", fetcher });

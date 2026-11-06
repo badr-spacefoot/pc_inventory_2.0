@@ -1,0 +1,78 @@
+{
+  "kind": "local-validation-summary-not-production-acceptance",
+  "date": "2026-11-06",
+  "baselineMain": "4ac6d8d77e982409f00809f7a25640e77ad720c0",
+  "quality": {
+    "command": "pnpm run quality",
+    "pnpm": "10.34.5",
+    "typescriptPassed": 233,
+    "typescriptNetworkSkipped": 3,
+    "pythonPassed": 34,
+    "passed": true,
+    "logSha256": "ac9e74b69dde4f523ce45001501a5acf6c8a577b1da7ba09a58c43ba4d8ff20a"
+  },
+  "nativeWindows": {
+    "startupProbeExitCode": 0,
+    "signed": false,
+    "hardwareScanned": false
+  },
+  "nativeUiFixture": {
+    "passed": true,
+    "networkRequests": 0,
+    "hardwareScanned": false,
+    "harness": "tools/collector-ui-acceptance.py"
+  },
+  "browserFixtures": {
+    "passed": true,
+    "realProductionRequests": false
+  },
+  "compose": {
+    "services": 12,
+    "publishedHostPorts": 0,
+    "fixtureSecretsOnly": true,
+    "servicesStarted": false,
+    "preflightPassed": true,
+    "images": {
+      "api-gw": "envoyproxy/envoy:v1.39.1",
+      "auth": "supabase/gotrue:v2.196.0",
+      "db": "supabase/postgres:17.6.1.136",
+      "functions": "supabase/edge-runtime:v1.76.2",
+      "imgproxy": "darthsim/imgproxy:v3.31.4",
+      "meta": "supabase/postgres-meta:v0.99.0",
+      "realtime": "supabase/realtime:v2.134.10",
+      "rest": "postgrest/postgrest:v14.17",
+      "storage": "supabase/storage-api:v1.74.0",
+      "studio": "supabase/studio:2026.09.07-sha-7996410",
+      "supavisor": "supabase/supavisor:2.9.12",
+      "web": "caddy:2.11.9-alpine@sha256:71d41fe4b1ae92a058abc87afe614178b996d8a6b96d0f4c71ae30606e5927e3"
+    }
+  },
+  "caddy": {
+    "version": "2.11.9",
+    "syntaxAdapted": true,
+    "proxyReloaded": false
+  },
+  "production": {
+    "modified": false,
+    "mainProtected": false,
+    "configuredEnvironments": [
+      "github-pages"
+    ],
+    "scheduledWorkflowsActive": true
+  },
+  "vps": {
+    "diskUsedPercent": 96,
+    "diskFreeHuman": "3.3G",
+    "memAvailableMiB": 4178,
+    "swapUsedMiB": 1243,
+    "capacityAccepted": false,
+    "cleanupPerformed": false
+  },
+  "remaining": [
+    "VPS capacity",
+    "Native signing and supported-OS install/update acceptance",
+    "Isolated full platform, storage and restore rehearsal",
+    "Off-host backup destination and retention",
+    "GitHub protections and authorized cutover"
+  ]
+}

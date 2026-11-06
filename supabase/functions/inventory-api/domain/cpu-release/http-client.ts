@@ -1,3 +1,5 @@
+import { fetchBoundedText } from "../../core/security.ts";
+
 export interface HttpTextResponse {
   url: string;
   body: string;
@@ -73,16 +75,21 @@ export class BoundedCpuReleaseHttpClient implements CpuReleaseHttpClient {
             ? { "if-modified-since": init.lastModified }
             : {}),
         };
-        const response = await fetch(url, {
-          redirect: "follow",
-          signal: AbortSignal.timeout(timeoutMs),
-          headers: {
-            accept: "text/html,application/xhtml+xml,application/xml,text/xml",
-            "accept-language": "en-US,en;q=0.9",
-            "user-agent": this.userAgent,
-            ...conditionalHeaders,
+        const { response, body } = await fetchBoundedText(
+          url.toString(),
+          officialHosts,
+          {
+            timeoutMs,
+            maxBytes,
+            headers: {
+              accept:
+                "text/html,application/xhtml+xml,application/xml,text/xml",
+              "accept-language": "en-US,en;q=0.9",
+              "user-agent": this.userAgent,
+              ...conditionalHeaders,
+            },
           },
-        });
+        );
         const finalUrl = new URL(response.url || url);
         if (!isOfficialHost(finalUrl.hostname)) {
           throw new Error(
@@ -95,7 +102,6 @@ export class BoundedCpuReleaseHttpClient implements CpuReleaseHttpClient {
         if (!response.ok) {
           throw new Error(`Official source returned HTTP ${response.status}`);
         }
-        const body = (await response.text()).slice(0, maxBytes);
         const result = {
           url: response.url || url.toString(),
           body,

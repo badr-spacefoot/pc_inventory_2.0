@@ -6,9 +6,12 @@ Le front est statique et peut etre heberge sur GitHub Pages. La collecte complet
 
 ## Démarrage développeur
 
-Prérequis : Node.js 22, pnpm 10+, Deno 2, Python 3.12+ et la CLI Supabase pour les opérations cloud.
+Prérequis : Node.js 22, pnpm 10.34.5, Deno 2, Python 3.12+ et la CLI Supabase pour les opérations cloud.
 
 ```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --require-hashes -r collectors/requirements-build.lock
 pnpm install --frozen-lockfile
 pnpm run quality
 python -m http.server 8090 --directory frontend
@@ -178,7 +181,7 @@ La météo de la barre supérieure utilise Open-Meteo côté navigateur. Par dé
 2. Vérifier que `ALLOWED_ORIGINS` contient l'URL GitHub Pages.
 3. Pousser sur `main` uniquement après validation de `.github/workflows/quality.yml`.
 
-Le workflow `.github/workflows/pages.yml` installe les dépendances, exécute `pnpm run quality`, reconstruit `frontend/core.js`, puis publie `frontend/` à la racine du site. Il copie aussi `scripts/` et `collectors/` pour le fallback PowerShell et la documentation du collecteur.
+Le workflow `.github/workflows/pages.yml` installe les dépendances, exécute `pnpm run quality`, reconstruit `frontend/core.js`, puis utilise `scripts/package-site.mjs` pour publier uniquement les assets web et les deux scripts de collecte de secours. Les URLs publiques sont injectées dans `config.js`; les scripts de déploiement/import et les sources ne sont pas publiés.
 
 ## Collecteur recommande, lanceurs simples et fallback script
 

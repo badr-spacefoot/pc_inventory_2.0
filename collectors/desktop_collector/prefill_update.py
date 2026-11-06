@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import platform
-import re
 import shlex
 import shutil
 import subprocess
@@ -15,6 +14,13 @@ import urllib.parse
 import zipfile
 from pathlib import Path
 from tkinter import messagebox
+
+try:
+    from .config import UPDATE_PUBLIC_KEY
+    from .update_security import verify_manifest, verify_download, verify_windows_publisher, extract_app_archive, release_asset, release_version
+except ImportError:
+    from config import UPDATE_PUBLIC_KEY
+    from update_security import verify_manifest, verify_download, verify_windows_publisher, extract_app_archive, release_asset, release_version
 
 try:
     from .config import (
@@ -28,7 +34,6 @@ try:
         fetch_json_url,
         is_newer_version,
         normalize_api_url,
-        version_label,
     )
 except ImportError:  # Supports direct execution and PyInstaller entry points.
     from config import (
@@ -42,7 +47,6 @@ except ImportError:  # Supports direct execution and PyInstaller entry points.
         fetch_json_url,
         is_newer_version,
         normalize_api_url,
-        version_label,
     )
 
 
@@ -50,7 +54,7 @@ class CollectorUpdateMixin:
     """Coordinates native collector updates for Windows, Linux, and macOS."""
 
     def check_update_then_load_prefill(self) -> None:
-        if not self.auto_update.get() or platform.system() not in {
+        if not UPDATE_PUBLIC_KEY or not self.auto_update.get() or platform.system() not in {
             "Windows",
             "Linux",
             "Darwin",
@@ -64,36 +68,35 @@ class CollectorUpdateMixin:
         ).start()
 
     def _check_update_then_load_prefill_background(self) -> None:
+        update_directory = None
+        handed_off = False
         try:
-            manifest = fetch_json_url(COLLECTOR_RELEASES_URL, timeout=8)
+            if not UPDATE_PUBLIC_KEY:
+                self.after(0, self.load_prefill)
+                return
+            manifest = verify_manifest(fetch_json_url(COLLECTOR_RELEASES_URL, timeout=8), UPDATE_PUBLIC_KEY)
             latest = str(manifest.get("latestVersion") or "")
             platform_key = {
                 "Windows": "windows",
                 "Linux": "linux",
                 "Darwin": "macos",
             }.get(platform.system(), "")
-            asset = (manifest.get("assets") or {}).get(platform_key) or {}
-            download_url = str(asset.get("downloadUrl") or "")
-            default_name = {
-                "windows": "spacefoot-it-collector-update.exe",
-                "linux": "spacefoot-it-collector-update.deb",
-                "macos": "spacefoot-it-collector-update.app.zip",
-            }.get(platform_key, "spacefoot-it-collector-update")
-            file_name = str(asset.get("fileName") or default_name)
-            if (
-                not latest
-                or not download_url
-                or not is_newer_version(latest, COLLECTOR_VERSION)
-            ):
+            release_version(latest)
+            if not is_newer_version(latest, COLLECTOR_VERSION):
                 self.after(0, self.load_prefill)
                 return
-            safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "-", file_name) or default_name
-            installer_path = Path(tempfile.gettempdir()) / safe_name
+            asset = release_asset(manifest, platform_key)
+            # Keep the directory alive until the installer has consumed the package.
+            update_directory = Path(tempfile.mkdtemp(prefix="spacefoot-update-"))
+            installer_path = update_directory / asset["fileName"]
             self.after(
                 0,
                 lambda: self.status.set(self.t("Downloading collector update...")),
             )
-            download_file(download_url, installer_path, timeout=120)
+            download_file(asset["downloadUrl"], installer_path, timeout=120, max_bytes=asset["size"])
+            verify_download(installer_path, asset)
+            if platform_key == "windows":
+                verify_windows_publisher(installer_path, str(asset.get("publisherThumbprint") or ""))
             if platform_key == "linux":
                 self.after(
                     0,
@@ -112,6 +115,7 @@ class CollectorUpdateMixin:
                 )
             else:
                 self.after(0, lambda: self.install_update_and_relaunch(installer_path))
+            handed_off = True
         except Exception:
             self.after(
                 0,
@@ -120,6 +124,9 @@ class CollectorUpdateMixin:
                 ),
             )
             self.after(700, self.load_prefill)
+        finally:
+            if update_directory is not None and not handed_off:
+                shutil.rmtree(update_directory)
 
     def launch_url_for_reopen(self) -> str:
         if self.launch_prefill_url:
@@ -162,7 +169,7 @@ class CollectorUpdateMixin:
         return env
 
     def launch_linux_update_terminal(self, installer_path: Path) -> bool:
-        script_path = Path(tempfile.gettempdir()) / "spacefoot-it-collector-update.sh"
+        script_path = installer_path.parent / "spacefoot-it-collector-update.sh"
         script = "\n".join(
             [
                 "#!/bin/sh",
@@ -312,7 +319,7 @@ class CollectorUpdateMixin:
             self.after(1000, self.load_prefill)
 
     def macos_target_app_path(self, latest_version: str) -> Path:
-        version = version_label(latest_version)
+        version = release_version(latest_version)
         return Path.home() / "Applications" / f"{MACOS_APP_BUNDLE_PREFIX}-{version}.app"
 
     def install_macos_update_and_relaunch(
@@ -336,7 +343,7 @@ class CollectorUpdateMixin:
             ) as temp_dir:
                 extract_dir = Path(temp_dir)
                 with zipfile.ZipFile(installer_path) as archive:
-                    archive.extractall(extract_dir)
+                    extract_app_archive(archive, extract_dir)
                 apps = sorted(
                     extract_dir.rglob("*.app"),
                     key=lambda path: len(path.parts),
@@ -346,18 +353,13 @@ class CollectorUpdateMixin:
                         "No macOS app bundle was found in the update archive."
                     )
                 source_app = apps[0]
+                subprocess.run(["codesign", "--verify", "--deep", "--strict", str(source_app)], check=True, timeout=30)
+                subprocess.run(["spctl", "--assess", "--type", "execute", str(source_app)], check=True, timeout=30)
                 target_app = self.macos_target_app_path(latest_version)
                 target_app.parent.mkdir(parents=True, exist_ok=True)
                 if target_app.exists():
                     shutil.rmtree(target_app)
                 shutil.copytree(source_app, target_app, symlinks=True)
-            subprocess.run(
-                ["xattr", "-dr", "com.apple.quarantine", str(target_app)],
-                check=False,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                timeout=10,
-            )
             lsregister = Path(
                 "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
             )
@@ -400,6 +402,7 @@ class CollectorUpdateMixin:
                     "/CLOSEAPPLICATIONS",
                     "/LaunchAfterInstall=1",
                     f"/PrefillCode={prefill_code}",
+                    f"/LaunchUrl={self.launch_url_for_reopen()}",
                 ]
             )
             self.after(800, self.destroy)

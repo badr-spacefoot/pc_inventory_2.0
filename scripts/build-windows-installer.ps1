@@ -61,36 +61,23 @@ function Sign-File {
     return
   }
 
+  if (-not $env:WINDOWS_CODESIGN_PFX_BASE64) {
+    throw "Configure a trusted PFX certificate, or use -SkipSign for a local development smoke build."
+  }
   $signTool = Find-SignTool
-  if ($env:WINDOWS_CODESIGN_PFX_BASE64) {
-    $certPath = Join-Path $env:TEMP "spacefoot-codesign.pfx"
+  $certPath = Join-Path $env:TEMP ("spacefoot-codesign-" + [Guid]::NewGuid().ToString('N') + ".pfx")
+  try {
     [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_CODESIGN_PFX_BASE64))
     & $signTool sign /f $certPath /p $env:WINDOWS_CODESIGN_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $Target
     if ($LASTEXITCODE -ne 0) { throw "Signing failed for $Target" }
-    return
+  } finally {
+    Remove-Item -LiteralPath $certPath -Force -ErrorAction SilentlyContinue
   }
-
-  $cert = Get-ChildItem Cert:\CurrentUser\My |
-    Where-Object { $_.Subject -eq "CN=Spacefoot IT Collector Internal Testing" } |
-    Select-Object -First 1
-  if (-not $cert) {
-    $cert = New-SelfSignedCertificate `
-      -Type CodeSigningCert `
-      -Subject "CN=Spacefoot IT Collector Internal Testing" `
-      -FriendlyName "Spacefoot IT Collector Internal Testing" `
-      -CertStoreLocation "Cert:\CurrentUser\My" `
-      -KeyAlgorithm RSA `
-      -KeyLength 3072 `
-      -HashAlgorithm SHA256 `
-      -NotAfter (Get-Date).AddYears(2)
-  }
-
-  New-Item -ItemType Directory -Force dist\installer | Out-Null
-  Export-Certificate -Cert $cert -FilePath "dist\installer\spacefoot-it-collector-internal-test.cer" | Out-Null
-  & $signTool sign /sha1 $cert.Thumbprint /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $Target
-  if ($LASTEXITCODE -ne 0) { throw "Signing failed for $Target" }
 }
 
+if ($Version -ne "0.0.0-dev" -and ($SkipSign -or -not $env:WINDOWS_CODESIGN_PFX_BASE64)) { throw "Production builds require a trusted signing certificate" }
+python -m pip install --require-hashes -r collectors/requirements-build.lock
+if ($LASTEXITCODE -ne 0) { throw "Build dependency installation failed" }
 python -m PyInstaller --version | Out-Null
 if ($LASTEXITCODE -ne 0) {
   throw "PyInstaller was not found. Install it with: python -m pip install --upgrade pyinstaller"
@@ -98,33 +85,24 @@ if ($LASTEXITCODE -ne 0) {
 $iscc = Find-InnoSetup
 
 New-Item -ItemType Directory -Force installer-assets | Out-Null
-if (-not (Test-Path "installer-assets\osquery.msi")) {
-  if ($OsqueryMsiUrl) {
-    $downloadUrl = $OsqueryMsiUrl
-  } else {
-    $release = Invoke-RestMethod `
-      -Headers @{ "User-Agent" = "spacefoot-it-collector-build" } `
-      -Uri "https://api.github.com/repos/osquery/osquery/releases/latest"
-    $asset = $release.assets |
-      Where-Object { $_.name -match '\.msi$' -and $_.name -match 'osquery' } |
-      Select-Object -First 1
-    if (-not $asset) {
-      throw "No osquery Windows MSI asset was found. Re-run with -OsqueryMsiUrl."
-    }
-    $downloadUrl = $asset.browser_download_url
-  }
-
-  Invoke-WebRequest -Uri $downloadUrl -OutFile "installer-assets\osquery.msi"
-}
+python scripts/download-osquery.py windows
+if ($LASTEXITCODE -ne 0) { throw "osquery verification failed" }
+if ((Get-AuthenticodeSignature installer-assets/osquery.msi).Status -ne "Valid") { throw "Invalid osquery signature" }
 
 python -m PyInstaller `
   -y `
   --onedir `
+  --noupx `
   --windowed `
   --name "spacefoot-it-collector-windows" `
   --icon "frontend/assets/brand/app-icon.ico" `
   --add-data "scripts/collect-cross-platform.py;scripts" `
   --add-data "frontend/assets/brand/app-icon.png;assets/brand" `
+  --paths "collectors/desktop_collector" `
+  --hidden-import diagnostics `
+  --hidden-import certifi `
+  --hidden-import update_security `
+  --hidden-import cryptography.hazmat.primitives.asymmetric.ed25519 `
   --hidden-import argparse `
   --hidden-import ctypes `
   --hidden-import datetime `

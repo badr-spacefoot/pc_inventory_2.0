@@ -38,6 +38,7 @@ export type Action =
   | "NOTIFICATION_MANAGE";
 
 export type AdminSession = {
+  sessionId?: string;
   id: string;
   username: string;
   displayName: string;

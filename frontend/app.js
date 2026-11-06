@@ -42,6 +42,90 @@ let renderedEnrichmentWorkflowSteps = [];
 let activeEnrichmentJobProgress = null;
 let unifiedEnrichmentRunActive = false;
 let pendingFilterFrame = null;
+let detailRequestSequence = 0;
+const invoiceSubmissions = new invoiceDomain.InvoiceSubmissionTracker();
+
+function preserveFormDrafts() {
+  const drafts = [...document.querySelectorAll("form[id]")].flatMap((form) =>
+    [...form.querySelectorAll("input[name],select[name],textarea[name]")].map((field, index) => ({
+      formId: form.id,
+      name: field.name,
+      index,
+      value: field.value,
+      checked: field.checked,
+      fileInput: field.type === "file" ? field : null,
+    })),
+  );
+  return () =>
+    drafts.forEach((draft) => {
+      const form = document.getElementById(draft.formId);
+      const field = form?.querySelectorAll("input[name],select[name],textarea[name]")[draft.index];
+      if (!field || field.name !== draft.name) return;
+      if (draft.fileInput) {
+        if (field !== draft.fileInput) field.replaceWith(draft.fileInput);
+      } else {
+        field.value = draft.value;
+        if (typeof draft.checked === "boolean") field.checked = draft.checked;
+      }
+    });
+}
+
+function clearAdminSession() {
+  invoiceSubmissions.clear();
+  detailRequestSequence += 1;
+  state.adminToken = "";
+  state.currentAdmin = null;
+  localStorage.removeItem("it_inventory_admin_token");
+  localStorage.removeItem("it_inventory_admin_user");
+  for (const key of [
+    "devices",
+    "filtered",
+    "selectedScans",
+    "selectedHistory",
+    "accessTokens",
+    "collectionInvites",
+    "adminUsers",
+    "adminUserInvites",
+    "notifications",
+    "pendingChanges",
+    "users",
+  ])
+    state[key] = [];
+  for (const key of ["rawAccessTokens", "rawInviteUrls", "rawAdminUserInviteUrls"]) state[key] = {};
+  state.selectedDeviceId = "";
+  state.selectedDetail = null;
+  state.unreadNotifications = 0;
+  state.cpuBenchmarkStats = null;
+  for (const selector of [
+    "#devices-table",
+    "#device-detail",
+    "#tokens-table",
+    "#invites-table",
+    "#admin-users-table",
+    "#admin-user-invites-table",
+    "#notifications-list",
+    "#notification-panel-list",
+    "#pending-changes-list",
+    "#generated-admin-user-invite-url",
+    "#generated-token",
+    "#generated-invite-url",
+    "#fleet-kpis",
+    "#fleet-priority",
+    "#fleet-distribution",
+    "#fleet-health",
+    "#fleet-valuation",
+    "#fleet-age-cpu",
+    "#valuation-metrics",
+    "#admin-session-label",
+    "#invite-form select[name=deviceId]",
+  ])
+    $(selector)?.replaceChildren();
+  $$("#admin-dashboard form").forEach((form) => form.reset());
+  $$("[data-valuation-chart]").forEach((chart) => chart.replaceChildren());
+  $("#detail-title").textContent = translate("Sélectionnez un poste");
+  $("#admin-login").classList.remove("is-hidden");
+  $("#admin-dashboard").classList.add("is-hidden");
+}
 
 const statusLabels = {
   fr: {
@@ -232,6 +316,7 @@ function translateElement(root) {
 }
 
 function applyLanguage(language, persist = true) {
+  const restoreDrafts = preserveFormDrafts();
   state.language = language === "en" ? "en" : "fr";
   document.documentElement.lang = state.language;
   if (persist) localStorage.setItem("it_inventory_language", state.language);
@@ -257,6 +342,7 @@ function applyLanguage(language, persist = true) {
   updateTimeFormatButton();
   updateCollectorDownloadUi();
   setTheme(state.themePreference, false);
+  restoreDrafts();
 }
 
 const languageObserver = new MutationObserver((records) => {
@@ -1844,6 +1930,7 @@ function bindNotificationList(root, { closePanel = false } = {}) {
       activate();
     });
     item.addEventListener("keydown", (event) => {
+      if (event.target !== item) return;
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
       activate();
@@ -2726,7 +2813,7 @@ function renderValuation() {
   const devices = fleetDomain.valuationFleetDevices(state.filtered);
   const launchValue = devices.reduce((sum, device) => sum + Number(device.estimated_launch_price || 0), 0);
   const currentValue = devices.reduce((sum, device) => sum + estimatedValue(device), 0);
-  const depreciation = launchValue > 0 ? Math.round((1 - currentValue / launchValue) * 100) : 0;
+  const depreciation = inventoryDomain.depreciationSummary(devices);
   const ageSnapshot = fleetDomain.fleetKpiSnapshot(devices, fleetEvaluationContext());
   const ages = inventoryDomain.fleetDeviceAges(devices);
   const averageAge = ageSnapshot.averageAge;
@@ -2736,8 +2823,10 @@ function renderValuation() {
       Number(device.cpu_benchmark_score || device.cpu_score || 0) > 0 &&
       Number(device.cpu_benchmark_score || device.cpu_score || 0) < 8000,
   ).length;
-  const highPriority = activeFleetDevices(devices).filter(
-    (device) => Number(device.replacement_priority || device.obsolescence_index || 0) >= 70,
+  const highPriority = devices.filter(
+    (device) =>
+      fleetDomain.isActionableDevice(device) &&
+      Number(device.replacement_priority || device.obsolescence_index || 0) >= 70,
   ).length;
   const marketObserved = devices.filter((device) => Number(device.market_observation_count || 0) > 0).length;
   const highConfidence = devices.filter((device) =>
@@ -2757,8 +2846,11 @@ function renderValuation() {
     },
     {
       label: "Dépréciation moyenne estimée",
-      value: `${depreciation}%`,
-      helper: "Écart entre la valeur de lancement totale et la valeur actuelle estimée",
+      value: depreciation.percent === null ? "—" : `${depreciation.percent}%`,
+      helper:
+        state.language === "en"
+          ? `Based on ${depreciation.count} of ${devices.length} devices with both launch and current values`
+          : `Calcul sur ${depreciation.count} postes sur ${devices.length} avec valeurs de lancement et actuelle`,
     },
     {
       label: "Âge moyen du parc",
@@ -2845,6 +2937,7 @@ function renderValuation() {
 }
 
 function renderDevices() {
+  const focusedDeviceId = document.activeElement?.closest("#devices-table tr")?.dataset.id;
   $("#result-count").textContent =
     state.language === "en"
       ? `${state.filtered.length} result${state.filtered.length === 1 ? "" : "s"}`
@@ -2861,7 +2954,7 @@ function renderDevices() {
         <tr data-id="${device.id}" class="${deviceRowStatusClass(device.status)} ${device.id === state.selectedDeviceId ? "is-selected" : ""}">
           <td>
             <span class="hostname-quality">
-              <strong class="cell-primary">${escapeHtml(device.hostname || "-")}</strong>
+              <button type="button" class="device-open cell-primary">${escapeHtml(device.hostname || "-")}</button>
               ${renderDataQualitySignal(device)}
             </span>
             <small class="cell-secondary">${escapeHtml(device.serial_number || device.service_tag || "")}</small>
@@ -2880,10 +2973,13 @@ function renderDevices() {
 
   $$("#devices-table tr").forEach((row) => {
     row.addEventListener("click", () => selectDevice(row.dataset.id));
+    if (focusedDeviceId && row.dataset.id === focusedDeviceId)
+      row.querySelector(".device-open")?.focus({ preventScroll: true });
   });
 }
 
 async function selectDevice(id) {
+  const requestSequence = ++detailRequestSequence;
   state.selectedDeviceId = id;
   renderDevices();
   const device = state.devices.find((item) => item.id === id);
@@ -2892,6 +2988,7 @@ async function selectDevice(id) {
   $("#device-detail").innerHTML = `<p class="helper">Chargement de l'historique...</p>`;
   try {
     const detail = await inventoryApi.getDevice(id);
+    if (requestSequence !== detailRequestSequence || state.selectedDeviceId !== id) return;
     renderDetail(
       {
         ...detail.device,
@@ -2902,6 +2999,7 @@ async function selectDevice(id) {
       detail.history || [],
     );
   } catch (error) {
+    if (requestSequence !== detailRequestSequence || state.selectedDeviceId !== id) return;
     toast(error.message);
     renderDetail(device, [], []);
   }
@@ -3331,7 +3429,7 @@ function syncWarrantyEndFromDuration(form) {
   if (!startInput || !endInput || !durationInput) return;
   const durationMonths = Number(durationInput.value || 0);
   if (!durationMonths || durationMonths < 0) return;
-  let startIso = "";
+  let startIso;
   try {
     startIso = normalizeDateInputValue(startInput.value);
   } catch {
@@ -3439,12 +3537,15 @@ function renderDetail(device, scans, history = []) {
     .slice(0, 8)
     .map(
       (row) =>
-        `<li>${formatDate(row.collected_at)} - ${row.source} - ${money(row.price)} - ${escapeHtml(localizedMarketCondition(row.condition))}</li>`,
+        `<li>${formatDate(row.collected_at)} - ${escapeHtml(row.source)} - ${money(row.price)} - ${escapeHtml(localizedMarketCondition(row.condition))}</li>`,
     )
     .join("");
   const scanRows = scans
     .slice(0, 8)
-    .map((scan) => `<li>${formatDate(scan.collected_at)} - ${scan.os_name || "-"} ${scan.os_version || ""}</li>`)
+    .map(
+      (scan) =>
+        `<li>${formatDate(scan.collected_at)} - ${escapeHtml(scan.os_name || "-")} ${escapeHtml(scan.os_version || "")}</li>`,
+    )
     .join("");
 
   $("#device-detail").innerHTML = `
@@ -3721,16 +3822,21 @@ function renderDetail(device, scans, history = []) {
       const button = event.currentTarget.querySelector("button[type='submit']");
       const originalText = button.textContent;
       button.disabled = true;
+      let saved = false;
       try {
         button.textContent = translate("Lecture du fichier...");
         const payload = await invoiceFormPayload(event.currentTarget);
+        payload.requestId = await invoiceSubmissions.requestId(device.id, payload);
         await inventoryApi.addDeviceInvoice(device.id, payload);
+        saved = true;
+        invoiceSubmissions.clear(device.id);
+        invoiceForm.reset();
         await loadAdminData();
         await selectDevice(device.id);
         activateDetailTab("invoices");
         toast("Facture ajoutée.", "success");
       } catch (error) {
-        toast(error.message, "error");
+        toast(saved ? `${translate("Facture ajoutée.")} ${error.message}` : error.message, saved ? "warning" : "error");
       } finally {
         button.disabled = false;
         button.textContent = originalText;
@@ -3914,7 +4020,7 @@ function sumBy(items, groupGetter, valueGetter) {
 }
 
 function csvEscape(value) {
-  return `"${String(value ?? "").replaceAll('"', '""')}"`;
+  return inventoryDomain.csvCell(value);
 }
 
 function exportCsv(enrichedExport = false) {
@@ -4283,6 +4389,21 @@ function updateOrganizationDatalists() {
   const teamSelect = collectionForm()?.elements.team;
   const establishmentSelect = collectionForm()?.elements.establishment;
   const inviteForm = $("#invite-form");
+  if (inviteForm?.elements.deviceId) {
+    const select = inviteForm.elements.deviceId;
+    const previous = select.value;
+    select.replaceChildren(new Option(translate("Nouveau poste"), ""));
+    state.devices.forEach((device) =>
+      select.add(
+        new Option(
+          `${device.hostname || device.id} — ${device.serial_number || device.service_tag || device.id}`,
+          device.id,
+        ),
+      ),
+    );
+    select.value = previous;
+    inviteForm.elements.email.required = Boolean(select.value);
+  }
   if (teamSelect) {
     const selected = teamSelect.value || state.collectionDraft.team || "";
     teamSelect.innerHTML = [
@@ -5669,13 +5790,15 @@ function bindEvents() {
     }
   });
 
-  $("#logout-admin").addEventListener("click", () => {
-    state.adminToken = "";
-    state.currentAdmin = null;
-    localStorage.removeItem("it_inventory_admin_token");
-    localStorage.removeItem("it_inventory_admin_user");
-    $("#admin-login").classList.remove("is-hidden");
-    $("#admin-dashboard").classList.add("is-hidden");
+  $("#logout-admin").addEventListener("click", async () => {
+    const logout = inventoryApi.logoutAdmin();
+    clearAdminSession();
+    try {
+      await logout;
+    } catch {
+      /* Local credentials are cleared even when the server is unavailable. */
+    }
+    window.location.reload();
   });
 
   $("#time-format-toggle").addEventListener("click", () => {
@@ -5911,6 +6034,9 @@ function bindEvents() {
     if (event.target.closest(".address-search-field")) return;
     hideAddressSuggestions();
   });
+  $("#invite-form").elements.deviceId.addEventListener("change", (event) => {
+    $("#invite-form").elements.email.required = Boolean(event.target.value);
+  });
   $("#invite-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -5920,6 +6046,7 @@ function bindEvents() {
       durationHours: Number(values.durationHours),
       maxUses: values.maxUses ? Number(values.maxUses) : null,
       email: values.email,
+      deviceId: values.deviceId || null,
       firstName: values.firstName,
       lastName: values.lastName,
       team: values.team,
@@ -6180,13 +6307,9 @@ function bootstrapApplication() {
   $("#admin-login").classList.add("is-hidden");
   $("#admin-dashboard").classList.remove("is-hidden");
   applyPermissions();
-  loadAdminData().catch(() => {
-    state.adminToken = "";
-    state.currentAdmin = null;
-    localStorage.removeItem("it_inventory_admin_token");
-    localStorage.removeItem("it_inventory_admin_user");
-    $("#admin-login").classList.remove("is-hidden");
-    $("#admin-dashboard").classList.add("is-hidden");
+  loadAdminData().catch((error) => {
+    if (error.status === 401 || error.status === 403) clearAdminSession();
+    else toast(error.message, "error");
   });
 }
 

@@ -11,7 +11,7 @@ from pathlib import Path
 def linux_desktop_exec_path() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve()
-    return Path(__file__).resolve()
+    return Path(__file__).resolve().with_name("collector_app.py")
 
 
 def desktop_exec_quote(value: str) -> str:

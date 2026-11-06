@@ -7,6 +7,10 @@ export function normalizeTranslationKey(value: unknown): string {
 }
 
 export const englishTranslations = {
+  "Poste à actualiser": "Device to update",
+  "Nouveau poste": "New device",
+  "Pour actualiser un poste existant, sélectionnez-le et renseignez l’e-mail du destinataire.":
+    "To update an existing device, select it and enter the recipient’s email.",
   "Inventaire IT": "IT Inventory",
   "Navigation principale": "Main navigation",
   Collecte: "Collection",

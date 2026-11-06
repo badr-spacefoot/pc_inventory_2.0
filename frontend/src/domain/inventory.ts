@@ -246,7 +246,7 @@ export function compareVersions(left: unknown, right: unknown): number {
   return 0;
 }
 
-const NON_AGE_ACTIONABLE_STATUSES = new Set(["retired", "stock", "lost"]);
+const EXCLUDED_CURRENT_STATUSES = new Set(["retired", "lost"]);
 
 export function reliableDeviceReleaseYear(
   device: ValuationDevice,
@@ -266,7 +266,11 @@ export function deviceAge(device: ValuationDevice, currentYear = new Date().getF
 }
 
 export function isFleetAgeEligible(device: ValuationDevice): boolean {
-  return !NON_AGE_ACTIONABLE_STATUSES.has(String(device.status || ""));
+  return isCurrentInventoryDevice(device);
+}
+
+export function isCurrentInventoryDevice(device: ValuationDevice): boolean {
+  return !EXCLUDED_CURRENT_STATUSES.has(String(device.status || ""));
 }
 
 export function fleetDeviceAges(devices: readonly ValuationDevice[], currentYear = new Date().getFullYear()): number[] {
@@ -289,14 +293,44 @@ export function fleetAgeSummary(
 }
 
 export function estimatedValue(device: ValuationDevice): number {
-  return Number(
-    device.resale_value ||
-      device.estimated_current_value ||
-      device.current_market_price_avg ||
-      device.current_new_price ||
-      device.estimated_launch_price ||
-      0,
-  );
+  return knownEstimatedValue(device) ?? 0;
+}
+
+export function knownEstimatedValue(device: ValuationDevice): number | null {
+  for (const value of [
+    device.resale_value,
+    device.estimated_current_value,
+    device.current_market_price_avg,
+    device.current_new_price,
+    device.estimated_launch_price,
+  ]) {
+    if (value === null || value === undefined || String(value).trim() === "") continue;
+    const number = Number(value);
+    if (Number.isFinite(number) && number >= 0) return number;
+  }
+  return null;
+}
+
+export function depreciationSummary(devices: readonly ValuationDevice[]): { percent: number | null; count: number } {
+  let launch = 0;
+  let current = 0;
+  let count = 0;
+  for (const device of devices) {
+    const initial = Number(device.estimated_launch_price);
+    // A launch-only fallback is not evidence of a current valuation.
+    const value = knownEstimatedValue({ ...device, estimated_launch_price: null });
+    if (!Number.isFinite(initial) || initial <= 0 || value === null) continue;
+    launch += initial;
+    current += value;
+    count += 1;
+  }
+  return { percent: count ? Math.round((1 - current / launch) * 100) : null, count };
+}
+
+export function csvCell(value: unknown): string {
+  const text = String(value ?? "");
+  const safe = typeof value !== "number" && (/^[\s]*[=+@-]/.test(text) || /^[\t\r\n]/.test(text)) ? `'${text}` : text;
+  return `"${safe.replaceAll('"', '""')}"`;
 }
 
 export function latestEnrichmentAt(devices: readonly ValuationDevice[]): string | null {

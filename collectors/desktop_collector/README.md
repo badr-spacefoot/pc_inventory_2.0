@@ -73,15 +73,17 @@ python collectors/desktop_collector/collector_app.py
 Packaging local:
 
 ```bash
-pyinstaller --onefile --windowed collectors/desktop_collector/collector_app.py
+python scripts/package-collector-source.py --output dist/collector-source.zip
 ```
 
 Packaging GitHub:
 
 - Workflow manuel: `Build collector apps`.
 - Release partageable: pousser un tag `collector-vX.Y.Z`.
-- Windows: signer le `.exe` avec un certificat Code Signing, ou self-signed interne si aucun secret officiel n'est configure.
+- Windows : signer le `.exe` et son installateur avec une identité Code Signing reconnue. Sans certificat, les builds internes restent explicitement non signés ; aucun certificat auto-signé n'est créé automatiquement.
 - macOS: signer et notariser avec Apple Developer ID.
 - Release: verifier les fichiers avec `SHA256SUMS.txt`.
 
 Ce dossier ne cherche pas a contourner les antivirus. Pour reduire les blocages en production, publier des binaires signes/notarises, garder un nom d'editeur stable et distribuer depuis une source officielle.
+
+La distribution source conserve la même interface et le même flux de collecte. Elle nécessite un Python approuvé avec Tkinter ; elle n'installe aucun runtime, compte ou service. Voir [le guide de validation IT](../../docs/collector/source-distribution.md). Elle n'est pas un installateur signé et ne garantit pas une acceptation antivirus. Sans clé de mise à jour configurée, la collecte démarre sans attendre un serveur de mise à jour.
