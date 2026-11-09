@@ -1,0 +1,19 @@
+{
+  "status": "prepared-locally",
+  "productionChanged": false,
+  "vercelProjectCreated": false,
+  "supabaseTransferred": false,
+  "siteFiles": 61,
+  "identicalToPublishedPackage": true,
+  "cspMatchesProduction": true,
+  "vercelTeam": "spacefoot1",
+  "vercelPlan": "pro",
+  "sourceProject": "oletfrcaptvardmdwacy",
+  "sourceOrganization": "rjudgyjtibtpifeuueyf",
+  "sourcePlan": "free",
+  "targetOrganization": "zqejjzdnqjgolttdiizx",
+  "targetPlan": "pro",
+  "transferRolesVerified": false,
+  "estimatedAdditionalComputeUsdMonthly": 10,
+  "costApproved": false
+}
