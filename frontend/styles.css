@@ -1,58 +1,87 @@
+@font-face {
+  font-family: "Manrope";
+  src: url("./assets/brand/parceo/fonts/Manrope-Variable.ttf") format("truetype");
+  font-weight: 200 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("./assets/brand/parceo/fonts/IBMPlexMono-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   color-scheme: light;
-  --bg: #f6f7f4;
+  --bg: #f6f7f2;
   --surface: #ffffff;
-  --ink: #18201b;
-  --muted: #667067;
-  --line: #dfe5dc;
-  --brand: #16735f;
-  --brand-strong: #0d4f44;
-  --accent: #e3b23c;
-  --danger: #bd3f32;
+  --ink: #142d27;
+  --muted: #53665d;
+  --line: #d9e3dc;
+  --brand: #0b6e58;
+  --brand-strong: #085440;
+  --accent: #d6f279;
+  --danger: #b42336;
   --shadow: 0 18px 45px rgba(24, 32, 27, 0.08);
-  --soft: #eef2ec;
-  --soft-hover: #f1f5ef;
+  --soft: #eaf0e9;
+  --soft-hover: #edf3ed;
   --topbar: rgba(255, 255, 255, 0.82);
   --input: #ffffff;
-  --notice: #fbf8ed;
-  --notice-line: #f1dfaa;
+  --notice: #f2f7e4;
+  --notice-line: #c9dca1;
   --danger-soft: #fae7e4;
   --site-soft: #fbf4df;
   --site-ink: #8b6813;
   --chart-grid: rgba(223, 229, 220, 0.7);
-  --nav-active: #18201b;
+  --nav-active: #142d27;
   --nav-active-ink: #ffffff;
-  --toast-bg: #18201b;
+  --toast-bg: #142d27;
   --toast-ink: #ffffff;
+  --on-brand: #ffffff;
+  --on-danger: #ffffff;
+  --focus: #0b6e58;
+  --accent-ink: #596f1f;
+  --control-line: #789184;
+  --warning: #855000;
+  --success: #176b45;
   --workspace-sticky-top: 112px;
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #101310;
-  --surface: #181d19;
-  --ink: #f1f4ef;
-  --muted: #a8b1a9;
-  --line: #303831;
-  --brand: #38a98e;
-  --brand-strong: #278a73;
-  --accent: #e4b94f;
-  --danger: #ef7669;
+  --bg: #0f211c;
+  --surface: #142d27;
+  --ink: #ffffff;
+  --muted: #bdcdc4;
+  --line: #3e574b;
+  --brand: #d6f279;
+  --brand-strong: #e4faa0;
+  --accent: #d6f279;
+  --danger: #fda4af;
   --shadow: 0 18px 45px rgba(0, 0, 0, 0.24);
-  --soft: #242b25;
-  --soft-hover: #283129;
-  --topbar: rgba(16, 19, 16, 0.86);
-  --input: #202621;
+  --soft: #213e32;
+  --soft-hover: #2b493c;
+  --topbar: rgba(15, 33, 28, 0.94);
+  --input: #10251e;
   --notice: #292619;
   --notice-line: #554a25;
   --danger-soft: #38211f;
   --site-soft: #302b1d;
-  --site-ink: #e4b94f;
+  --site-ink: #d6f279;
   --chart-grid: rgba(75, 86, 77, 0.55);
-  --nav-active: #eef3ed;
-  --nav-active-ink: #151915;
-  --toast-bg: #eef3ed;
-  --toast-ink: #151915;
+  --nav-active: #d6f279;
+  --nav-active-ink: #142d27;
+  --toast-bg: #d6f279;
+  --on-brand: #142d27;
+  --on-danger: #142d27;
+  --focus: #d6f279;
+  --accent-ink: #d6f279;
+  --control-line: #789184;
+  --warning: #e8c16a;
+  --success: #8bd9a9;
+  --toast-ink: #142d27;
 }
 
 * {
@@ -65,7 +94,7 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family:
-    Inter,
+    "Manrope",
     ui-sans-serif,
     system-ui,
     -apple-system,
@@ -103,7 +132,7 @@ a.secondary {
 
 .primary {
   background: var(--brand);
-  color: white;
+  color: var(--on-brand);
 }
 
 .primary:hover {
@@ -128,7 +157,7 @@ a.secondary {
 
 .danger-button:hover {
   background: var(--danger);
-  color: white;
+  color: var(--on-danger);
 }
 
 .form-actions {
@@ -252,7 +281,7 @@ a.secondary {
   border-radius: 999px;
   padding: 0 5px;
   background: var(--danger);
-  color: #ffffff;
+  color: var(--on-danger);
   font-size: 10px;
   font-weight: 900;
 }
@@ -328,11 +357,9 @@ a.secondary {
   min-height: 48px;
   display: inline-flex;
   align-items: center;
-  padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--line), transparent 15%);
+  padding: 0;
   border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 10px 24px rgba(24, 32, 27, 0.08);
+  background: transparent;
 }
 
 .brand-lockup img {
@@ -649,7 +676,7 @@ select {
 }
 
 .device-open:focus-visible {
-  outline: 3px solid var(--accent, #16735f);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -657,7 +684,8 @@ input:focus,
 textarea:focus,
 select:focus {
   border-color: var(--brand);
-  outline: 3px solid rgba(22, 115, 95, 0.14);
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
 
 .field-invalid input,
@@ -761,7 +789,7 @@ select:focus {
 }
 
 .switch-field input:focus-visible + .account-switch {
-  outline: 3px solid rgba(22, 115, 95, 0.18);
+  outline: 2px solid var(--focus);
 }
 
 .switch-copy {
@@ -3733,7 +3761,7 @@ tbody tr.is-selected {
 }
 
 .age-cpu-chart .zone-watch {
-  fill: var(--accent);
+  fill: var(--accent-ink);
 }
 
 .age-cpu-chart .zone-replace {
@@ -3794,7 +3822,7 @@ tbody tr.is-selected {
 }
 
 .age-point.watch {
-  fill: var(--accent);
+  fill: var(--accent-ink);
 }
 
 .age-point.replace {
@@ -3825,7 +3853,7 @@ tbody tr.is-selected {
 }
 
 .age-cpu-legend .legend-watch {
-  background: var(--accent);
+  background: var(--accent-ink);
 }
 
 .age-cpu-legend .legend-replace {
@@ -4087,4 +4115,37 @@ tbody tr.is-selected {
   .panel {
     padding: 16px;
   }
+}
+
+/* Parcéo Sillage: native logo variants and technical typography. */
+.brand-lockup .brand-logo-dark {
+  display: none;
+}
+:root[data-theme="dark"] .brand-logo-light {
+  display: none;
+}
+:root[data-theme="dark"] .brand-lockup .brand-logo-dark {
+  display: block;
+}
+code,
+pre,
+.token-prefix,
+.generated-token-field input {
+  font-family: "IBM Plex Mono", Consolas, monospace;
+}
+table,
+.fleet-stat,
+.stat-card {
+  font-variant-numeric: tabular-nums;
+}
+button:focus-visible,
+a:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select {
+  border-color: var(--control-line);
 }

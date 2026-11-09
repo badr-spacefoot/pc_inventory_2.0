@@ -35,7 +35,7 @@ describe("collector platform helpers", () => {
     expect(macosCommand).toContain('codesign --verify --deep --strict "$app" || exit 1');
     expect(macosCommand).toContain('spctl --assess --type execute "$app" || exit 1');
     expect(macosCommand).not.toContain("xattr");
-    expect(macosCommand).toContain("Application Spacefoot introuvable");
+    expect(macosCommand).toContain("Application Parcéo introuvable");
   });
 
   it("does not interpolate shell syntax or paths from release metadata", () => {

@@ -1,0 +1,11 @@
+{
+  "imagesLoaded": true,
+  "mobile": {
+    "viewport": 390,
+    "document": 390
+  },
+  "errors": [],
+  "external": [],
+  "renderer": "Chromium",
+  "nativeVectorArtwork": true
+}

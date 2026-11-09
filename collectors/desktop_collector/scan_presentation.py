@@ -8,9 +8,11 @@ import tkinter as tk
 
 try:
     from .support import as_float, compact_number, money_text, os_icon_name
+    from . import ui as theme
     from .ui import COLORS
 except ImportError:  # Supports direct execution and PyInstaller entry points.
     from support import as_float, compact_number, money_text, os_icon_name
+    import ui as theme
     from ui import COLORS
 
 
@@ -27,7 +29,7 @@ class ScanPresentationMixin:
             bg=COLORS["panel"],
             wraplength=320,
             justify="left",
-            font=("Segoe UI", 11, "bold" if accent else "normal"),
+            font=(theme.FONT_UI, 11, "bold" if accent else "normal"),
         ).grid(row=1, column=0, sticky="w", pady=(6, 0))
 
     def gb_unit(self) -> str:

@@ -4562,7 +4562,7 @@ function renderTeamOrganizationRow(team, index, canManageTeams) {
     <div class="organization-sort-row ${team.active ? "" : "is-inactive"}" draggable="${canManageTeams}" data-entity="team" data-id="${team.id}">
       ${canManageTeams ? `<button class="drag-handle" type="button" aria-label="Déplacer ${escapeHtml(team.name)}" title="Glisser pour réordonner">&#8942;&#8942;</button>` : ""}
       <button class="organization-item edit-team" type="button" data-id="${team.id}">
-        <span class="organization-icon" style="--item-color:${escapeHtml(team.color || "#16735f")}">${teamIcon(normalizeTeamInfo(team.name, team.abbreviation).iconType)}</span>
+        <span class="organization-icon" style="--item-color:${escapeHtml(team.color || "#0b6e58")}">${teamIcon(normalizeTeamInfo(team.name, team.abbreviation).iconType)}</span>
         <span>
           <strong>${escapeHtml(displayWithAbbreviation(team.name, team.abbreviation))}</strong>
           <small class="organization-meta">

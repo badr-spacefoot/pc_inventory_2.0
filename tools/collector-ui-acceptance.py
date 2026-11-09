@@ -96,7 +96,7 @@ app.after(100, start)
 app.after(8000, lambda: fail('Collector fixture timed out'))
 app.mainloop()
 result['callbackExceptions'] = app.callback_exception_count
-output = Path('docs/operations/2026-11-06-release/collector-ui.json')
+output = Path(os.environ.get('SPACEFOOT_COLLECTOR_ACCEPTANCE_OUTPUT', 'docs/operations/2026-11-06-release/collector-ui.json'))
 output.write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
 print(json.dumps(result))
 raise SystemExit(0 if result.get('passed') else 1)

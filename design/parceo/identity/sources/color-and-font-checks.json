@@ -1,0 +1,112 @@
+{
+  "contrastPairs": [
+    {
+      "usage": "Texte principal / blanc",
+      "foreground": "#142D27",
+      "background": "#FFFFFF",
+      "ratio": 14.64,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "usage": "Texte secondaire / blanc",
+      "foreground": "#53665D",
+      "background": "#FFFFFF",
+      "ratio": 6.13,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "usage": "Action blanche / vert",
+      "foreground": "#FFFFFF",
+      "background": "#0B6E58",
+      "ratio": 6.2,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "usage": "Lien vert / papier",
+      "foreground": "#0B6E58",
+      "background": "#F6F7F2",
+      "ratio": 5.76,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "usage": "Repère citron / vert",
+      "foreground": "#D6F279",
+      "background": "#0B6E58",
+      "ratio": 4.97,
+      "minimum": 3,
+      "pass": true
+    },
+    {
+      "usage": "Repère citron / encre",
+      "foreground": "#D6F279",
+      "background": "#142D27",
+      "ratio": 11.74,
+      "minimum": 3,
+      "pass": true
+    },
+    {
+      "usage": "Texte encre / citron",
+      "foreground": "#142D27",
+      "background": "#D6F279",
+      "ratio": 11.74,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "usage": "Bordure interactive / blanc",
+      "foreground": "#789184",
+      "background": "#FFFFFF",
+      "ratio": 3.4,
+      "minimum": 3,
+      "pass": true
+    },
+    {
+      "usage": "Succès / blanc",
+      "foreground": "#176B45",
+      "background": "#FFFFFF",
+      "ratio": 6.51,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "usage": "Réparation / blanc",
+      "foreground": "#855000",
+      "background": "#FFFFFF",
+      "ratio": 6.68,
+      "minimum": 4.5,
+      "pass": true
+    },
+    {
+      "usage": "Erreur / blanc",
+      "foreground": "#B42336",
+      "background": "#FFFFFF",
+      "ratio": 6.49,
+      "minimum": 4.5,
+      "pass": true
+    }
+  ],
+  "limeOnWhiteRatio": 1.25,
+  "limeUsage": "Background or accent on green/ink; never small text on white",
+  "fonts": [
+    {
+      "file": "IBMPlexMono-Regular.ttf",
+      "missingFrenchGlyphs": "",
+      "variableAxes": []
+    },
+    {
+      "file": "Manrope-Variable.ttf",
+      "missingFrenchGlyphs": "",
+      "variableAxes": [
+        {
+          "tag": "wght",
+          "minimum": 200.0,
+          "maximum": 800.0
+        }
+      ]
+    }
+  ]
+}

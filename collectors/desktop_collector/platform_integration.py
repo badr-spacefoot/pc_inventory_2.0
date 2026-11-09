@@ -33,8 +33,8 @@ def register_linux_url_scheme() -> None:
         [
             "[Desktop Entry]",
             "Type=Application",
-            "Name=Spacefoot IT Collector",
-            "Comment=Spacefoot hardware inventory collector",
+            "Name=Parcéo Collector",
+            "Comment=Parcéo hardware inventory collector",
             f"Exec={exec_line}",
             "Terminal=false",
             "Categories=Utility;",

@@ -1,0 +1,144 @@
+[
+ {
+  "file": "concept-a-v1.svg",
+  "bytes": 434,
+  "viewBox": [
+   0.0,
+   0.0,
+   256.0,
+   256.0
+  ],
+  "aspect": 1.0,
+  "aspect_class": "square",
+  "colors": [
+   "#111111"
+  ],
+  "gradients": 0,
+  "anchors": 19,
+  "library_anchor_percentiles": {
+   "p10": 21.0,
+   "p25": 31.0,
+   "median": 53.0,
+   "p75": 95.5,
+   "p90": 194.0,
+   "p95": 274.0
+  },
+  "content_bbox": [
+   40.0,
+   32.0,
+   216.0,
+   224.0
+  ],
+  "margins": {
+   "left": 40.0,
+   "right": 40.0,
+   "top": 32.0,
+   "bottom": 32.0
+  },
+  "bbox_fill_ratio": 0.516,
+  "score": 100,
+  "findings": []
+ },
+ {
+  "file": "concept-b-v1.svg",
+  "bytes": 505,
+  "viewBox": [
+   0.0,
+   0.0,
+   256.0,
+   256.0
+  ],
+  "aspect": 1.0,
+  "aspect_class": "square",
+  "colors": [
+   "#111111"
+  ],
+  "gradients": 0,
+  "anchors": 26,
+  "library_anchor_percentiles": {
+   "p10": 21.0,
+   "p25": 31.0,
+   "median": 53.0,
+   "p75": 95.5,
+   "p90": 194.0,
+   "p95": 274.0
+  },
+  "content_bbox": [
+   32.0,
+   32.0,
+   216.0,
+   224.0
+  ],
+  "margins": {
+   "left": 32.0,
+   "right": 40.0,
+   "top": 32.0,
+   "bottom": 32.0
+  },
+  "bbox_fill_ratio": 0.539,
+  "score": 99,
+  "findings": [
+   {
+    "level": "INFO",
+    "code": "off-centre-x",
+    "message": "Horizontal margins differ (left 32.0, right 40.0). Intentional optical centring? Otherwise centre it."
+   }
+  ]
+ },
+ {
+  "file": "concept-c-v1.svg",
+  "bytes": 522,
+  "viewBox": [
+   0.0,
+   0.0,
+   256.0,
+   256.0
+  ],
+  "aspect": 1.0,
+  "aspect_class": "square",
+  "colors": [
+   "#111111"
+  ],
+  "gradients": 0,
+  "anchors": 18,
+  "library_anchor_percentiles": {
+   "p10": 21.0,
+   "p25": 31.0,
+   "median": 53.0,
+   "p75": 95.5,
+   "p90": 194.0,
+   "p95": 274.0
+  },
+  "content_bbox": [
+   36.0,
+   -8.0,
+   224.0,
+   226.0
+  ],
+  "margins": {
+   "left": 36.0,
+   "right": 32.0,
+   "top": -8.0,
+   "bottom": 30.0
+  },
+  "bbox_fill_ratio": 0.671,
+  "score": 83,
+  "findings": [
+   {
+    "level": "WARN",
+    "code": "near-miss-angle",
+    "message": "1 straight edge(s) are 0.3–3° off a clean angle — they read as mistakes. Snap them: 43.9° (→45°) len 36.1 at (185,168). (Expected — and fine — for type set on a curve or deliberately rotated elements.)"
+   },
+   {
+    "level": "WARN",
+    "code": "overflow",
+    "message": "Artwork extends beyond the viewBox and will be clipped."
+   },
+   {
+    "level": "INFO",
+    "code": "off-centre-y",
+    "message": "Vertical margins differ (top -8.0, bottom 30.0). Remember the optical centre sits slightly above the geometric centre."
+   }
+  ]
+ }
+]

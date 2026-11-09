@@ -1,0 +1,1241 @@
+[
+ {
+  "file": "parceo-horizontal-black.svg",
+  "bytes": 4014,
+  "viewBox": [
+   0.0,
+   0.0,
+   623.0,
+   256.0
+  ],
+  "aspect": 2.434,
+  "aspect_class": "wide",
+  "colors": [
+   "#000000"
+  ],
+  "gradients": 0,
+  "anchors": 188,
+  "library_anchor_percentiles": {
+   "p10": 23.0,
+   "p25": 37.0,
+   "median": 75.0,
+   "p75": 155.0,
+   "p90": 257.8,
+   "p95": 379.45
+  },
+  "content_bbox": [
+   35.92,
+   30.96,
+   593.18,
+   191.68
+  ],
+  "margins": {
+   "left": 35.9,
+   "right": 29.8,
+   "top": 31.0,
+   "bottom": 64.3
+  },
+  "bbox_fill_ratio": 0.562,
+  "score": 98,
+  "findings": [
+   {
+    "level": "INFO",
+    "code": "complexity",
+    "message": "188 anchor points (library median 75.0, p75 155.0). Check every point earns its place."
+   },
+   {
+    "level": "INFO",
+    "code": "off-centre-y",
+    "message": "Vertical margins differ (top 31.0, bottom 64.3). Remember the optical centre sits slightly above the geometric centre."
+   }
+  ]
+ },
+ {
+  "file": "parceo-horizontal-color.svg",
+  "bytes": 4014,
+  "viewBox": [
+   0.0,
+   0.0,
+   623.0,
+   256.0
+  ],
+  "aspect": 2.434,
+  "aspect_class": "wide",
+  "colors": [
+   "#0b6e58",
+   "#142d27"
+  ],
+  "gradients": 0,
+  "anchors": 188,
+  "library_anchor_percentiles": {
+   "p10": 23.0,
+   "p25": 37.0,
+   "median": 75.0,
+   "p75": 155.0,
+   "p90": 257.8,
+   "p95": 379.45
+  },
+  "content_bbox": [
+   35.92,
+   30.96,
+   593.18,
+   191.68
+  ],
+  "margins": {
+   "left": 35.9,
+   "right": 29.8,
+   "top": 31.0,
+   "bottom": 64.3
+  },
+  "bbox_fill_ratio": 0.562,
+  "score": 98,
+  "findings": [
+   {
+    "level": "INFO",
+    "code": "complexity",
+    "message": "188 anchor points (library median 75.0, p75 155.0). Check every point earns its place."
+   },
+   {
+    "level": "INFO",
+    "code": "off-centre-y",
+    "message": "Vertical margins differ (top 31.0, bottom 64.3). Remember the optical centre sits slightly above the geometric centre."
+   }
+  ]
+ },
+ {
+  "file": "parceo-horizontal-dark.svg",
+  "bytes": 4124,
+  "viewBox": [
+   0.0,
+   0.0,
+   623.0,
+   256.0
+  ],
+  "aspect": 2.434,
+  "aspect_class": "wide",
+  "colors": [
+   "#ffffff"
+  ],
+  "gradients": 0,
+  "anchors": 188,
+  "library_anchor_percentiles": {
+   "p10": 23.0,
+   "p25": 37.0,
+   "median": 75.0,
+   "p75": 155.0,
+   "p90": 257.8,
+   "p95": 379.45
+  },
+  "content_bbox": [
+   36.37,
+   31.41,
+   593.18,
+   190.59
+  ],
+  "margins": {
+   "left": 36.4,
+   "right": 29.8,
+   "top": 31.4,
+   "bottom": 65.4
+  },
+  "bbox_fill_ratio": 0.556,
+  "score": 98,
+  "findings": [
+   {
+    "level": "INFO",
+    "code": "complexity",
+    "message": "188 anchor points (library median 75.0, p75 155.0). Check every point earns its place."
+   },
+   {
+    "level": "INFO",
+    "code": "off-centre-y",
+    "message": "Vertical margins differ (top 31.4, bottom 65.4). Remember the optical centre sits slightly above the geometric centre."
+   }
+  ]
+ },
+ {
+  "file": "parceo-horizontal-ink.svg",
+  "bytes": 4012,
+  "viewBox": [
+   0.0,
+   0.0,
+   623.0,
+   256.0
+  ],
+  "aspect": 2.434,
+  "aspect_class": "wide",
+  "colors": [
+   "#142d27"
+  ],
+  "gradients": 0,
+  "anchors": 188,
+  "library_anchor_percentiles": {
+   "p10": 23.0,
+   "p25": 37.0,
+   "median": 75.0,
+   "p75": 155.0,
+   "p90": 257.8,
+   "p95": 379.45
+  },
+  "content_bbox": [
+   35.92,
+   30.96,
+   593.18,
+   191.68
+  ],
+  "margins": {
+   "left": 35.9,
+   "right": 29.8,
+   "top": 31.0,
+   "bottom": 64.3
+  },
+  "bbox_fill_ratio": 0.562,
+  "score": 98,
+  "findings": [
+   {
+    "level": "INFO",
+    "code": "complexity",
+    "message": "188 anchor points (library median 75.0, p75 155.0). Check every point earns its place."
+   },
+   {
+    "level": "INFO",
+    "code": "off-centre-y",
+    "message": "Vertical margins differ (top 31.0, bottom 64.3). Remember the optical centre sits slightly above the geometric centre."
+   }
+  ]
+ },
+ {
+  "file": "parceo-horizontal-white.svg",
+  "bytes": 4125,
+  "viewBox": [
+   0.0,
+   0.0,
+   623.0,
+   256.0
+  ],
+  "aspect": 2.434,
+  "aspect_class": "wide",
+  "colors": [
+   "#ffffff"
+  ],
+  "gradients": 0,
+  "anchors": 188,
+  "library_anchor_percentiles": {
+   "p10": 23.0,
+   "p25": 37.0,
+   "median": 75.0,
+   "p75": 155.0,
+   "p90": 257.8,
+   "p95": 379.45
+  },
+  "content_bbox": [
+   36.37,
+   31.41,
+   593.18,
+   190.59
+  ],
+  "margins": {
+   "left": 36.4,
+   "right": 29.8,
+   "top": 31.4,
+   "bottom": 65.4
+  },
+  "bbox_fill_ratio": 0.556,
+  "score": 98,
+  "findings": [
+   {
+    "level": "INFO",
+    "code": "complexity",
+    "message": "188 anchor points (library median 75.0, p75 155.0). Check every point earns its place."
+   },
+   {
+    "level": "INFO",
+    "code": "off-centre-y",
+    "message": "Vertical margins differ (top 31.4, bottom 65.4). Remember the optical centre sits slightly above the geometric centre."
+   }
+  ]
+ },
+ {
+  "file": "parceo-stacked-black.svg",
+  "bytes": 4026,
+  "viewBox": [
+   0.0,
+   0.0,
+   560.0,
+   512.0
+  ],
+  "aspect": 1.094,
+  "aspect_class": "square",
+  "colors": [
+   "#000000"
+  ],
+  "gradients": 0,
+  "anchors": 188,
+  "library_anchor_percentiles": {
+   "p10": 21.0,
+   "p25": 31.0,
+   "median": 53.0,
+   "p75": 95.5,
+   "p90": 194.0,
+   "p95": 274.0
+  },
+  "content_bbox": [
+   65.6,
+   41.6,
+   494.58,
+   477.5
+  ],
+  "margins": {
+   "left": 65.6,
+   "right": 65.4,
+   "top": 41.6,
+   "bottom": 34.5
+  },
+  "bbox_fill_ratio": 0.652,
+  "score": 99,
+  "findings": [
+   {
+    "level": "INFO",
+    "code": "complexity",
+    "message": "188 anchor points (library median 53.0, p75 95.5). Check every point earns its place."
+   }
+  ]
+ },
+ {
+  "file": "parceo-stacked-color.svg",
+  "bytes": 4026,
+  "viewBox": [
+   0.0,
+   0.0,
+   560.0,
+   512.0
+  ],
+  "aspect": 1.094,
+  "aspect_class": "square",
+  "colors": [
+   "#0b6e58",
+   "#142d27"
+  ],
+  "gradients": 0,
+  "anchors": 188,
+  "library_anchor_percentiles": {
+   "p10": 21.0,
+   "p25": 31.0,
+   "median": 53.0,
+   "p75": 95.5,
+   "p90": 194.0,
+   "p95": 274.0
+  },
+  "content_bbox": [
+   65.6,
+   41.6,
+   494.58,
+   477.5
+  ],
+  "margins": {
+   "left": 65.6,
+   "right": 65.4,
+   "top": 41.6,
+   "bottom": 34.5
+  },
+  "bbox_fill_ratio": 0.652,
+  "score": 99,
+  "findings": [
+   {
+    "level": "INFO",
+    "code": "complexity",
+    "message": "188 anchor points (library median 53.0, p75 95.5). Check every point earns its place."
+   }
+  ]
+ },
+ {
+  "file": "parceo-stacked-dark.svg",
+  "bytes": 4136,
+  "viewBox": [
+   0.0,
+   0.0,
+   560.0,
+   512.0
+  ],
+  "aspect": 1.094,
+  "aspect_class": "square",
+  "colors": [
+   "#ffffff"
+  ],
+  "gradients": 0,
+  "anchors": 188,
+  "library_anchor_percentiles": {
+   "p10": 21.0,
+   "p25": 31.0,
+   "median": 53.0,
+   "p75": 95.5,
+   "p90": 194.0,
+   "p95": 274.0
+  },
+  "content_bbox": [
+   65.6,
+   42.26,
+   494.58,
+   477.5
+  ],
+  "margins": {
+   "left": 65.6,
+   "right": 65.4,
+   "top": 42.3,
+   "bottom": 34.5
+  },
+  "bbox_fill_ratio": 0.651,
+  "score": 99,
+  "findings": [
+   {
+    "level": "INFO",
+    "code": "complexity",
+    "message": "188 anchor points (library median 53.0, p75 95.5). Check every point earns its place."
+   }
+  ]
+ },
+ {
+  "file": "parceo-stacked-ink.svg",
+  "bytes": 4024,
+  "viewBox": [
+   0.0,
+   0.0,
+   560.0,
+   512.0
+  ],
+  "aspect": 1.094,
+  "aspect_class": "square",
+  "colors": [
+   "#142d27"
+  ],
+  "gradients": 0,
+  "anchors": 188,
+  "library_anchor_percentiles": {
+   "p10": 21.0,
+   "p25": 31.0,
+   "median": 53.0,
+   "p75": 95.5,
+   "p90": 194.0,
+   "p95": 274.0
+  },
+  "content_bbox": [
+   65.6,
+   41.6,
+   494.58,
+   477.5
+  ],
+  "margins": {
+   "left": 65.6,
+   "right": 65.4,
+   "top": 41.6,
+   "bottom": 34.5
+  },
+  "bbox_fill_ratio": 0.652,
+  "score": 99,
+  "findings": [
+   {
+    "level": "INFO",
+    "code": "complexity",
+    "message": "188 anchor points (library median 53.0, p75 95.5). Check every point earns its place."
+   }
+  ]
+ },
+ {
+  "file": "parceo-stacked-white.svg",
+  "bytes": 4137,
+  "viewBox": [
+   0.0,
+   0.0,
+   560.0,
+   512.0
+  ],
+  "aspect": 1.094,
+  "aspect_class": "square",
+  "colors": [
+   "#ffffff"
+  ],
+  "gradients": 0,
+  "anchors": 188,
+  "library_anchor_percentiles": {
+   "p10": 21.0,
+   "p25": 31.0,
+   "median": 53.0,
+   "p75": 95.5,
+   "p90": 194.0,
+   "p95": 274.0
+  },
+  "content_bbox": [
+   65.6,
+   42.26,
+   494.58,
+   477.5
+  ],
+  "margins": {
+   "left": 65.6,
+   "right": 65.4,
+   "top": 42.3,
+   "bottom": 34.5
+  },
+  "bbox_fill_ratio": 0.651,
+  "score": 99,
+  "findings": [
+   {
+    "level": "INFO",
+    "code": "complexity",
+    "message": "188 anchor points (library median 53.0, p75 95.5). Check every point earns its place."
+   }
+  ]
+ },
+ {
+  "file": "parceo-symbol-black.svg",
+  "bytes": 358,
+  "viewBox": [
+   0.0,
+   0.0,
+   256.0,
+   256.0
+  ],
+  "aspect": 1.0,
+  "aspect_class": "square",
+  "colors": [
+   "#000000"
+  ],
+  "gradients": 0,
+  "anchors": 15,
+  "library_anchor_percentiles": {
+   "p10": 21.0,
+   "p25": 31.0,
+   "median": 53.0,
+   "p75": 95.5,
+   "p90": 194.0,
+   "p95": 274.0
+  },
+  "content_bbox": [
+   46.0,
+   28.0,
+   210.0,
+   224.0
+  ],
+  "margins": {
+   "left": 46.0,
+   "right": 46.0,
+   "top": 28.0,
+   "bottom": 32.0
+  },
+  "bbox_fill_ratio": 0.49,
+  "score": 100,
+  "findings": []
+ },
+ {
+  "file": "parceo-symbol-color.svg",
+  "bytes": 358,
+  "viewBox": [
+   0.0,
+   0.0,
+   256.0,
+   256.0
+  ],
+  "aspect": 1.0,
+  "aspect_class": "square",
+  "colors": [
+   "#0b6e58"
+  ],
+  "gradients": 0,
+  "anchors": 15,
+  "library_anchor_percentiles": {
+   "p10": 21.0,
+   "p25": 31.0,
+   "median": 53.0,
+   "p75": 95.5,
+   "p90": 194.0,
+   "p95": 274.0
+  },
+  "content_bbox": [
+   46.0,
+   28.0,
+   210.0,
+   224.0
+  ],
+  "margins": {
+   "left": 46.0,
+   "right": 46.0,
+   "top": 28.0,
+   "bottom": 32.0
+  },
+  "bbox_fill_ratio": 0.49,
+  "score": 100,
+  "findings": []
+ },
+ {
+  "file": "parceo-symbol-dark.svg",
+  "bytes": 468,
+  "viewBox": [
+   0.0,
+   0.0,
+   256.0,
+   256.0
+  ],
+  "aspect": 1.0,
+  "aspect_class": "square",
+  "colors": [
+   "#ffffff"
+  ],
+  "gradients": 0,
+  "anchors": 15,
+  "library_anchor_percentiles": {
+   "p10": 21.0,
+   "p25": 31.0,
+   "median": 53.0,
+   "p75": 95.5,
+   "p90": 194.0,
+   "p95": 274.0
+  },
+  "content_bbox": [
+   46.55,
+   28.55,
+   209.45,
+   222.67
+  ],
+  "margins": {
+   "left": 46.5,
+   "right": 46.6,
+   "top": 28.6,
+   "bottom": 33.3
+  },
+  "bbox_fill_ratio": 0.483,
+  "score": 100,
+  "findings": []
+ },
+ {
+  "file": "parceo-symbol-ink.svg",
+  "bytes": 356,
+  "viewBox": [
+   0.0,
+   0.0,
+   256.0,
+   256.0
+  ],
+  "aspect": 1.0,
+  "aspect_class": "square",
+  "colors": [
+   "#142d27"
+  ],
+  "gradients": 0,
+  "anchors": 15,
+  "library_anchor_percentiles": {
+   "p10": 21.0,
+   "p25": 31.0,
+   "median": 53.0,
+   "p75": 95.5,
+   "p90": 194.0,
+   "p95": 274.0
+  },
+  "content_bbox": [
+   46.0,
+   28.0,
+   210.0,
+   224.0
+  ],
+  "margins": {
+   "left": 46.0,
+   "right": 46.0,
+   "top": 28.0,
+   "bottom": 32.0
+  },
+  "bbox_fill_ratio": 0.49,
+  "score": 100,
+  "findings": []
+ },
+ {
+  "file": "parceo-symbol-small.svg",
+  "bytes": 330,
+  "viewBox": [
+   0.0,
+   0.0,
+   16.0,
+   16.0
+  ],
+  "aspect": 1.0,
+  "aspect_class": "square",
+  "colors": [
+   "#0b6e58"
+  ],
+  "gradients": 0,
+  "anchors": 15,
+  "library_anchor_percentiles": {
+   "p10": 21.0,
+   "p25": 31.0,
+   "median": 53.0,
+   "p75": 95.5,
+   "p90": 194.0,
+   "p95": 274.0
+  },
+  "content_bbox": [
+   3.0,
+   2.0,
+   13.0,
+   14.0
+  ],
+  "margins": {
+   "left": 3.0,
+   "right": 3.0,
+   "top": 2.0,
+   "bottom": 2.0
+  },
+  "bbox_fill_ratio": 0.469,
+  "score": 100,
+  "findings": []
+ },
+ {
+  "file": "parceo-symbol-white.svg",
+  "bytes": 469,
+  "viewBox": [
+   0.0,
+   0.0,
+   256.0,
+   256.0
+  ],
+  "aspect": 1.0,
+  "aspect_class": "square",
+  "colors": [
+   "#ffffff"
+  ],
+  "gradients": 0,
+  "anchors": 15,
+  "library_anchor_percentiles": {
+   "p10": 21.0,
+   "p25": 31.0,
+   "median": 53.0,
+   "p75": 95.5,
+   "p90": 194.0,
+   "p95": 274.0
+  },
+  "content_bbox": [
+   46.55,
+   28.55,
+   209.45,
+   222.67
+  ],
+  "margins": {
+   "left": 46.5,
+   "right": 46.6,
+   "top": 28.6,
+   "bottom": 33.3
+  },
+  "bbox_fill_ratio": 0.483,
+  "score": 100,
+  "findings": []
+ },
+ {
+  "file": "parceo-wordmark-black.svg",
+  "bytes": 3770,
+  "viewBox": [
+   0.0,
+   0.0,
+   400.0,
+   160.0
+  ],
+  "aspect": 2.5,
+  "aspect_class": "wide",
+  "colors": [
+   "#000000"
+  ],
+  "gradients": 0,
+  "anchors": 173,
+  "library_anchor_percentiles": {
+   "p10": 23.0,
+   "p25": 37.0,
+   "median": 75.0,
+   "p75": 155.0,
+   "p90": 257.8,
+   "p95": 379.45
+  },
+  "content_bbox": [
+   28.0,
+   25.0,
+   371.18,
+   135.0
+  ],
+  "margins": {
+   "left": 28.0,
+   "right": 28.8,
+   "top": 25.0,
+   "bottom": 25.0
+  },
+  "bbox_fill_ratio": 0.59,
+  "score": 99,
+  "findings": [
+   {
+    "level": "INFO",
+    "code": "complexity",
+    "message": "173 anchor points (library median 75.0, p75 155.0). Check every point earns its place."
+   }
+  ]
+ },
+ {
+  "file": "parceo-wordmark-green.svg",
+  "bytes": 3770,
+  "viewBox": [
+   0.0,
+   0.0,
+   400.0,
+   160.0
+  ],
+  "aspect": 2.5,
+  "aspect_class": "wide",
+  "colors": [
+   "#0b6e58"
+  ],
+  "gradients": 0,
+  "anchors": 173,
+  "library_anchor_percentiles": {
+   "p10": 23.0,
+   "p25": 37.0,
+   "median": 75.0,
+   "p75": 155.0,
+   "p90": 257.8,
+   "p95": 379.45
+  },
+  "content_bbox": [
+   28.0,
+   25.0,
+   371.18,
+   135.0
+  ],
+  "margins": {
+   "left": 28.0,
+   "right": 28.8,
+   "top": 25.0,
+   "bottom": 25.0
+  },
+  "bbox_fill_ratio": 0.59,
+  "score": 99,
+  "findings": [
+   {
+    "level": "INFO",
+    "code": "complexity",
+    "message": "173 anchor points (library median 75.0, p75 155.0). Check every point earns its place."
+   }
+  ]
+ },
+ {
+  "file": "parceo-wordmark-ink.svg",
+  "bytes": 3768,
+  "viewBox": [
+   0.0,
+   0.0,
+   400.0,
+   160.0
+  ],
+  "aspect": 2.5,
+  "aspect_class": "wide",
+  "colors": [
+   "#142d27"
+  ],
+  "gradients": 0,
+  "anchors": 173,
+  "library_anchor_percentiles": {
+   "p10": 23.0,
+   "p25": 37.0,
+   "median": 75.0,
+   "p75": 155.0,
+   "p90": 257.8,
+   "p95": 379.45
+  },
+  "content_bbox": [
+   28.0,
+   25.0,
+   371.18,
+   135.0
+  ],
+  "margins": {
+   "left": 28.0,
+   "right": 28.8,
+   "top": 25.0,
+   "bottom": 25.0
+  },
+  "bbox_fill_ratio": 0.59,
+  "score": 99,
+  "findings": [
+   {
+    "level": "INFO",
+    "code": "complexity",
+    "message": "173 anchor points (library median 75.0, p75 155.0). Check every point earns its place."
+   }
+  ]
+ },
+ {
+  "file": "parceo-wordmark-white.svg",
+  "bytes": 3770,
+  "viewBox": [
+   0.0,
+   0.0,
+   400.0,
+   160.0
+  ],
+  "aspect": 2.5,
+  "aspect_class": "wide",
+  "colors": [
+   "#ffffff"
+  ],
+  "gradients": 0,
+  "anchors": 173,
+  "library_anchor_percentiles": {
+   "p10": 23.0,
+   "p25": 37.0,
+   "median": 75.0,
+   "p75": 155.0,
+   "p90": 257.8,
+   "p95": 379.45
+  },
+  "content_bbox": [
+   28.0,
+   25.0,
+   371.18,
+   135.0
+  ],
+  "margins": {
+   "left": 28.0,
+   "right": 28.8,
+   "top": 25.0,
+   "bottom": 25.0
+  },
+  "bbox_fill_ratio": 0.59,
+  "score": 99,
+  "findings": [
+   {
+    "level": "INFO",
+    "code": "complexity",
+    "message": "173 anchor points (library median 75.0, p75 155.0). Check every point earns its place."
+   }
+  ]
+ },
+ {
+  "file": "parceo-collector-horizontal-dark.svg",
+  "bytes": 7671,
+  "viewBox": [
+   0.0,
+   0.0,
+   623.0,
+   288.0
+  ],
+  "aspect": 2.163,
+  "aspect_class": "wide",
+  "colors": [
+   "#ffffff"
+  ],
+  "gradients": 0,
+  "anchors": 374,
+  "library_anchor_percentiles": {
+   "p10": 23.0,
+   "p25": 37.0,
+   "median": 75.0,
+   "p75": 155.0,
+   "p90": 257.8,
+   "p95": 379.45
+  },
+  "content_bbox": [
+   36.37,
+   31.41,
+   593.18,
+   238.48
+  ],
+  "margins": {
+   "left": 36.4,
+   "right": 29.8,
+   "top": 31.4,
+   "bottom": 49.5
+  },
+  "bbox_fill_ratio": 0.643,
+  "score": 99,
+  "findings": [
+   {
+    "level": "INFO",
+    "code": "complexity",
+    "message": "374 anchor points (library median 75.0, p75 155.0). Check every point earns its place."
+   }
+  ]
+ },
+ {
+  "file": "parceo-collector-horizontal.svg",
+  "bytes": 7548,
+  "viewBox": [
+   0.0,
+   0.0,
+   623.0,
+   288.0
+  ],
+  "aspect": 2.163,
+  "aspect_class": "wide",
+  "colors": [
+   "#0b6e58",
+   "#142d27"
+  ],
+  "gradients": 0,
+  "anchors": 374,
+  "library_anchor_percentiles": {
+   "p10": 23.0,
+   "p25": 37.0,
+   "median": 75.0,
+   "p75": 155.0,
+   "p90": 257.8,
+   "p95": 379.45
+  },
+  "content_bbox": [
+   35.92,
+   30.96,
+   593.18,
+   238.48
+  ],
+  "margins": {
+   "left": 35.9,
+   "right": 29.8,
+   "top": 31.0,
+   "bottom": 49.5
+  },
+  "bbox_fill_ratio": 0.645,
+  "score": 99,
+  "findings": [
+   {
+    "level": "INFO",
+    "code": "complexity",
+    "message": "374 anchor points (library median 75.0, p75 155.0). Check every point earns its place."
+   }
+  ]
+ },
+ {
+  "file": "parceo-collector-square.svg",
+  "bytes": 577,
+  "viewBox": [
+   0.0,
+   0.0,
+   256.0,
+   256.0
+  ],
+  "aspect": 1.0,
+  "aspect_class": "square",
+  "colors": [
+   "#0b6e58",
+   "#ffffff"
+  ],
+  "gradients": 0,
+  "anchors": 20,
+  "library_anchor_percentiles": {
+   "p10": 21.0,
+   "p25": 31.0,
+   "median": 53.0,
+   "p75": 95.5,
+   "p90": 194.0,
+   "p95": 274.0
+  },
+  "content_bbox": [
+   0.0,
+   0.0,
+   256.0,
+   256.0
+  ],
+  "margins": {
+   "left": 0.0,
+   "right": 0.0,
+   "top": 0.0,
+   "bottom": 0.0
+  },
+  "bbox_fill_ratio": 1.0,
+  "score": 99,
+  "findings": [
+   {
+    "level": "INFO",
+    "code": "on-tile",
+    "message": "White artwork on a full-canvas tile/container — fine for app icons and avatars; make sure a version without the tile exists for other uses."
+   }
+  ]
+ },
+ {
+  "file": "parceo-collector.svg",
+  "bytes": 562,
+  "viewBox": [
+   0.0,
+   0.0,
+   256.0,
+   256.0
+  ],
+  "aspect": 1.0,
+  "aspect_class": "square",
+  "colors": [
+   "#0b6e58",
+   "#ffffff"
+  ],
+  "gradients": 0,
+  "anchors": 24,
+  "library_anchor_percentiles": {
+   "p10": 21.0,
+   "p25": 31.0,
+   "median": 53.0,
+   "p75": 95.5,
+   "p90": 194.0,
+   "p95": 274.0
+  },
+  "content_bbox": [
+   0.0,
+   0.0,
+   256.0,
+   256.0
+  ],
+  "margins": {
+   "left": 0.0,
+   "right": 0.0,
+   "top": 0.0,
+   "bottom": 0.0
+  },
+  "bbox_fill_ratio": 1.0,
+  "score": 99,
+  "findings": [
+   {
+    "level": "INFO",
+    "code": "on-tile",
+    "message": "White artwork on a full-canvas tile/container — fine for app icons and avatars; make sure a version without the tile exists for other uses."
+   }
+  ]
+ },
+ {
+  "file": "app-icon.svg",
+  "bytes": 574,
+  "viewBox": [
+   0.0,
+   0.0,
+   256.0,
+   256.0
+  ],
+  "aspect": 1.0,
+  "aspect_class": "square",
+  "colors": [
+   "#0b6e58",
+   "#ffffff"
+  ],
+  "gradients": 0,
+  "anchors": 20,
+  "library_anchor_percentiles": {
+   "p10": 21.0,
+   "p25": 31.0,
+   "median": 53.0,
+   "p75": 95.5,
+   "p90": 194.0,
+   "p95": 274.0
+  },
+  "content_bbox": [
+   0.0,
+   0.0,
+   256.0,
+   256.0
+  ],
+  "margins": {
+   "left": 0.0,
+   "right": 0.0,
+   "top": 0.0,
+   "bottom": 0.0
+  },
+  "bbox_fill_ratio": 1.0,
+  "score": 99,
+  "findings": [
+   {
+    "level": "INFO",
+    "code": "on-tile",
+    "message": "White artwork on a full-canvas tile/container — fine for app icons and avatars; make sure a version without the tile exists for other uses."
+   }
+  ]
+ },
+ {
+  "file": "favicon.svg",
+  "bytes": 366,
+  "viewBox": [
+   0.0,
+   0.0,
+   16.0,
+   16.0
+  ],
+  "aspect": 1.0,
+  "aspect_class": "square",
+  "colors": [
+   "#0b6e58",
+   "#ffffff"
+  ],
+  "gradients": 0,
+  "anchors": 24,
+  "library_anchor_percentiles": {
+   "p10": 21.0,
+   "p25": 31.0,
+   "median": 53.0,
+   "p75": 95.5,
+   "p90": 194.0,
+   "p95": 274.0
+  },
+  "content_bbox": [
+   0.0,
+   0.0,
+   16.0,
+   16.0
+  ],
+  "margins": {
+   "left": 0.0,
+   "right": 0.0,
+   "top": 0.0,
+   "bottom": 0.0
+  },
+  "bbox_fill_ratio": 1.0,
+  "score": 99,
+  "findings": [
+   {
+    "level": "INFO",
+    "code": "on-tile",
+    "message": "White artwork on a full-canvas tile/container — fine for app icons and avatars; make sure a version without the tile exists for other uses."
+   }
+  ]
+ },
+ {
+  "file": "maskable-icon.svg",
+  "bytes": 571,
+  "viewBox": [
+   0.0,
+   0.0,
+   256.0,
+   256.0
+  ],
+  "aspect": 1.0,
+  "aspect_class": "square",
+  "colors": [
+   "#0b6e58",
+   "#ffffff"
+  ],
+  "gradients": 0,
+  "anchors": 20,
+  "library_anchor_percentiles": {
+   "p10": 21.0,
+   "p25": 31.0,
+   "median": 53.0,
+   "p75": 95.5,
+   "p90": 194.0,
+   "p95": 274.0
+  },
+  "content_bbox": [
+   0.0,
+   0.0,
+   256.0,
+   256.0
+  ],
+  "margins": {
+   "left": 0.0,
+   "right": 0.0,
+   "top": 0.0,
+   "bottom": 0.0
+  },
+  "bbox_fill_ratio": 1.0,
+  "score": 99,
+  "findings": [
+   {
+    "level": "INFO",
+    "code": "on-tile",
+    "message": "White artwork on a full-canvas tile/container — fine for app icons and avatars; make sure a version without the tile exists for other uses."
+   }
+  ]
+ }
+]

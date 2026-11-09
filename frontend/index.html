@@ -3,16 +3,34 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Spacefoot IT Inventory</title>
-    <link rel="icon" type="image/svg+xml" href="./assets/brand/favicon.svg" />
+    <title>Parcéo — Gestion du parc informatique</title>
+    <link rel="icon" type="image/svg+xml" href="./assets/brand/parceo/favicon.svg" />
+    <link rel="icon" href="./assets/brand/parceo/favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="apple-touch-icon" href="./assets/brand/parceo/apple-touch-icon.png" />
+    <link rel="manifest" href="./assets/brand/parceo/site.webmanifest" />
+    <meta name="theme-color" content="#0b6e58" />
     <script src="./theme-init.js"></script>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <header class="topbar">
       <div class="brand-title">
-        <a class="brand-lockup" href="./" aria-label="Spacefoot">
-          <img src="./assets/brand/spacefoot-logo.svg" alt="Spacefoot" />
+        <a class="brand-lockup" href="./" aria-label="Parcéo — Accueil">
+          <img
+            class="brand-logo-light"
+            src="./assets/brand/parceo/logo-light.svg"
+            alt="Parcéo"
+            width="623"
+            height="256"
+          />
+          <img
+            class="brand-logo-dark"
+            src="./assets/brand/parceo/logo-dark.svg"
+            alt=""
+            aria-hidden="true"
+            width="623"
+            height="256"
+          />
         </a>
         <div>
           <p class="eyebrow">Inventaire IT</p>
@@ -633,7 +651,7 @@
                 </label>
                 <label>
                   E-mail d’invitation
-                  <input name="email" type="email" placeholder="prénom.nom@spacefoot.com" />
+                  <input name="email" type="email" placeholder="prénom.nom@entreprise.fr" />
                 </label>
                 <label>
                   Poste à actualiser
@@ -1059,7 +1077,7 @@
                   </label>
                   <label class="color-field">
                     Couleur
-                    <input name="color" type="color" value="#16735f" />
+                    <input name="color" type="color" value="#0b6e58" />
                   </label>
                   <div class="color-tools">
                     <button id="reset-team-color" class="secondary" type="button">Couleur par défaut</button>

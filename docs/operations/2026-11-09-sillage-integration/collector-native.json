@@ -1,0 +1,10 @@
+{
+  "version": "0.1.54-dev",
+  "startupProbeExitCode": 0,
+  "exeSha256": "ecd9d66c83bca670403c78900b23609e64f3e2b4faeb0298b784b2602ba0cb10",
+  "signed": false,
+  "hardwareScanned": false,
+  "installed": false,
+  "bundledManrope": true,
+  "bundledPlexMono": true
+}

@@ -1,0 +1,476 @@
+{
+  "syntheticOnly": true,
+  "productionRequests": 0,
+  "errors": [],
+  "cspViolations": [],
+  "blockedExternalOrigins": [
+    "https://api.open-meteo.com"
+  ],
+  "views": [
+    {
+      "name": "collection",
+      "theme": "light",
+      "viewport": 1440,
+      "content": 1440,
+      "logo": [
+        {
+          "file": "./assets/brand/parceo/logo-light.svg",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "name": "collection",
+      "theme": "light",
+      "viewport": 390,
+      "content": 390,
+      "logo": [
+        {
+          "file": "./assets/brand/parceo/logo-light.svg",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "name": "collection",
+      "theme": "dark",
+      "viewport": 1440,
+      "content": 1440,
+      "logo": [
+        {
+          "file": "./assets/brand/parceo/logo-dark.svg",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "name": "collection",
+      "theme": "dark",
+      "viewport": 390,
+      "content": 390,
+      "logo": [
+        {
+          "file": "./assets/brand/parceo/logo-dark.svg",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "name": "fleet",
+      "theme": "light",
+      "viewport": 1440,
+      "content": 1440,
+      "logo": [
+        {
+          "file": "./assets/brand/parceo/logo-light.svg",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "name": "organization",
+      "theme": "light",
+      "viewport": 1440,
+      "content": 1440,
+      "logo": [
+        {
+          "file": "./assets/brand/parceo/logo-light.svg",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "name": "valuation",
+      "theme": "light",
+      "viewport": 1440,
+      "content": 1440,
+      "logo": [
+        {
+          "file": "./assets/brand/parceo/logo-light.svg",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "name": "access",
+      "theme": "light",
+      "viewport": 1440,
+      "content": 1440,
+      "logo": [
+        {
+          "file": "./assets/brand/parceo/logo-light.svg",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "name": "users",
+      "theme": "light",
+      "viewport": 1440,
+      "content": 1440,
+      "logo": [
+        {
+          "file": "./assets/brand/parceo/logo-light.svg",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "name": "pending",
+      "theme": "light",
+      "viewport": 1440,
+      "content": 1440,
+      "logo": [
+        {
+          "file": "./assets/brand/parceo/logo-light.svg",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "name": "notifications",
+      "theme": "light",
+      "viewport": 1440,
+      "content": 1440,
+      "logo": [
+        {
+          "file": "./assets/brand/parceo/logo-light.svg",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "name": "device-detail",
+      "theme": "light",
+      "viewport": 1440,
+      "content": 1440,
+      "logo": [
+        {
+          "file": "./assets/brand/parceo/logo-light.svg",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "name": "fleet",
+      "theme": "light",
+      "viewport": 390,
+      "content": 390,
+      "logo": [
+        {
+          "file": "./assets/brand/parceo/logo-light.svg",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "name": "valuation",
+      "theme": "light",
+      "viewport": 390,
+      "content": 390,
+      "logo": [
+        {
+          "file": "./assets/brand/parceo/logo-light.svg",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "name": "access",
+      "theme": "light",
+      "viewport": 390,
+      "content": 390,
+      "logo": [
+        {
+          "file": "./assets/brand/parceo/logo-light.svg",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "name": "fleet",
+      "theme": "dark",
+      "viewport": 1440,
+      "content": 1440,
+      "logo": [
+        {
+          "file": "./assets/brand/parceo/logo-dark.svg",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "name": "organization",
+      "theme": "dark",
+      "viewport": 1440,
+      "content": 1440,
+      "logo": [
+        {
+          "file": "./assets/brand/parceo/logo-dark.svg",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "name": "valuation",
+      "theme": "dark",
+      "viewport": 1440,
+      "content": 1440,
+      "logo": [
+        {
+          "file": "./assets/brand/parceo/logo-dark.svg",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "name": "access",
+      "theme": "dark",
+      "viewport": 1440,
+      "content": 1440,
+      "logo": [
+        {
+          "file": "./assets/brand/parceo/logo-dark.svg",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "name": "users",
+      "theme": "dark",
+      "viewport": 1440,
+      "content": 1440,
+      "logo": [
+        {
+          "file": "./assets/brand/parceo/logo-dark.svg",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "name": "pending",
+      "theme": "dark",
+      "viewport": 1440,
+      "content": 1440,
+      "logo": [
+        {
+          "file": "./assets/brand/parceo/logo-dark.svg",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "name": "notifications",
+      "theme": "dark",
+      "viewport": 1440,
+      "content": 1440,
+      "logo": [
+        {
+          "file": "./assets/brand/parceo/logo-dark.svg",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "name": "device-detail",
+      "theme": "dark",
+      "viewport": 1440,
+      "content": 1440,
+      "logo": [
+        {
+          "file": "./assets/brand/parceo/logo-dark.svg",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "name": "fleet",
+      "theme": "dark",
+      "viewport": 390,
+      "content": 390,
+      "logo": [
+        {
+          "file": "./assets/brand/parceo/logo-dark.svg",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "name": "valuation",
+      "theme": "dark",
+      "viewport": 390,
+      "content": 390,
+      "logo": [
+        {
+          "file": "./assets/brand/parceo/logo-dark.svg",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "name": "access",
+      "theme": "dark",
+      "viewport": 390,
+      "content": 390,
+      "logo": [
+        {
+          "file": "./assets/brand/parceo/logo-dark.svg",
+          "loaded": true
+        }
+      ]
+    }
+  ],
+  "contrasts": [
+    {
+      "name": "collection",
+      "theme": "light",
+      "ratio": 6.2
+    },
+    {
+      "name": "collection",
+      "theme": "light",
+      "ratio": 6.2
+    },
+    {
+      "name": "collection",
+      "theme": "dark",
+      "ratio": 11.74
+    },
+    {
+      "name": "collection",
+      "theme": "dark",
+      "ratio": 11.74
+    },
+    {
+      "name": "fleet",
+      "theme": "light",
+      "ratio": 6.2
+    },
+    {
+      "name": "organization",
+      "theme": "light",
+      "ratio": 6.2
+    },
+    {
+      "name": "valuation",
+      "theme": "light",
+      "ratio": 6.2
+    },
+    {
+      "name": "access",
+      "theme": "light",
+      "ratio": 6.2
+    },
+    {
+      "name": "users",
+      "theme": "light",
+      "ratio": 6.2
+    },
+    {
+      "name": "pending",
+      "theme": "light",
+      "ratio": 6.2
+    },
+    {
+      "name": "notifications",
+      "theme": "light",
+      "ratio": 6.2
+    },
+    {
+      "name": "device-detail",
+      "theme": "light",
+      "ratio": 6.2
+    },
+    {
+      "name": "fleet",
+      "theme": "light",
+      "ratio": 6.2
+    },
+    {
+      "name": "valuation",
+      "theme": "light",
+      "ratio": 6.2
+    },
+    {
+      "name": "access",
+      "theme": "light",
+      "ratio": 6.2
+    },
+    {
+      "name": "fleet",
+      "theme": "dark",
+      "ratio": 11.74
+    },
+    {
+      "name": "organization",
+      "theme": "dark",
+      "ratio": 11.74
+    },
+    {
+      "name": "valuation",
+      "theme": "dark",
+      "ratio": 11.74
+    },
+    {
+      "name": "access",
+      "theme": "dark",
+      "ratio": 11.74
+    },
+    {
+      "name": "users",
+      "theme": "dark",
+      "ratio": 11.74
+    },
+    {
+      "name": "pending",
+      "theme": "dark",
+      "ratio": 11.74
+    },
+    {
+      "name": "notifications",
+      "theme": "dark",
+      "ratio": 11.74
+    },
+    {
+      "name": "device-detail",
+      "theme": "dark",
+      "ratio": 11.74
+    },
+    {
+      "name": "fleet",
+      "theme": "dark",
+      "ratio": 11.74
+    },
+    {
+      "name": "valuation",
+      "theme": "dark",
+      "ratio": 11.74
+    },
+    {
+      "name": "access",
+      "theme": "dark",
+      "ratio": 11.74
+    }
+  ],
+  "fonts": [
+    {
+      "family": "Manrope",
+      "status": "loaded"
+    },
+    {
+      "family": "IBM Plex Mono",
+      "status": "loaded"
+    }
+  ],
+  "manifestRoots": [
+    {
+      "base": "https://parceo.piqa.fr/",
+      "start": "https://parceo.piqa.fr/"
+    },
+    {
+      "base": "https://example.test/pc_inventory_2.0/",
+      "start": "https://example.test/pc_inventory_2.0/"
+    }
+  ],
+  "passed": true
+}

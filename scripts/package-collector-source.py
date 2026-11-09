@@ -11,7 +11,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parent.parent
 MODULES = (
     "__init__", "collector_app", "config", "diagnostics", "platform_integration",
-    "prefill", "prefill_update", "scan_presentation", "support", "ui", "update_security",
+    "prefill", "prefill_update", "scan_presentation", "support", "ui", "update_security", "branding",
 )
 FILES = (
     "collectors/__init__.py",
@@ -19,6 +19,14 @@ FILES = (
     "scripts/collect-cross-platform.py",
     "collectors/osquery/spacefoot_inventory.sql",
     "frontend/assets/brand/app-icon.png",
+    "frontend/assets/brand/app-icon.ico",
+    "frontend/assets/brand/parceo/logo-light.png",
+    "frontend/assets/brand/parceo/logo-dark.png",
+    "frontend/assets/brand/parceo/fonts/Manrope-Regular.ttf",
+    "frontend/assets/brand/parceo/fonts/Manrope-Bold.ttf",
+    "frontend/assets/brand/parceo/fonts/Manrope-OFL.txt",
+    "frontend/assets/brand/parceo/fonts/IBMPlexMono-Regular.ttf",
+    "frontend/assets/brand/parceo/fonts/IBMPlexMono-OFL.txt",
     "docs/collector/source-distribution.md",
 )
 

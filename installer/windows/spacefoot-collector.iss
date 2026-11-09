@@ -6,13 +6,13 @@
 
 [Setup]
 AppId={{D8F2992B-38FA-4B9F-9D8D-9B63D71CBBF8}
-AppName=Spacefoot IT Collector
+AppName=Parcéo Collector
 AppVersion={#AppVersion}
-AppPublisher=Spacefoot IT
+AppPublisher=Piqa
 AppPublisherURL=https://github.com/badr-spacefoot/pc_inventory_2.0
 AppSupportURL=https://github.com/badr-spacefoot/pc_inventory_2.0/issues
 DefaultDirName={autopf}\Spacefoot IT Collector
-DefaultGroupName=Spacefoot IT Collector
+DefaultGroupName=Parcéo Collector
 DisableProgramGroupPage=yes
 OutputDir={#RepoRoot}dist\installer
 OutputBaseFilename=Spacefoot-IT-Collector-{#AppVersion}-Setup
@@ -33,11 +33,11 @@ Source: "{#RepoRoot}dist\spacefoot-it-collector-windows\*"; DestDir: "{app}"; Fl
 Source: "{#RepoRoot}installer-assets\osquery.msi"; DestDir: "{app}\dependencies"; DestName: "osquery.msi"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\Spacefoot IT Collector"; Filename: "{app}\spacefoot-it-collector-windows.exe"
-Name: "{autodesktop}\Spacefoot IT Collector"; Filename: "{app}\spacefoot-it-collector-windows.exe"; Tasks: desktopicon
+Name: "{group}\Parcéo Collector"; Filename: "{app}\spacefoot-it-collector-windows.exe"; AppUserModelID: "Piqa.Parceo.Collector"
+Name: "{autodesktop}\Parcéo Collector"; Filename: "{app}\spacefoot-it-collector-windows.exe"; AppUserModelID: "Piqa.Parceo.Collector"; Tasks: desktopicon
 
 [Registry]
-Root: HKCR; Subkey: "spacefoot-collector"; ValueType: string; ValueData: "URL:Spacefoot IT Collector"; Flags: uninsdeletekey
+Root: HKCR; Subkey: "spacefoot-collector"; ValueType: string; ValueData: "URL:Parcéo Collector"; Flags: uninsdeletekey
 Root: HKCR; Subkey: "spacefoot-collector"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
 Root: HKCR; Subkey: "spacefoot-collector\DefaultIcon"; ValueType: string; ValueData: "{app}\spacefoot-it-collector-windows.exe,0"
 Root: HKCR; Subkey: "spacefoot-collector\shell\open\command"; ValueType: string; ValueData: """{app}\spacefoot-it-collector-windows.exe"" ""%1"""

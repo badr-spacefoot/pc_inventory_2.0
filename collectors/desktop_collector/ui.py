@@ -3,39 +3,62 @@
 from __future__ import annotations
 
 import tkinter as tk
+from tkinter import font as tkfont
 
 
 DARK_COLORS = {
-    "bg": "#1d241f",
-    "panel": "#252d28",
-    "panel_2": "#2d3831",
-    "line": "#3c473f",
-    "text": "#edf4ee",
-    "muted": "#aab6ad",
-    "brand": "#1f8a70",
-    "brand_2": "#43c0a3",
-    "danger": "#ef4444",
-    "warning": "#eab308",
-    "success": "#22c55e",
-    "input": "#1a211d",
+    "bg": "#0f211c",
+    "panel": "#142d27",
+    "panel_2": "#213e32",
+    "line": "#789184",
+    "text": "#ffffff",
+    "muted": "#bdcdc4",
+    "brand": "#d6f279",
+    "brand_2": "#d6f279",
+    "brand_hover": "#e4faa0",
+    "secondary_hover": "#2b493c",
+    "on_brand": "#142d27",
+    "danger": "#fda4af",
+    "warning": "#e8c16a",
+    "success": "#8bd9a9",
+    "input": "#10251e",
 }
 
 LIGHT_COLORS = {
-    "bg": "#eef1ed",
+    "bg": "#f6f7f2",
     "panel": "#ffffff",
-    "panel_2": "#e4ebe5",
-    "line": "#cbd5ce",
-    "text": "#202a24",
-    "muted": "#5f6f66",
-    "brand": "#1f8a70",
-    "brand_2": "#087966",
-    "danger": "#dc2626",
-    "warning": "#b7791f",
-    "success": "#15803d",
-    "input": "#f7faf8",
+    "panel_2": "#eaf0e9",
+    "line": "#789184",
+    "text": "#142d27",
+    "muted": "#53665d",
+    "brand": "#0b6e58",
+    "brand_2": "#085440",
+    "brand_hover": "#085440",
+    "secondary_hover": "#dde8de",
+    "on_brand": "#ffffff",
+    "danger": "#b42336",
+    "warning": "#855000",
+    "success": "#176b45",
+    "input": "#ffffff",
 }
 
 COLORS = DARK_COLORS.copy()
+FONT_UI = "Segoe UI"
+FONT_MONO = "Consolas"
+
+
+def configure_fonts(root) -> dict[str, str]:
+    global FONT_UI, FONT_MONO
+    families = {name.casefold(): name for name in tkfont.families(root)}
+    def choose(candidates, named):
+        return next((families[name.casefold()] for name in candidates if name.casefold() in families),
+                    tkfont.nametofont(named, root=root).actual("family"))
+    FONT_UI = choose(("Manrope", "Segoe UI", "Helvetica", "DejaVu Sans"), "TkDefaultFont")
+    FONT_MONO = choose(("IBM Plex Mono", "Consolas", "Menlo", "DejaVu Sans Mono"), "TkFixedFont")
+    for name in ("TkDefaultFont", "TkTextFont", "TkMenuFont", "TkHeadingFont", "TkCaptionFont"):
+        tkfont.nametofont(name, root=root).configure(family=FONT_UI)
+    tkfont.nametofont("TkFixedFont", root=root).configure(family=FONT_MONO)
+    return {"interface": FONT_UI, "technical": FONT_MONO}
 
 
 def apply_palette(palette: dict[str, str]) -> None:
@@ -49,9 +72,9 @@ class ThemedButton(tk.Button):
         self.secondary = secondary
         self._state = "normal"
         self.normal_bg = COLORS["panel_2"] if secondary else COLORS["brand"]
-        self.hover_bg = COLORS["line"] if secondary else COLORS["brand_2"]
+        self.hover_bg = COLORS["secondary_hover"] if secondary else COLORS["brand_hover"]
         self.disabled_bg = COLORS["panel"]
-        self.normal_fg = COLORS["text"]
+        self.normal_fg = COLORS["text"] if secondary else COLORS["on_brand"]
         self.disabled_fg = COLORS["muted"]
         super().__init__(
             parent,
@@ -60,7 +83,7 @@ class ThemedButton(tk.Button):
             fg=self.normal_fg,
             padx=16,
             pady=9,
-            font=("Segoe UI", 10, "bold"),
+            font=(FONT_UI, 10, "bold"),
             cursor="hand2",
             borderwidth=0,
             highlightthickness=2,

@@ -7,6 +7,9 @@ export function normalizeTranslationKey(value: unknown): string {
 }
 
 export const englishTranslations = {
+  "Parcéo — Gestion du parc informatique": "Parcéo — IT asset management",
+  "Parcéo — Accueil": "Parcéo — Home",
+  "prénom.nom@entreprise.fr": "first.last@company.example",
   "Poste à actualiser": "Device to update",
   "Nouveau poste": "New device",
   "Pour actualiser un poste existant, sélectionnez-le et renseignez l’e-mail du destinataire.":

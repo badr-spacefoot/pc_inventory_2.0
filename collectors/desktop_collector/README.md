@@ -1,6 +1,8 @@
-# Spacefoot desktop collector
+# Parcéo Collector — Sillage
 
 Collecteur desktop transparent et packagable pour Windows, Linux et macOS.
+
+L’interface applique l’identité Sillage : logo adapté au thème, palette vert/encre/citron, Manrope et IBM Plex Mono chargées pour le processus. Les TTF et leurs licences sont inclus dans les paquets ; aucune installation globale de police n’est effectuée. Les anciens noms techniques de fichiers, le schéma d’URL et les identifiants d’application restent stables pour les postes déjà équipés.
 
 Objectif:
 

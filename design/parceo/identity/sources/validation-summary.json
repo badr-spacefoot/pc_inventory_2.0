@@ -1,0 +1,293 @@
+{
+  "brand": "Parcéo",
+  "version": "2.0",
+  "date": "2026-11-09",
+  "direction": "C — Sillage, selected by the user",
+  "approvedSymbolRasterMatchesFinalNormalSymbolExactly": true,
+  "vectorMastersAudited": 27,
+  "svgWarningsOrFailures": [],
+  "pngFilesDecodedAndVerified": 47,
+  "logoVariants": 20,
+  "colorPairChecksPassed": 11,
+  "fontFamiliesWithFrenchGlyphCoverageChecked": 2,
+  "faviconIcoSizes": [
+    16,
+    32,
+    48
+  ],
+  "collectorIcoSizes": [
+    16,
+    24,
+    32,
+    48,
+    64,
+    128,
+    256
+  ],
+  "collectorIcnsPixelSizes": [
+    16,
+    32,
+    64,
+    128,
+    256,
+    512,
+    1024
+  ],
+  "maskableIcon": {
+    "canvasPx": 512,
+    "maximumPaintedSymbolRadiusPx": 168.4,
+    "safeRadiusPx": 204.8,
+    "passed": true
+  },
+  "pdfPages": {
+    "guide-parceo.pdf": 3,
+    "parceo-identity.pdf": 1
+  },
+  "browser": {
+    "renderer": "Chromium via Playwright",
+    "generatedFromNativeSvg": true,
+    "externalRequests": [],
+    "uiErrors": [],
+    "boardFonts": [
+      {
+        "family": "Manrope",
+        "status": "loaded"
+      },
+      {
+        "family": "IBM Plex Mono",
+        "status": "loaded"
+      }
+    ],
+    "boardImagesLoaded": 9,
+    "mobile": {
+      "viewport": 390,
+      "content": 390
+    },
+    "outputs": [
+      {
+        "file": "web/favicon-16.png",
+        "width": 16,
+        "height": 16,
+        "source": "web/favicon.svg"
+      },
+      {
+        "file": "web/favicon-32.png",
+        "width": 32,
+        "height": 32,
+        "source": "web/favicon.svg"
+      },
+      {
+        "file": "web/favicon-48.png",
+        "width": 48,
+        "height": 48,
+        "source": "web/favicon.svg"
+      },
+      {
+        "file": "web/apple-touch-icon.png",
+        "width": 180,
+        "height": 180,
+        "source": "web/app-icon.svg"
+      },
+      {
+        "file": "web/icon-192.png",
+        "width": 192,
+        "height": 192,
+        "source": "web/app-icon.svg"
+      },
+      {
+        "file": "web/icon-512.png",
+        "width": 512,
+        "height": 512,
+        "source": "web/app-icon.svg"
+      },
+      {
+        "file": "web/maskable-512.png",
+        "width": 512,
+        "height": 512,
+        "source": "web/maskable-icon.svg"
+      },
+      {
+        "file": "collector/parceo-collector-16.png",
+        "width": 16,
+        "height": 16,
+        "source": "collector/parceo-collector.svg"
+      },
+      {
+        "file": "collector/parceo-collector-square-16.png",
+        "width": 16,
+        "height": 16,
+        "source": "collector/parceo-collector-square.svg"
+      },
+      {
+        "file": "collector/parceo-collector-24.png",
+        "width": 24,
+        "height": 24,
+        "source": "collector/parceo-collector.svg"
+      },
+      {
+        "file": "collector/parceo-collector-32.png",
+        "width": 32,
+        "height": 32,
+        "source": "collector/parceo-collector.svg"
+      },
+      {
+        "file": "collector/parceo-collector-square-32.png",
+        "width": 32,
+        "height": 32,
+        "source": "collector/parceo-collector-square.svg"
+      },
+      {
+        "file": "collector/parceo-collector-48.png",
+        "width": 48,
+        "height": 48,
+        "source": "collector/parceo-collector.svg"
+      },
+      {
+        "file": "collector/parceo-collector-square-48.png",
+        "width": 48,
+        "height": 48,
+        "source": "collector/parceo-collector-square.svg"
+      },
+      {
+        "file": "collector/parceo-collector-64.png",
+        "width": 64,
+        "height": 64,
+        "source": "collector/parceo-collector.svg"
+      },
+      {
+        "file": "collector/parceo-collector-square-64.png",
+        "width": 64,
+        "height": 64,
+        "source": "collector/parceo-collector-square.svg"
+      },
+      {
+        "file": "collector/parceo-collector-128.png",
+        "width": 128,
+        "height": 128,
+        "source": "collector/parceo-collector.svg"
+      },
+      {
+        "file": "collector/parceo-collector-square-128.png",
+        "width": 128,
+        "height": 128,
+        "source": "collector/parceo-collector-square.svg"
+      },
+      {
+        "file": "collector/parceo-collector-256.png",
+        "width": 256,
+        "height": 256,
+        "source": "collector/parceo-collector.svg"
+      },
+      {
+        "file": "collector/parceo-collector-square-256.png",
+        "width": 256,
+        "height": 256,
+        "source": "collector/parceo-collector-square.svg"
+      },
+      {
+        "file": "collector/parceo-collector-512.png",
+        "width": 512,
+        "height": 512,
+        "source": "collector/parceo-collector.svg"
+      },
+      {
+        "file": "collector/parceo-collector-square-512.png",
+        "width": 512,
+        "height": 512,
+        "source": "collector/parceo-collector-square.svg"
+      },
+      {
+        "file": "collector/parceo-collector-1024.png",
+        "width": 1024,
+        "height": 1024,
+        "source": "collector/parceo-collector.svg"
+      },
+      {
+        "file": "collector/parceo-collector-square-1024.png",
+        "width": 1024,
+        "height": 1024,
+        "source": "collector/parceo-collector-square.svg"
+      },
+      {
+        "file": "logos/png/parceo-horizontal-color-1246.png",
+        "width": 1246,
+        "height": 512,
+        "source": "logos/parceo-horizontal-color.svg"
+      },
+      {
+        "file": "logos/png/parceo-symbol-color-512.png",
+        "width": 512,
+        "height": 512,
+        "source": "logos/parceo-symbol-color.svg"
+      },
+      {
+        "file": "logos/png/parceo-horizontal-ink-1246.png",
+        "width": 1246,
+        "height": 512,
+        "source": "logos/parceo-horizontal-ink.svg"
+      },
+      {
+        "file": "logos/png/parceo-symbol-ink-512.png",
+        "width": 512,
+        "height": 512,
+        "source": "logos/parceo-symbol-ink.svg"
+      },
+      {
+        "file": "logos/png/parceo-horizontal-white-1246.png",
+        "width": 1246,
+        "height": 512,
+        "source": "logos/parceo-horizontal-white.svg"
+      },
+      {
+        "file": "logos/png/parceo-symbol-white-512.png",
+        "width": 512,
+        "height": 512,
+        "source": "logos/parceo-symbol-white.svg"
+      },
+      {
+        "file": "logos/png/parceo-horizontal-dark-1246.png",
+        "width": 1246,
+        "height": 512,
+        "source": "logos/parceo-horizontal-dark.svg"
+      },
+      {
+        "file": "logos/png/parceo-symbol-dark-512.png",
+        "width": 512,
+        "height": 512,
+        "source": "logos/parceo-symbol-dark.svg"
+      },
+      {
+        "file": "logos/png/parceo-horizontal-black-1246.png",
+        "width": 1246,
+        "height": 512,
+        "source": "logos/parceo-horizontal-black.svg"
+      },
+      {
+        "file": "logos/png/parceo-symbol-black-512.png",
+        "width": 512,
+        "height": 512,
+        "source": "logos/parceo-symbol-black.svg"
+      },
+      {
+        "file": "logos/png/parceo-stacked-color-1120.png",
+        "width": 1120,
+        "height": 1024,
+        "source": "logos/parceo-stacked-color.svg"
+      }
+    ]
+  },
+  "visualInspection": [
+    "Color identity board, desktop",
+    "Native collector icon and 16px favicon",
+    "Updated symbol size/reverse/mirror tests",
+    "Print guide layouts",
+    "Six-context presentation board"
+  ],
+  "nativeOperatingSystemAcceptanceTested": false,
+  "printProofPerformed": false,
+  "trademarkClearancePerformed": false,
+  "firstKitArchiveSha256": "c6ca0c10456dedf5f943dae5e5cbe138126e6c914ee9479f69b2dcae121ca411",
+  "applicationChanged": false,
+  "productionChanged": false,
+  "dnsChanged": false
+}

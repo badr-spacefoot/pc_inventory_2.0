@@ -1,0 +1,532 @@
+{
+  "brand": "Parcéo",
+  "version": "2.0",
+  "date": "2026-11-09",
+  "files": [
+    {
+      "file": "build-identity.py",
+      "bytes": 12327,
+      "sha256": "86c46773a5cb4847be370ff30790a8d7d21ee90111e74bcb265816fa0c8ef6ea"
+    },
+    {
+      "file": "collector/parceo-collector-1024.png",
+      "bytes": 27604,
+      "sha256": "12b2d5eb3174bde936bd6698ab853dd3a4c0c984fbceb5cf794e90a56a253087"
+    },
+    {
+      "file": "collector/parceo-collector-128.png",
+      "bytes": 2963,
+      "sha256": "9ffabd95cb2c5624d987e2249fdc4d44a7ecfb32cbd0bd247126a8c54dc409fa"
+    },
+    {
+      "file": "collector/parceo-collector-16.png",
+      "bytes": 502,
+      "sha256": "faca5caed011e31627676d162c9852e525f243b108929921049efa7f8f6016bd"
+    },
+    {
+      "file": "collector/parceo-collector-24.png",
+      "bytes": 726,
+      "sha256": "757cfc0fd9dd7c9f5cf190cbe76f17294912ef7f82606e2b32c1b02c40e5adee"
+    },
+    {
+      "file": "collector/parceo-collector-256.png",
+      "bytes": 6056,
+      "sha256": "420b4b3e9a685b646c4a78661c811f457b27cf37a931494e02b725774813b2e6"
+    },
+    {
+      "file": "collector/parceo-collector-32.png",
+      "bytes": 885,
+      "sha256": "e253d9af1bf6e7e42ae9643b8bcc1d5ba2982028485df10b3e7ad390c0d818c6"
+    },
+    {
+      "file": "collector/parceo-collector-48.png",
+      "bytes": 1207,
+      "sha256": "756286d6d2cb0d17ef1f06d0e14f790ba76fe2648ce9186578abcdc56d768763"
+    },
+    {
+      "file": "collector/parceo-collector-512.png",
+      "bytes": 12568,
+      "sha256": "2165ad050c5384922af8e1e5c4dd1ec506cd053290ae0c88a073b673814ac2c8"
+    },
+    {
+      "file": "collector/parceo-collector-64.png",
+      "bytes": 1595,
+      "sha256": "47d0870fdf04bd84e38fe1b6d71ad8512e7c32a9f1c31715f4058868b5a52340"
+    },
+    {
+      "file": "collector/parceo-collector-horizontal-dark.svg",
+      "bytes": 7671,
+      "sha256": "c7741358819c409ddcf9f7be841d26ee42a2941689a2e4328525a9b8c0d21a49"
+    },
+    {
+      "file": "collector/parceo-collector-horizontal.svg",
+      "bytes": 7548,
+      "sha256": "75b9b56b9b07057ed2f72951869b5af7027587626932f9697c322e9ccf207033"
+    },
+    {
+      "file": "collector/parceo-collector-square-1024.png",
+      "bytes": 16331,
+      "sha256": "ebcfbd49ee4dd8e999cc40a75f62bb417f945e9c4a636d71efd8f8b1b1660186"
+    },
+    {
+      "file": "collector/parceo-collector-square-128.png",
+      "bytes": 1806,
+      "sha256": "0920c2a3ae0c87dd8b0dceffc3967f8addfded1f6ce8f05d3c36b85236db7f7c"
+    },
+    {
+      "file": "collector/parceo-collector-square-16.png",
+      "bytes": 388,
+      "sha256": "b803143453c33b35800d7b6aff5c164929f2e5e12eec30335c7a5ce56032c456"
+    },
+    {
+      "file": "collector/parceo-collector-square-256.png",
+      "bytes": 3565,
+      "sha256": "8f82c84220e743e7f0db322446954a74ac90b45135738f129e69cca06dff99f1"
+    },
+    {
+      "file": "collector/parceo-collector-square-32.png",
+      "bytes": 615,
+      "sha256": "465ee557f3ebbf434882e287da3fbe6b76f51e1bd29b25839111ea8dc041f271"
+    },
+    {
+      "file": "collector/parceo-collector-square-48.png",
+      "bytes": 816,
+      "sha256": "4020e77dd206659cc197e9a9e5680cfb571efe1b307d871123cec22e707b8fb2"
+    },
+    {
+      "file": "collector/parceo-collector-square-512.png",
+      "bytes": 7487,
+      "sha256": "08c9a106dbab519f0576bf597a88335904fa58aba2b4ee55355247fb18a01d3b"
+    },
+    {
+      "file": "collector/parceo-collector-square-64.png",
+      "bytes": 1022,
+      "sha256": "06b3540da1b8675d9b819c944d7538efa0147375ca3b3cd289e89a7bbaa75596"
+    },
+    {
+      "file": "collector/parceo-collector-square.svg",
+      "bytes": 577,
+      "sha256": "0c625ca36bbfb0b4a7d9922a5faab38faaae4cfac01c012d090d0c560442270b"
+    },
+    {
+      "file": "collector/parceo-collector.icns",
+      "bytes": 31278,
+      "sha256": "018126f123f71df1636d50790f7ce88bbecdd79a0809fc3a198a9ec964bd1db3"
+    },
+    {
+      "file": "collector/parceo-collector.ico",
+      "bytes": 14052,
+      "sha256": "7c3cd58f2fb688a9ca1f60c4ba470ee616a2a5fb17c8760ac4146ae1db062aeb"
+    },
+    {
+      "file": "collector/parceo-collector.svg",
+      "bytes": 562,
+      "sha256": "502460f063f7dd84c51fe8970acf8f0e8d72e23c80bb8cf343adcc3368d4bd25"
+    },
+    {
+      "file": "fonts/IBMPlexMono-OFL.txt",
+      "bytes": 4456,
+      "sha256": "7e6b2818edbd8f6a01ae80641cc8f16a51080d08fb4e532be3a0b6f74adb07da"
+    },
+    {
+      "file": "fonts/IBMPlexMono-Regular.ttf",
+      "bytes": 135580,
+      "sha256": "6a3412f058c7d8dfd9170c41e85ade48e5156ecb89356110ca57a0a27734af46"
+    },
+    {
+      "file": "fonts/Manrope-OFL.txt",
+      "bytes": 4387,
+      "sha256": "58172e0c0fac2cda8a37b348164bb55e44b0e69051e557e92b1d3f6910141f7b"
+    },
+    {
+      "file": "fonts/Manrope-Variable.ttf",
+      "bytes": 164700,
+      "sha256": "3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6"
+    },
+    {
+      "file": "fonts/sources.json",
+      "bytes": 1408,
+      "sha256": "8441304ed731040ccbea174b29a4d5bd0f9c6ce67921e41d36b99c9b83637dbd"
+    },
+    {
+      "file": "guide-parceo.pdf",
+      "bytes": 255553,
+      "sha256": "b6c21a6d1fc8e61902eed1edd5c89149a12e1577b1a2bccde6028057940c67f8"
+    },
+    {
+      "file": "guide.html",
+      "bytes": 9625,
+      "sha256": "5a5076c9a874dad4a75ad561a2a13661147f04662fcd9ebbcce49a067d307d9d"
+    },
+    {
+      "file": "logos/parceo-horizontal-black.svg",
+      "bytes": 4014,
+      "sha256": "fa50b575a598d93008884c3cc73f59b93ba75586b0779c5fee7b6cd435328bd8"
+    },
+    {
+      "file": "logos/parceo-horizontal-color.svg",
+      "bytes": 4014,
+      "sha256": "d9c6ea786b832324fcea4fd9421c1c42897697b06c7787e9c0c8ae2259555181"
+    },
+    {
+      "file": "logos/parceo-horizontal-dark.svg",
+      "bytes": 4124,
+      "sha256": "1a47083ca26039652640a2c28cb0b0e8728326b8be5294d124f69b9510c2dfad"
+    },
+    {
+      "file": "logos/parceo-horizontal-ink.svg",
+      "bytes": 4012,
+      "sha256": "0a8db182dd8aa2cde76aaace43934cc1d8cc379570acd39e0a363556c92abcea"
+    },
+    {
+      "file": "logos/parceo-horizontal-white.svg",
+      "bytes": 4125,
+      "sha256": "ba25571b56757dadf31dbb19d952341da567036678886f0e429122abbf665320"
+    },
+    {
+      "file": "logos/parceo-stacked-black.svg",
+      "bytes": 4026,
+      "sha256": "1f33b4d07887f6452b3fb825ee0f7af381cbd1a99bf78bf221289e4c38e4e4f4"
+    },
+    {
+      "file": "logos/parceo-stacked-color.svg",
+      "bytes": 4026,
+      "sha256": "52d1dc446de0c0cd1a612085491c4c0b465c56980449a8594f25068bd7fcdb58"
+    },
+    {
+      "file": "logos/parceo-stacked-dark.svg",
+      "bytes": 4136,
+      "sha256": "be61df0d4303d2b224c61c1aa0d4d1273ebda07d655ab7ead75db0f3b3451790"
+    },
+    {
+      "file": "logos/parceo-stacked-ink.svg",
+      "bytes": 4024,
+      "sha256": "201009f31fa700ba24b1ce6df24c7db2464014c2b2bd7a6dac0efa306900d5ea"
+    },
+    {
+      "file": "logos/parceo-stacked-white.svg",
+      "bytes": 4137,
+      "sha256": "ddf3f5473f86460aa5ed00106dc56e8e8dac78fd20c479c3075c92e2b8b14d19"
+    },
+    {
+      "file": "logos/parceo-symbol-black.svg",
+      "bytes": 358,
+      "sha256": "0718bb250f0cc9a8cdd16cc02aeeb81f60e055fac7698ae138311140f2de2e37"
+    },
+    {
+      "file": "logos/parceo-symbol-color.svg",
+      "bytes": 358,
+      "sha256": "400dfef961728e2892ab8c8353295abd599f1b0baf174823d5f2f9c411a9c896"
+    },
+    {
+      "file": "logos/parceo-symbol-dark.svg",
+      "bytes": 468,
+      "sha256": "04ab16dece7ec244deee67877670c0288cb29d4f69453825e0efcf996b0107dd"
+    },
+    {
+      "file": "logos/parceo-symbol-ink.svg",
+      "bytes": 356,
+      "sha256": "3c5a037b3b54d54ecd1a15a74892f6935648751ca3e0220feb796f5ed5138ac1"
+    },
+    {
+      "file": "logos/parceo-symbol-small.svg",
+      "bytes": 330,
+      "sha256": "b0da5a8d32051465db30b14aafb65fb93a9cee5f3432843a6adf20bf6dc09dde"
+    },
+    {
+      "file": "logos/parceo-symbol-white.svg",
+      "bytes": 469,
+      "sha256": "c7c92e5167b3008c48386dfe4396caca9610e28ecbf09b7f8a68debd34f09432"
+    },
+    {
+      "file": "logos/parceo-wordmark-black.svg",
+      "bytes": 3770,
+      "sha256": "a6ade478b7280b4e7724db0e9a382843ef7436e67eb7884570d06569e7be72c0"
+    },
+    {
+      "file": "logos/parceo-wordmark-green.svg",
+      "bytes": 3770,
+      "sha256": "1f1e3227c843e6b342ef33b67e66b6746805015cb79acf79af3623fed9d62106"
+    },
+    {
+      "file": "logos/parceo-wordmark-ink.svg",
+      "bytes": 3768,
+      "sha256": "2bb80b6e900a4522329c9b8c16665c68a0952683075847a931af07846e973012"
+    },
+    {
+      "file": "logos/parceo-wordmark-white.svg",
+      "bytes": 3770,
+      "sha256": "61eb716a827caf83000f8ee7aa15057e1bffce0cf2e1202010cf48d8d718cf0f"
+    },
+    {
+      "file": "logos/png/parceo-horizontal-black-1246.png",
+      "bytes": 20373,
+      "sha256": "0afe710b8f9c02029ea86d14a2feffd6a62875dcc52e67ffb3d6ee202eed1893"
+    },
+    {
+      "file": "logos/png/parceo-horizontal-color-1246.png",
+      "bytes": 29998,
+      "sha256": "08ab168a8be26dac0c7bbe2c5133b17e4d0861c88e170583df8fbeea0a53d03c"
+    },
+    {
+      "file": "logos/png/parceo-horizontal-dark-1246.png",
+      "bytes": 22235,
+      "sha256": "80570fcb9da25a039c42091e6e89e9264d580346e5c9f74afbc022cdeea9579a"
+    },
+    {
+      "file": "logos/png/parceo-horizontal-ink-1246.png",
+      "bytes": 29576,
+      "sha256": "66d28eaa56311840b7abba9fd43842e1c64e17c789123e09149aa7c8fb900ccf"
+    },
+    {
+      "file": "logos/png/parceo-horizontal-white-1246.png",
+      "bytes": 22235,
+      "sha256": "80570fcb9da25a039c42091e6e89e9264d580346e5c9f74afbc022cdeea9579a"
+    },
+    {
+      "file": "logos/png/parceo-stacked-color-1120.png",
+      "bytes": 40267,
+      "sha256": "438eba4fc3a70c164b4e529f076d4791b32033bfacb1703275f2974712dea940"
+    },
+    {
+      "file": "logos/png/parceo-symbol-black-512.png",
+      "bytes": 6879,
+      "sha256": "97d4b4813eca5d785e21ea247d052a2af6e09ba693de55f51c79e2fc347e1788"
+    },
+    {
+      "file": "logos/png/parceo-symbol-color-512.png",
+      "bytes": 9120,
+      "sha256": "d4bad7ced9febfae755fd8ee940f3c8930d06ec16cce3dece2e2407d54abf699"
+    },
+    {
+      "file": "logos/png/parceo-symbol-dark-512.png",
+      "bytes": 7131,
+      "sha256": "9e6a458950874f213943d08b8a1c771bd28a1127b1ad6ab205d173d51179aa80"
+    },
+    {
+      "file": "logos/png/parceo-symbol-ink-512.png",
+      "bytes": 9112,
+      "sha256": "e997773d38a81807e39e10b15f6857701338e57dcff70c34c7c11e75ad5988b7"
+    },
+    {
+      "file": "logos/png/parceo-symbol-white-512.png",
+      "bytes": 7131,
+      "sha256": "9e6a458950874f213943d08b8a1c771bd28a1127b1ad6ab205d173d51179aa80"
+    },
+    {
+      "file": "package-identity.py",
+      "bytes": 4465,
+      "sha256": "8dfa099a6645a258ac62b3b69d14f375f3e83fa4220acdc9425f89e4ed88b7d3"
+    },
+    {
+      "file": "parceo-tokens.css",
+      "bytes": 1671,
+      "sha256": "70874de9e4c7308d29c5dfaf091651867ffb9079f7af9ddb313ffd03010cc670"
+    },
+    {
+      "file": "previews/approved-symbol-reference.png",
+      "bytes": 9120,
+      "sha256": "d4bad7ced9febfae755fd8ee940f3c8930d06ec16cce3dece2e2407d54abf699"
+    },
+    {
+      "file": "previews/guide-page-01.png",
+      "bytes": 94854,
+      "sha256": "3bb1b78038fb41710609e342169706a0d9f14f27846d04669a376c5a1305926b"
+    },
+    {
+      "file": "previews/guide-page-02.png",
+      "bytes": 101247,
+      "sha256": "1cd87a140d0ce122b0a7f7cec89604d233937691ab31d3a4bc81c9a63426fb0e"
+    },
+    {
+      "file": "previews/guide-page-03.png",
+      "bytes": 117115,
+      "sha256": "a55f68572b65e7646fdc0469ade944fff8394d573f324280e9cea5e6c0abb4bb"
+    },
+    {
+      "file": "previews/identity-board.html",
+      "bytes": 12768,
+      "sha256": "f191cb96d1f24622bc0aac4e559a941cd9670a2083b50e1cb8dc7c4d823e97e7"
+    },
+    {
+      "file": "previews/logo-tests.html",
+      "bytes": 180501,
+      "sha256": "eb3fa23aa33e8582ddd5d900c4c0b1e0ee88001c52eacf09cac0636cf09ae4cf"
+    },
+    {
+      "file": "previews/logo-tests.png",
+      "bytes": 453914,
+      "sha256": "625b94e4a21c23ec49429c2fa6027520cc343f57a50a40cc17a21c0f7e0474ea"
+    },
+    {
+      "file": "previews/parceo-identity-mobile.png",
+      "bytes": 179117,
+      "sha256": "e03dcd7b0cc606fc59db7b45276c421b951fcd10985227baa8c4a33e52d2d95f"
+    },
+    {
+      "file": "previews/parceo-identity.pdf",
+      "bytes": 295028,
+      "sha256": "681e4d3b4ab8e9ac59a8ef8d4912a3dbc49f7b9bbf91c9a99526cb09b22e6bfd"
+    },
+    {
+      "file": "previews/parceo-identity.png",
+      "bytes": 198537,
+      "sha256": "fb0a089b28230404abec81813fbb951127e96fb481660d7fdd746caa45ab4323"
+    },
+    {
+      "file": "previews/presentation-spec.json",
+      "bytes": 1892,
+      "sha256": "235a41f35352893f339d95c32e1b45ecc4a96d38c2c1c70bbfb3c63e6d5ea4e3"
+    },
+    {
+      "file": "previews/skill-presentation.html",
+      "bytes": 52435,
+      "sha256": "6f0c4c0b0f189963ab9ecec50bfc47ea9236ac8b167a40afd0d10f5c14ec9090"
+    },
+    {
+      "file": "previews/skill-slides/slide-01.png",
+      "bytes": 26390,
+      "sha256": "f940d24aad6a17ed1443c58d8ba4355eb1b9988bc9158c592c2b7173d58a3ca9"
+    },
+    {
+      "file": "previews/skill-slides/slide-02.png",
+      "bytes": 23619,
+      "sha256": "5bc9fb2140956029724c8afc7b35aa5806913728d280fd6e533d9bfe543a83c8"
+    },
+    {
+      "file": "previews/skill-slides/slide-03.png",
+      "bytes": 40767,
+      "sha256": "0f026648d02228bf6e79e8247e645318f4c60b4f4eac1d1a3ad0c9984607a683"
+    },
+    {
+      "file": "previews/skill-slides/slide-04.png",
+      "bytes": 80626,
+      "sha256": "94be82d7e67024f8e2152dcf7351fb5b3564610241a9b12ea6316b96d593ae88"
+    },
+    {
+      "file": "previews/skill-slides/slide-05.png",
+      "bytes": 26416,
+      "sha256": "8846d66a2614bdaf44255a071edd975b6b38fe04e813185c2dc0d9da02ee737a"
+    },
+    {
+      "file": "README.md",
+      "bytes": 12017,
+      "sha256": "3a5ed8203153127defec4c39fe7bcbdfec2f722f086f2e2e413fe3837e994bd0"
+    },
+    {
+      "file": "render-assets.mjs",
+      "bytes": 5988,
+      "sha256": "301c05b2f8ea5622f7c53e8538ceef96fbf53dc03dd1be4771d342753102f301"
+    },
+    {
+      "file": "sources/color-and-font-checks.json",
+      "bytes": 2415,
+      "sha256": "9902fcc70d4c33ba389851ca14360381b5188b94003cc1e420d87cd9e1cacaed"
+    },
+    {
+      "file": "sources/icon-container-checks.json",
+      "bytes": 358,
+      "sha256": "f58b2c5689ceab94f9f48f1541610822b09f8fc0f7e42b48b9011857522d87fe"
+    },
+    {
+      "file": "sources/render-checks.json",
+      "bytes": 5755,
+      "sha256": "0bb6410fe2138584a892f8c139a914202d9b42165b9f8df6cda5eb6b52b54c10"
+    },
+    {
+      "file": "sources/sillage-approved.svg",
+      "bytes": 402,
+      "sha256": "0613f57c19fced9b281041be8dcadf3a2d63f2fd07a7244974209dac41ef73c8"
+    },
+    {
+      "file": "sources/svg-audit.json",
+      "bytes": 21677,
+      "sha256": "9710162850b3ac7208302184d3e546c03e3b7bd1ab41d57cccb9961513749ab4"
+    },
+    {
+      "file": "sources/validation-summary.json",
+      "bytes": 7884,
+      "sha256": "27b3a72cba633d830488405a199a8b6a91bc39b1ea6e92edc3d5cf0da2685219"
+    },
+    {
+      "file": "sources/wordmark-original.svg",
+      "bytes": 4279,
+      "sha256": "c968a6765a9216875ccc15052eff1f0e0655fe348e5b01251ae92e15c773d15e"
+    },
+    {
+      "file": "tokens.json",
+      "bytes": 801,
+      "sha256": "f6b48e0e8acbba8b555f89bb613b826db2f6a8168735167c7bef0f6fe7428f08"
+    },
+    {
+      "file": "verify-identity.py",
+      "bytes": 4689,
+      "sha256": "5682f7b3051a68906e938440926d41cc1dfa71926857ea92f29b0f7fd5e5a978"
+    },
+    {
+      "file": "web/app-icon.svg",
+      "bytes": 574,
+      "sha256": "7d8979c16c8149cc82047bde3490d1997865431ca52fa3c5d247c503e0ae15e8"
+    },
+    {
+      "file": "web/apple-touch-icon.png",
+      "bytes": 2557,
+      "sha256": "7f4b8fcdea1b1bed97bc5d366e8a2c0e96d994e3df4799ef467d6f81586b5ee1"
+    },
+    {
+      "file": "web/favicon-16.png",
+      "bytes": 423,
+      "sha256": "deb90fd2eeeae3318d73ecf6b26693ae075bb53371c15735ed95a187aa26cf9c"
+    },
+    {
+      "file": "web/favicon-32.png",
+      "bytes": 760,
+      "sha256": "18e041a9e8589f60aa960293f34d681102f672d7de2edbbaaadc2a14eb6f8e95"
+    },
+    {
+      "file": "web/favicon-48.png",
+      "bytes": 1180,
+      "sha256": "cc1af0035b595a270f9e28ec4b486846b2644792983322afd17aaeaf7668efa9"
+    },
+    {
+      "file": "web/favicon.ico",
+      "bytes": 2417,
+      "sha256": "8dd1a068f0482802155a92aeeaf02c1db655dd83da70e4b42d53d82fb2c1afcd"
+    },
+    {
+      "file": "web/favicon.svg",
+      "bytes": 366,
+      "sha256": "c6e096bd328d5ec3cb0ddd12d3c42896677fee3dcce965d254d66b18ca8eebdc"
+    },
+    {
+      "file": "web/head-snippet.html",
+      "bytes": 474,
+      "sha256": "73bbc7165405a8607ff4ef7873661b2fd4f565986e3eecb765de8be76d74a4e5"
+    },
+    {
+      "file": "web/icon-192.png",
+      "bytes": 2630,
+      "sha256": "93da886b47e7854f120bb779ad0bb9818665ff950517da274746b9dc8f5f2ac6"
+    },
+    {
+      "file": "web/icon-512.png",
+      "bytes": 7487,
+      "sha256": "08c9a106dbab519f0576bf597a88335904fa58aba2b4ee55355247fb18a01d3b"
+    },
+    {
+      "file": "web/maskable-512.png",
+      "bytes": 6630,
+      "sha256": "8782336d60a0da5aa4d4fd9ca524bd1c879bbc317e4679f987a38c6afcda202b"
+    },
+    {
+      "file": "web/maskable-icon.svg",
+      "bytes": 571,
+      "sha256": "385ac12a8123f4b4b01999ac5f26fedc1d27332071bb4c958ff6a9c8a6b77e50"
+    },
+    {
+      "file": "web/site.webmanifest",
+      "bytes": 639,
+      "sha256": "728fc65bf77b54cbec36b34b63acf184aed31179682d22e55e695f1550c2dad4"
+    }
+  ]
+}

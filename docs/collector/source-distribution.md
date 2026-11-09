@@ -2,6 +2,8 @@
 
 Ce paquet fournit le collecteur Python/Tkinter existant, son moteur de collecte et les assets nécessaires. Il permet de valider les corrections avec un Python approuvé déjà installé, pendant la préparation des identités de signature. Il ne remplace pas un installateur signé et ne garantit pas l'absence de détection antivirus.
 
+Depuis la version `0.1.54-dev`, il inclut l’identité **Parcéo — Sillage**, les logos clair/sombre et les polices locales avec leurs licences. Le chargement des polices est privé au processus ; un échec conserve une police système de repli. Le moteur de collecte et les anciens liens d’invitation conservent leurs contrats et identifiants techniques.
+
 ## Préparer et vérifier le paquet
 
 L'équipe IT génère le ZIP depuis la révision relue :

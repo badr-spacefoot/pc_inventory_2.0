@@ -1,0 +1,27 @@
+{
+  "date": "2026-11-09",
+  "tool": "CUA native app control",
+  "userAuthorizedRetry": true,
+  "product": "Parcéo Collector 0.1.54-dev",
+  "syntheticOnly": true,
+  "realHardwareScanned": false,
+  "productionNetworkRequests": 0,
+  "observed": [
+    "Sillage logo and readable profile in light theme",
+    "White Sillage logo and readable profile in dark theme",
+    "Synthetic hardware scan with IBM Plex Mono log",
+    "Synthetic submission success without production writes",
+    "Sillage window icon after final relaunch"
+  ],
+  "screenshots": [
+    "collector-cua-light.jpg",
+    "collector-cua-dark.jpg",
+    "collector-cua-scan.jpg",
+    "collector-cua-success.jpg"
+  ],
+  "windowsIdentity": "Piqa.Parceo.Collector",
+  "taskbarIdentityQueriedSeparately": true,
+  "systemTaskbarPixelsCaptured": false,
+  "priorPinnedPythonShortcutsModified": false,
+  "passed": true
+}

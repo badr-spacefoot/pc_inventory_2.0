@@ -1,0 +1,56 @@
+{
+  "brand": "Parcéo",
+  "tagline": "Votre parc, clairement.",
+  "brief": "Inventaire, collecte, affectations, valorisation et réparations du matériel informatique.",
+  "adjectives": [
+    "Précis",
+    "Clair",
+    "Fiable",
+    "Accessible"
+  ],
+  "criteria": "Un signe lisible en petit, un nom français conservé, des fichiers utilisables dans l’application et le collecteur.",
+  "industry": "software",
+  "mockups": [
+    "website",
+    "favicon-tab",
+    "app-icon",
+    "readme",
+    "sticker",
+    "box"
+  ],
+  "nav": [
+    "Inventaire",
+    "Valorisation",
+    "Réparations"
+  ],
+  "brand_color": "#0B6E58",
+  "tile_color": "#0B6E58",
+  "greyscale": false,
+  "final": true,
+  "label": "Identité retenue",
+  "designer": "Parcéo · Piqa",
+  "round": 3,
+  "concepts": [
+    {
+      "name": "Sillage",
+      "symbol": "../logos/parceo-symbol-color.svg",
+      "lockup": "../logos/parceo-horizontal-color.svg",
+      "stacked": "../logos/parceo-stacked-color.svg",
+      "symbol_on_tile": "../logos/parceo-symbol-dark.svg",
+      "symbol_on_dark": "../logos/parceo-symbol-dark.svg",
+      "lockup_on_dark": "../logos/parceo-horizontal-dark.svg",
+      "stacked_on_tile": "../logos/parceo-stacked-dark.svg",
+      "idea": "Un parc organisé, chaque équipement identifié.",
+      "rationale": [
+        "Un P continu, une contreforme ouverte et une terminaison à 45 degrés.",
+        "Le symbole reste monochrome ; le citron ponctue les surfaces de l’identité.",
+        "Mot-symbole Manrope 600 vectorisé et icône dédiée aux petites tailles."
+      ]
+    }
+  ],
+  "recommendation": "Direction C — Sillage choisie par le client. Maquettes illustratives ; aucune application ni URL de production modifiée.",
+  "next_steps": [
+    "Utiliser les masters fournis plutôt que redessiner le logo.",
+    "Conserver les licences des polices lors de la redistribution."
+  ]
+}

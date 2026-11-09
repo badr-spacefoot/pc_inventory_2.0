@@ -6,6 +6,7 @@ from __future__ import annotations
 import ctypes
 import datetime
 import json
+import math
 import os
 import platform
 import sys
@@ -36,6 +37,8 @@ install_startup_diagnostics()
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, ttk
 
+FALLBACK_ICON = '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'
+
 try:
     from .config import (
         COLLECTOR_BUILD_CHANNEL,
@@ -56,6 +59,8 @@ try:
     from .prefill_update import CollectorUpdateMixin
     from .platform_integration import register_linux_url_scheme
     from .scan_presentation import ScanPresentationMixin
+    from . import ui as theme
+    from .branding import asset_path, configure_windows_identity, register_private_fonts
     from .ui import COLORS, DARK_COLORS, LIGHT_COLORS, ThemedButton, apply_palette
 except ImportError:  # Supports direct execution and PyInstaller entry points.
     module_directory = str(Path(__file__).resolve().parent)
@@ -80,6 +85,8 @@ except ImportError:  # Supports direct execution and PyInstaller entry points.
     from prefill_update import CollectorUpdateMixin
     from platform_integration import register_linux_url_scheme
     from scan_presentation import ScanPresentationMixin
+    import ui as theme
+    from branding import asset_path, configure_windows_identity, register_private_fonts
     from ui import COLORS, DARK_COLORS, LIGHT_COLORS, ThemedButton, apply_palette
 
 try:
@@ -203,7 +210,7 @@ TRANSLATIONS = {
         "Submission successful. Device": "Envoi réussi. Machine",
         "Submission sent": "Envoi réussi",
         "Device ID": "ID machine",
-        "The inventory was received by Spacefoot. You can close the collector.": "L'inventaire a bien été reçu par Spacefoot. Vous pouvez fermer le collecteur.",
+        "The inventory was received by Parcéo. You can close the collector.": "L'inventaire a bien été reçu par Parcéo. Vous pouvez fermer le collecteur.",
         "Submission failed": "Échec de l'envoi",
         "Theme": "Thème",
         "System": "Système",
@@ -281,9 +288,12 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
         super().destroy()
 
     def __init__(self) -> None:
+        self.windows_app_identity = configure_windows_identity()
+        self.private_font_status = register_private_fonts()
         super().__init__()
+        self.brand_fonts = theme.configure_fonts(self)
         write_diagnostic("Tk window initialized.")
-        self.title(f"Spacefoot IT Collector {COLLECTOR_VERSION}")
+        self.title(f"Parcéo Collector {COLLECTOR_VERSION}")
         self._set_window_icon()
         self.geometry("1180x840")
         self.minsize(1040, 760)
@@ -436,47 +446,22 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
 
     def _set_window_icon(self) -> None:
         try:
-            icon_path = bundled_asset_path("assets/brand/app-icon.png")
-            if icon_path.exists():
-                photo = tk.PhotoImage(file=str(icon_path))
-                self.app_icon_photo = photo
-                self.iconphoto(True, photo)
-                return
-            photo = tk.PhotoImage(width=32, height=32)
-            colors = [
-                "#ff7e02", "#662e9b", "#ea3546",
-                "#43bccd", "#f9c80e", "#ff7e02",
-                "#662e9b", "#ea3546", "#43bccd",
-            ]
-            index = 0
-            for y in (7, 13, 19):
-                for x in (7, 13, 19):
-                    photo.put(colors[index], to=(x, y, x + 5, y + 5))
-                    index += 1
+            icon_path = asset_path("app-icon.png")
+            photo = tk.PhotoImage(file=str(icon_path)) if icon_path.exists() else tk.PhotoImage(data=FALLBACK_ICON)
             self.app_icon_photo = photo
             self.iconphoto(True, photo)
         except tk.TclError:
             pass
 
-    def brand_mark(self, parent, size=38):
-        canvas = tk.Canvas(parent, width=size, height=size, bg=parent["bg"], highlightthickness=0, borderwidth=0)
-        colors = [
-            "#ff7e02", "#662e9b", "#ea3546",
-            "#43bccd", "#f9c80e", "#ff7e02",
-            "#662e9b", "#ea3546", "#43bccd",
-        ]
-        dot = max(5, size // 6)
-        gap = max(3, size // 12)
-        grid = dot * 3 + gap * 2
-        start = (size - grid) // 2
-        index = 0
-        for row in range(3):
-            for column in range(3):
-                x = start + column * (dot + gap)
-                y = start + row * (dot + gap)
-                canvas.create_oval(x, y, x + dot, y + dot, fill=colors[index], outline="")
-                index += 1
-        return canvas
+    def brand_mark(self, parent, size=210):
+        variant = "dark" if self.active_theme() == "dark" else "light"
+        logo = asset_path(f"parceo/logo-{variant}.png")
+        photo = tk.PhotoImage(file=str(logo)) if logo.exists() else tk.PhotoImage(data=FALLBACK_ICON)
+        factor = max(1, math.ceil(photo.width() / size))
+        photo = photo.subsample(factor)
+        widget = tk.Label(parent, image=photo, bg=parent["bg"], borderwidth=0)
+        widget.brand_photo = photo
+        return widget
 
     def system_theme(self) -> str:
         if platform.system() == "Windows" and winreg:
@@ -505,7 +490,7 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
                 except tk.TclError:
                     pass
             style.configure(
-                "Spacefoot.TCombobox",
+                "Parcéo.TCombobox",
                 fieldbackground=COLORS["input"],
                 background=COLORS["panel_2"],
                 foreground=COLORS["text"],
@@ -516,7 +501,7 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
                 padding=4,
             )
             style.map(
-                "Spacefoot.TCombobox",
+                "Parcéo.TCombobox",
                 fieldbackground=[("readonly", COLORS["input"]), ("focus", COLORS["input"])],
                 foreground=[("readonly", COLORS["text"]), ("focus", COLORS["text"])],
                 background=[("readonly", COLORS["panel_2"]), ("active", COLORS["brand"])],
@@ -524,7 +509,7 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
             self.option_add("*TCombobox*Listbox.background", COLORS["input"])
             self.option_add("*TCombobox*Listbox.foreground", COLORS["text"])
             self.option_add("*TCombobox*Listbox.selectBackground", COLORS["brand"])
-            self.option_add("*TCombobox*Listbox.selectForeground", COLORS["text"])
+            self.option_add("*TCombobox*Listbox.selectForeground", COLORS["on_brand"])
         except Exception:
             pass
 
@@ -558,9 +543,8 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
         header.columnconfigure(1, weight=0)
         brand = tk.Frame(header, bg=COLORS["bg"])
         brand.grid(row=0, column=0, sticky="w")
-        self.brand_mark(brand, 38).grid(row=0, column=0, rowspan=2, sticky="w", padx=(0, 10))
-        tk.Label(brand, text="SPACEFOOT", fg=COLORS["brand_2"], bg=COLORS["bg"], font=("Segoe UI", 9, "bold")).grid(row=0, column=1, sticky="w")
-        tk.Label(brand, text=self.t("IT Collector"), fg=COLORS["text"], bg=COLORS["bg"], font=("Segoe UI", 26, "bold")).grid(row=1, column=1, sticky="w")
+        self.brand_mark(brand, 210).grid(row=0, column=0, sticky="w")
+        tk.Label(brand, text="Collector", fg=COLORS["muted"], bg=COLORS["bg"], font=(theme.FONT_MONO, 11)).grid(row=1, column=0, sticky="w", padx=(83, 0))
         tk.Label(
             header,
             text=f"{self.t('Version')} {COLLECTOR_VERSION}",
@@ -568,20 +552,20 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
             bg=COLORS["panel_2"],
             padx=12,
             pady=7,
-            font=("Segoe UI", 9, "bold"),
+            font=(theme.FONT_UI, 9, "bold"),
         ).grid(row=0, column=1, sticky="ne")
         tk.Label(
             header,
             text=self.t("This collector gathers only inventory information needed by the IT team."),
             fg=COLORS["muted"],
             bg=COLORS["bg"],
-            font=("Segoe UI", 10),
+            font=(theme.FONT_UI, 10),
         ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
         self.step_nav = tk.Frame(shell, bg=COLORS["bg"])
         self.step_nav.grid(row=1, column=0, sticky="ew", pady=(18, 0))
         for index, label in enumerate(["Profile", "Scan"]):
-            chip = tk.Label(self.step_nav, text=f"{index + 1}. {self.t(label)}", padx=14, pady=8, font=("Segoe UI", 10, "bold"))
+            chip = tk.Label(self.step_nav, text=f"{index + 1}. {self.t(label)}", padx=14, pady=8, font=(theme.FONT_UI, 10, "bold"))
             chip.grid(row=0, column=index, sticky="w", padx=(0, 8))
             setattr(self, f"step_chip_{index}", chip)
 
@@ -623,7 +607,7 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
             textvariable=self.status,
             fg=COLORS["muted"],
             bg=COLORS["bg"],
-            font=("Segoe UI", 10),
+            font=(theme.FONT_UI, 10),
             anchor="w",
             justify="left",
             wraplength=620,
@@ -737,7 +721,7 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
             text=text,
             fg=COLORS["muted"] if muted else COLORS["text"],
             bg=parent["bg"],
-            font=("Segoe UI", size, "bold" if bold else "normal"),
+            font=(theme.FONT_UI, size, "bold" if bold else "normal"),
         )
 
     def entry(self, parent, variable, show=None):
@@ -752,12 +736,12 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
             highlightthickness=1,
             highlightbackground=COLORS["line"],
             highlightcolor=COLORS["brand_2"],
-            font=("Segoe UI", 10),
+            font=(theme.FONT_UI, 10),
         )
         return item
 
     def combo(self, parent, variable, values):
-        combo = ttk.Combobox(parent, textvariable=variable, values=values, state="readonly", style="Spacefoot.TCombobox")
+        combo = ttk.Combobox(parent, textvariable=variable, values=values, state="readonly", style="Parcéo.TCombobox")
         return combo
 
     def button(self, parent, text, command, secondary=False):
@@ -840,10 +824,10 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
                 chip = tk.Frame(summary, bg=COLORS["panel_2"], padx=12, pady=8)
                 chip.grid(row=index // 2, column=index % 2, sticky="ew", padx=(0, 8), pady=(0, 8))
                 summary.columnconfigure(index % 2, weight=1)
-                tk.Label(chip, text=label.upper(), fg=COLORS["muted"], bg=COLORS["panel_2"], font=("Segoe UI", 8, "bold")).grid(row=0, column=0, sticky="w")
-                tk.Label(chip, text=value, fg=COLORS["text"], bg=COLORS["panel_2"], font=("Segoe UI", 10, "bold"), wraplength=430, justify="left").grid(row=1, column=0, sticky="w", pady=(3, 0))
+                tk.Label(chip, text=label.upper(), fg=COLORS["muted"], bg=COLORS["panel_2"], font=(theme.FONT_UI, 8, "bold")).grid(row=0, column=0, sticky="w")
+                tk.Label(chip, text=value, fg=COLORS["text"], bg=COLORS["panel_2"], font=(theme.FONT_UI, 10, "bold"), wraplength=430, justify="left").grid(row=1, column=0, sticky="w", pady=(3, 0))
         else:
-            tk.Label(summary, text=self.t("Waiting for prefill"), fg=COLORS["muted"], bg=COLORS["panel"], font=("Segoe UI", 11, "bold")).grid(row=0, column=0, sticky="w")
+            tk.Label(summary, text=self.t("Waiting for prefill"), fg=COLORS["muted"], bg=COLORS["panel"], font=(theme.FONT_UI, 11, "bold")).grid(row=0, column=0, sticky="w")
         if missing:
             self.label(hero, f"{self.t('Please complete')}: {', '.join(missing)}", muted=True).grid(row=3, column=0, sticky="w", pady=(8, 0))
         action_row = tk.Frame(hero, bg=COLORS["panel"])
@@ -910,7 +894,7 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
             ).grid(row=4, column=1, sticky="w", pady=(6, 12))
             self.auto_update_checkbutton(advanced).grid(row=5, column=1, sticky="w", pady=(0, 12))
             self.button(advanced, self.t("Validate token"), self.validate_token, secondary=True).grid(row=6, column=0, sticky="w", pady=(8, 0))
-            tk.Label(advanced, textvariable=self.connection_status, fg=COLORS["brand_2"], bg=COLORS["panel"], font=("Segoe UI", 10, "bold")).grid(row=6, column=1, sticky="w", padx=(10, 0), pady=(8, 0))
+            tk.Label(advanced, textvariable=self.connection_status, fg=COLORS["brand_2"], bg=COLORS["panel"], font=(theme.FONT_UI, 10, "bold")).grid(row=6, column=1, sticky="w", padx=(10, 0), pady=(8, 0))
 
         self.after(0, self.update_proposal_visibility)
         return frame
@@ -936,7 +920,7 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
             bg=COLORS["panel"],
             wraplength=980,
             justify="left",
-            font=("Segoe UI", 11, "bold"),
+            font=(theme.FONT_UI, 11, "bold"),
         ).grid(row=2, column=0, sticky="ew")
         if missing:
             self.label(hero, f"{self.t('Please complete')}: {', '.join(missing)}", muted=True).grid(row=3, column=0, sticky="w", pady=(8, 0))
@@ -1005,7 +989,7 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
             ).grid(row=4, column=1, sticky="w", pady=(6, 12))
             self.auto_update_checkbutton(quick).grid(row=5, column=1, sticky="w", pady=(0, 12))
             self.button(quick, self.t("Validate token"), self.validate_token, secondary=True).grid(row=6, column=0, sticky="w", pady=(8, 0))
-            tk.Label(quick, textvariable=self.connection_status, fg=COLORS["brand_2"], bg=COLORS["panel"], font=("Segoe UI", 10, "bold")).grid(row=6, column=1, sticky="w", padx=(10, 0), pady=(8, 0))
+            tk.Label(quick, textvariable=self.connection_status, fg=COLORS["brand_2"], bg=COLORS["panel"], font=(theme.FONT_UI, 10, "bold")).grid(row=6, column=1, sticky="w", padx=(10, 0), pady=(8, 0))
 
         scan_card = self.card(frame)
         scan_card.grid(row=3, column=0, sticky="ew", pady=(14, 0))
@@ -1073,7 +1057,7 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
             "Data is submitted only after user confirmation.",
         ]
         for index, line in enumerate(lines, start=3):
-            tk.Label(intro, text=f"- {self.t(line)}", fg=COLORS["muted"], bg=COLORS["panel"], font=("Segoe UI", 10)).grid(row=index, column=0, sticky="w", pady=2)
+            tk.Label(intro, text=f"- {self.t(line)}", fg=COLORS["muted"], bg=COLORS["panel"], font=(theme.FONT_UI, 10)).grid(row=index, column=0, sticky="w", pady=2)
 
         quick = self.card(frame)
         quick.grid(row=1, column=0, sticky="ew", pady=(14, 0))
@@ -1107,7 +1091,7 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
             selectcolor=COLORS["input"],
         ).grid(row=5, column=1, sticky="w", pady=(6, 12))
         self.button(self.connection_card, self.t("Validate token"), self.validate_token, secondary=True).grid(row=6, column=0, sticky="w", pady=(8, 0))
-        tk.Label(self.connection_card, textvariable=self.connection_status, fg=COLORS["brand_2"], bg=COLORS["panel"], font=("Segoe UI", 10, "bold")).grid(row=6, column=1, sticky="w", padx=(10, 0), pady=(8, 0))
+        tk.Label(self.connection_card, textvariable=self.connection_status, fg=COLORS["brand_2"], bg=COLORS["panel"], font=(theme.FONT_UI, 10, "bold")).grid(row=6, column=1, sticky="w", padx=(10, 0), pady=(8, 0))
         if not self.connection_visible.get():
             self.connection_card.grid_remove()
         return frame
@@ -1128,7 +1112,7 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
             "Data is submitted only after user confirmation.",
         ]
         for index, line in enumerate(lines, start=1):
-            tk.Label(card, text=f"- {self.t(line)}", fg=COLORS["muted"], bg=COLORS["panel"], font=("Segoe UI", 10)).grid(row=index, column=0, sticky="w", pady=2)
+            tk.Label(card, text=f"- {self.t(line)}", fg=COLORS["muted"], bg=COLORS["panel"], font=(theme.FONT_UI, 10)).grid(row=index, column=0, sticky="w", pady=2)
         return card
 
     def _assignment_step(self):
@@ -1183,7 +1167,7 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
             success.grid(row=next_row, column=0, sticky="ew", pady=(14, 0))
             success.columnconfigure(0, weight=1)
             self.label(success, self.t("Submission sent"), 17, bold=True).grid(row=0, column=0, sticky="w")
-            self.label(success, self.t("The inventory was received by Spacefoot. You can close the collector."), muted=True).grid(row=1, column=0, sticky="w", pady=(4, 10))
+            self.label(success, self.t("The inventory was received by Parcéo. You can close the collector."), muted=True).grid(row=1, column=0, sticky="w", pady=(4, 10))
             if self.submission_device_id:
                 tk.Label(
                     success,
@@ -1193,7 +1177,7 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
                     wraplength=980,
                     justify="left",
                     anchor="w",
-                    font=("Segoe UI", 10, "bold"),
+                    font=(theme.FONT_UI, 10, "bold"),
                 ).grid(row=2, column=0, sticky="ew")
             next_row += 1
         log_card = self.card(frame)
@@ -1344,7 +1328,7 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
             if not chip:
                 continue
             active = chip_index == self.step_index
-            chip.configure(bg=COLORS["brand"] if active else COLORS["panel"], fg=COLORS["text"] if active else COLORS["muted"])
+            chip.configure(bg=COLORS["brand"] if active else COLORS["panel"], fg=COLORS["on_brand"] if active else COLORS["muted"])
         if hasattr(self, "back_button"):
             self.back_button.configure(state="normal" if self.step_index > 0 else "disabled")
         self.update_primary_action()
@@ -1618,7 +1602,7 @@ def run_collector() -> None:
                 error_root = tk.Tk()
                 error_root.withdraw()
             messagebox.showerror(
-                "Spacefoot IT Collector",
+                "Parcéo Collector",
                 (
                     "The collector could not start.\n\n"
                     f"{exc}\n\nDiagnostic: {default_log_path()}"

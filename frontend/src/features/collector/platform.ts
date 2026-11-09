@@ -55,7 +55,7 @@ export function macosInstallCommand(asset?: CollectorAsset | null): string {
     'if [ ! -d "$app" ]; then app="/Applications/spacefoot-it-collector-macos.app"; fi',
     'if [ ! -d "$app" ]; then app="$HOME/Downloads/spacefoot-it-collector-macos.app"; fi',
     'if [ ! -d "$app" ]; then app="$HOME/Téléchargements/spacefoot-it-collector-macos.app"; fi',
-    'if [ ! -d "$app" ]; then echo "Application Spacefoot introuvable. Décompressez le téléchargement puis relancez cette commande."; exit 1; fi',
+    'if [ ! -d "$app" ]; then echo "Application Parcéo introuvable. Décompressez le téléchargement puis relancez cette commande."; exit 1; fi',
     'codesign --verify --deep --strict "$app" || exit 1',
     'spctl --assess --type execute "$app" || exit 1',
     'open "$app"',

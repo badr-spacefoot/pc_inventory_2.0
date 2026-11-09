@@ -1,0 +1,24 @@
+{
+  "date": "2026-11-09",
+  "identity": "Parc\u00e9o Sillage",
+  "collectorVersion": "0.1.54-dev",
+  "artifacts": [
+    {
+      "kind": "web",
+      "path": "dist/parceo-sillage-site-20261109.zip",
+      "bytes": 600136,
+      "sha256": "2c166e3f79ad02d663838ca278c72e3698b189f0df97e312f06025646a02f6d3"
+    },
+    {
+      "kind": "collector-source",
+      "path": "dist/parceo-collector-source-0.1.54-dev.zip",
+      "bytes": 294559,
+      "sha256": "e11afb88cb6ca1f732085f501d7c34f68ec523f36e771ca6d0f9850ab87b95bc"
+    }
+  ],
+  "sourceFileCount": 25,
+  "sourceUnpackedStartupExitCode": 0,
+  "webFiles": 61,
+  "published": false,
+  "deployed": false
+}

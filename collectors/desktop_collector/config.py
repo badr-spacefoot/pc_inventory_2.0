@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 DEFAULT_API_URL = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
-COLLECTOR_VERSION = "0.1.53-dev"
+COLLECTOR_VERSION = "0.1.54-dev"
 COLLECTOR_BUILD_CHANNEL = "source"
 # Injected into packaged builds only after verifying against the signing key.
 UPDATE_PUBLIC_KEY = ""

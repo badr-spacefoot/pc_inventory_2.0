@@ -97,7 +97,7 @@ python -m PyInstaller `
   --name "spacefoot-it-collector-windows" `
   --icon "frontend/assets/brand/app-icon.ico" `
   --add-data "scripts/collect-cross-platform.py;scripts" `
-  --add-data "frontend/assets/brand/app-icon.png;assets/brand" `
+  --add-data "frontend/assets/brand;assets/brand" `
   --paths "collectors/desktop_collector" `
   --hidden-import diagnostics `
   --hidden-import certifi `

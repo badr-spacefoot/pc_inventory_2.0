@@ -1,0 +1,116 @@
+{
+  "brand": "Parc\u00e9o",
+  "identity": "Sillage",
+  "version": "2.0",
+  "nativeFonts": "Manrope variable source instantiated at 400/700, SIL OFL 1.1; names normalized for private OS font matching",
+  "files": [
+    {
+      "file": "apple-touch-icon.png",
+      "sha256": "7f4b8fcdea1b1bed97bc5d366e8a2c0e96d994e3df4799ef467d6f81586b5ee1"
+    },
+    {
+      "file": "collector-1024.png",
+      "sha256": "12b2d5eb3174bde936bd6698ab853dd3a4c0c984fbceb5cf794e90a56a253087"
+    },
+    {
+      "file": "collector-256.png",
+      "sha256": "420b4b3e9a685b646c4a78661c811f457b27cf37a931494e02b725774813b2e6"
+    },
+    {
+      "file": "collector-64.png",
+      "sha256": "47d0870fdf04bd84e38fe1b6d71ad8512e7c32a9f1c31715f4058868b5a52340"
+    },
+    {
+      "file": "collector-square-1024.png",
+      "sha256": "ebcfbd49ee4dd8e999cc40a75f62bb417f945e9c4a636d71efd8f8b1b1660186"
+    },
+    {
+      "file": "collector.icns",
+      "sha256": "018126f123f71df1636d50790f7ce88bbecdd79a0809fc3a198a9ec964bd1db3"
+    },
+    {
+      "file": "collector.ico",
+      "sha256": "7c3cd58f2fb688a9ca1f60c4ba470ee616a2a5fb17c8760ac4146ae1db062aeb"
+    },
+    {
+      "file": "favicon-16.png",
+      "sha256": "deb90fd2eeeae3318d73ecf6b26693ae075bb53371c15735ed95a187aa26cf9c"
+    },
+    {
+      "file": "favicon-32.png",
+      "sha256": "18e041a9e8589f60aa960293f34d681102f672d7de2edbbaaadc2a14eb6f8e95"
+    },
+    {
+      "file": "favicon-48.png",
+      "sha256": "cc1af0035b595a270f9e28ec4b486846b2644792983322afd17aaeaf7668efa9"
+    },
+    {
+      "file": "favicon.ico",
+      "sha256": "8dd1a068f0482802155a92aeeaf02c1db655dd83da70e4b42d53d82fb2c1afcd"
+    },
+    {
+      "file": "favicon.svg",
+      "sha256": "c6e096bd328d5ec3cb0ddd12d3c42896677fee3dcce965d254d66b18ca8eebdc"
+    },
+    {
+      "file": "fonts/IBMPlexMono-OFL.txt",
+      "sha256": "7e6b2818edbd8f6a01ae80641cc8f16a51080d08fb4e532be3a0b6f74adb07da"
+    },
+    {
+      "file": "fonts/IBMPlexMono-Regular.ttf",
+      "sha256": "6a3412f058c7d8dfd9170c41e85ade48e5156ecb89356110ca57a0a27734af46"
+    },
+    {
+      "file": "fonts/Manrope-Bold.ttf",
+      "sha256": "f1676ec85f58958fe4bf9fa9a3a26e7e21f8fa22d2cd64767c5f6e60b2418fc0"
+    },
+    {
+      "file": "fonts/Manrope-OFL.txt",
+      "sha256": "58172e0c0fac2cda8a37b348164bb55e44b0e69051e557e92b1d3f6910141f7b"
+    },
+    {
+      "file": "fonts/Manrope-Regular.ttf",
+      "sha256": "89e9499c404545b98edf701becd4ce5e0b8d6690bb183760534d89c77a3f2327"
+    },
+    {
+      "file": "fonts/Manrope-Variable.ttf",
+      "sha256": "3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6"
+    },
+    {
+      "file": "icon-192.png",
+      "sha256": "93da886b47e7854f120bb779ad0bb9818665ff950517da274746b9dc8f5f2ac6"
+    },
+    {
+      "file": "icon-512.png",
+      "sha256": "08c9a106dbab519f0576bf597a88335904fa58aba2b4ee55355247fb18a01d3b"
+    },
+    {
+      "file": "logo-dark.png",
+      "sha256": "80570fcb9da25a039c42091e6e89e9264d580346e5c9f74afbc022cdeea9579a"
+    },
+    {
+      "file": "logo-dark.svg",
+      "sha256": "ba25571b56757dadf31dbb19d952341da567036678886f0e429122abbf665320"
+    },
+    {
+      "file": "logo-light.png",
+      "sha256": "08ab168a8be26dac0c7bbe2c5133b17e4d0861c88e170583df8fbeea0a53d03c"
+    },
+    {
+      "file": "logo-light.svg",
+      "sha256": "d9c6ea786b832324fcea4fd9421c1c42897697b06c7787e9c0c8ae2259555181"
+    },
+    {
+      "file": "maskable-512.png",
+      "sha256": "8782336d60a0da5aa4d4fd9ca524bd1c879bbc317e4679f987a38c6afcda202b"
+    },
+    {
+      "file": "site.webmanifest",
+      "sha256": "0639cadf4e725a83aad1b73012f82c81e41b8de1ae381f668b5d3849b3f02e37"
+    },
+    {
+      "file": "symbol.svg",
+      "sha256": "400dfef961728e2892ab8c8353295abd599f1b0baf174823d5f2f9c411a9c896"
+    }
+  ]
+}

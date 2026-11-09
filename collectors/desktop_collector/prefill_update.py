@@ -173,7 +173,7 @@ class CollectorUpdateMixin:
         script = "\n".join(
             [
                 "#!/bin/sh",
-                "echo 'Installing Spacefoot IT Collector update...'",
+                "echo 'Installing Parcéo Collector update...'",
                 'sudo apt install -y "$1"',
                 "status=$?",
                 'if [ "$status" -ne 0 ]; then',

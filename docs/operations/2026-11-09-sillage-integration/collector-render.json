@@ -1,0 +1,141 @@
+{
+  "syntheticOnly": true,
+  "realHardwareScanned": false,
+  "networkRequests": 0,
+  "windowTitle": "Parcéo Collector 0.1.54-dev",
+  "privateFonts": {
+    "Manrope-Regular.ttf": true,
+    "Manrope-Bold.ttf": true,
+    "IBMPlexMono-Regular.ttf": true
+  },
+  "fonts": {
+    "interface": "Manrope",
+    "technical": "IBM Plex Mono"
+  },
+  "screens": [
+    {
+      "file": null,
+      "requestedView": "collector-profile-light.png",
+      "width": 1180,
+      "height": 840,
+      "visualCapture": "widget-state-only; live CUA evidence is recorded separately"
+    },
+    {
+      "file": null,
+      "requestedView": "collector-scan-light.png",
+      "width": 1180,
+      "height": 840,
+      "visualCapture": "widget-state-only; live CUA evidence is recorded separately"
+    },
+    {
+      "file": null,
+      "requestedView": "collector-success-light.png",
+      "width": 1180,
+      "height": 840,
+      "visualCapture": "widget-state-only; live CUA evidence is recorded separately"
+    },
+    {
+      "file": null,
+      "requestedView": "collector-profile-dark.png",
+      "width": 1180,
+      "height": 840,
+      "visualCapture": "widget-state-only; live CUA evidence is recorded separately"
+    },
+    {
+      "file": null,
+      "requestedView": "collector-scan-dark.png",
+      "width": 1180,
+      "height": 840,
+      "visualCapture": "widget-state-only; live CUA evidence is recorded separately"
+    },
+    {
+      "file": null,
+      "requestedView": "collector-success-dark.png",
+      "width": 1180,
+      "height": 840,
+      "visualCapture": "widget-state-only; live CUA evidence is recorded separately"
+    },
+    {
+      "file": null,
+      "requestedView": "collector-profile-minimum.png",
+      "width": 1180,
+      "height": 840,
+      "visualCapture": "widget-state-only; live CUA evidence is recorded separately"
+    }
+  ],
+  "buttonContrasts": [
+    {
+      "theme": "light",
+      "label": "Masquer le profil",
+      "ratio": 12.65
+    },
+    {
+      "theme": "light",
+      "label": "Options avancées",
+      "ratio": 12.65
+    },
+    {
+      "theme": "light",
+      "label": "Charger le pré-remplissage",
+      "ratio": 12.65
+    },
+    {
+      "theme": "light",
+      "label": "Valider le token",
+      "ratio": 12.65
+    },
+    {
+      "theme": "light",
+      "label": "EN",
+      "ratio": 12.65
+    },
+    {
+      "theme": "light",
+      "label": "Thème: ○ Clair",
+      "ratio": 12.65
+    },
+    {
+      "theme": "light",
+      "label": "Suivant",
+      "ratio": 6.2
+    },
+    {
+      "theme": "dark",
+      "label": "Masquer le profil",
+      "ratio": 11.67
+    },
+    {
+      "theme": "dark",
+      "label": "Options avancées",
+      "ratio": 11.67
+    },
+    {
+      "theme": "dark",
+      "label": "Charger le pré-remplissage",
+      "ratio": 11.67
+    },
+    {
+      "theme": "dark",
+      "label": "Valider le token",
+      "ratio": 11.67
+    },
+    {
+      "theme": "dark",
+      "label": "EN",
+      "ratio": 11.67
+    },
+    {
+      "theme": "dark",
+      "label": "Thème: ● Sombre",
+      "ratio": 11.67
+    },
+    {
+      "theme": "dark",
+      "label": "Suivant",
+      "ratio": 11.74
+    }
+  ],
+  "windowsAppUserModelId": "Piqa.Parceo.Collector",
+  "callbackExceptions": 0,
+  "passed": true
+}

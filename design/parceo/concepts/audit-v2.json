@@ -1,0 +1,248 @@
+[
+ {
+  "file": "concept-a-v2.svg",
+  "bytes": 434,
+  "viewBox": [
+   0.0,
+   0.0,
+   256.0,
+   256.0
+  ],
+  "aspect": 1.0,
+  "aspect_class": "square",
+  "colors": [
+   "#111111"
+  ],
+  "gradients": 0,
+  "anchors": 19,
+  "library_anchor_percentiles": {
+   "p10": 21.0,
+   "p25": 31.0,
+   "median": 53.0,
+   "p75": 95.5,
+   "p90": 194.0,
+   "p95": 274.0
+  },
+  "content_bbox": [
+   40.0,
+   32.0,
+   216.0,
+   224.0
+  ],
+  "margins": {
+   "left": 40.0,
+   "right": 40.0,
+   "top": 32.0,
+   "bottom": 32.0
+  },
+  "bbox_fill_ratio": 0.516,
+  "score": 100,
+  "findings": []
+ },
+ {
+  "file": "concept-b-v2.svg",
+  "bytes": 539,
+  "viewBox": [
+   0.0,
+   0.0,
+   256.0,
+   256.0
+  ],
+  "aspect": 1.0,
+  "aspect_class": "square",
+  "colors": [
+   "#111111"
+  ],
+  "gradients": 0,
+  "anchors": 26,
+  "library_anchor_percentiles": {
+   "p10": 21.0,
+   "p25": 31.0,
+   "median": 53.0,
+   "p75": 95.5,
+   "p90": 194.0,
+   "p95": 274.0
+  },
+  "content_bbox": [
+   36.0,
+   32.0,
+   220.0,
+   224.0
+  ],
+  "margins": {
+   "left": 36.0,
+   "right": 36.0,
+   "top": 32.0,
+   "bottom": 32.0
+  },
+  "bbox_fill_ratio": 0.539,
+  "score": 100,
+  "findings": []
+ },
+ {
+  "file": "concept-c-v2.svg",
+  "bytes": 569,
+  "viewBox": [
+   0.0,
+   0.0,
+   256.0,
+   256.0
+  ],
+  "aspect": 1.0,
+  "aspect_class": "square",
+  "colors": [
+   "#111111"
+  ],
+  "gradients": 0,
+  "anchors": 18,
+  "library_anchor_percentiles": {
+   "p10": 21.0,
+   "p25": 31.0,
+   "median": 53.0,
+   "p75": 95.5,
+   "p90": 194.0,
+   "p95": 274.0
+  },
+  "content_bbox": [
+   46.24,
+   20.0,
+   204.16,
+   213.2
+  ],
+  "margins": {
+   "left": 46.2,
+   "right": 51.8,
+   "top": 20.0,
+   "bottom": 42.8
+  },
+  "bbox_fill_ratio": 0.466,
+  "score": 99,
+  "findings": [
+   {
+    "level": "INFO",
+    "code": "off-centre-y",
+    "message": "Vertical margins differ (top 20.0, bottom 42.8). Remember the optical centre sits slightly above the geometric centre."
+   }
+  ]
+ },
+ {
+  "file": "concept-a-lockup-v2.svg",
+  "bytes": 1684,
+  "viewBox": [
+   0.0,
+   0.0,
+   896.0,
+   256.0
+  ],
+  "aspect": 3.5,
+  "aspect_class": "horizontal",
+  "colors": [
+   "#111111"
+  ],
+  "gradients": 0,
+  "anchors": 94,
+  "library_anchor_percentiles": {
+   "p10": 23.0,
+   "p25": 37.0,
+   "median": 75.0,
+   "p75": 155.0,
+   "p90": 257.8,
+   "p95": 379.45
+  },
+  "content_bbox": [
+   32.8,
+   34.24,
+   851.2,
+   218.32
+  ],
+  "margins": {
+   "left": 32.8,
+   "right": 44.8,
+   "top": 34.2,
+   "bottom": 37.7
+  },
+  "bbox_fill_ratio": 0.657,
+  "score": 100,
+  "findings": []
+ },
+ {
+  "file": "concept-b-lockup-v2.svg",
+  "bytes": 1789,
+  "viewBox": [
+   0.0,
+   0.0,
+   896.0,
+   256.0
+  ],
+  "aspect": 3.5,
+  "aspect_class": "horizontal",
+  "colors": [
+   "#111111"
+  ],
+  "gradients": 0,
+  "anchors": 101,
+  "library_anchor_percentiles": {
+   "p10": 23.0,
+   "p25": 37.0,
+   "median": 75.0,
+   "p75": 155.0,
+   "p90": 257.8,
+   "p95": 379.45
+  },
+  "content_bbox": [
+   29.52,
+   34.24,
+   851.2,
+   218.32
+  ],
+  "margins": {
+   "left": 29.5,
+   "right": 44.8,
+   "top": 34.2,
+   "bottom": 37.7
+  },
+  "bbox_fill_ratio": 0.659,
+  "score": 100,
+  "findings": []
+ },
+ {
+  "file": "concept-c-lockup-v2.svg",
+  "bytes": 1819,
+  "viewBox": [
+   0.0,
+   0.0,
+   896.0,
+   256.0
+  ],
+  "aspect": 3.5,
+  "aspect_class": "horizontal",
+  "colors": [
+   "#111111"
+  ],
+  "gradients": 0,
+  "anchors": 93,
+  "library_anchor_percentiles": {
+   "p10": 23.0,
+   "p25": 37.0,
+   "median": 75.0,
+   "p75": 155.0,
+   "p90": 257.8,
+   "p95": 379.45
+  },
+  "content_bbox": [
+   37.92,
+   24.4,
+   851.2,
+   218.32
+  ],
+  "margins": {
+   "left": 37.9,
+   "right": 44.8,
+   "top": 24.4,
+   "bottom": 37.7
+  },
+  "bbox_fill_ratio": 0.688,
+  "score": 100,
+  "findings": []
+ }
+]
