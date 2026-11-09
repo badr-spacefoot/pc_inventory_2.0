@@ -20,6 +20,21 @@ def load_script(name, path):
 
 
 class CollectorDistributionTests(unittest.TestCase):
+    def test_macos_frozen_collector_finds_intact_vendor_bundle(self):
+        script = load_script("macos_bundle_test", "scripts/collect-cross-platform.py")
+        with tempfile.TemporaryDirectory() as directory:
+            executable = Path(directory) / "osquery.app/Contents/MacOS/osqueryd"
+            executable.parent.mkdir(parents=True)
+            executable.write_bytes(b"synthetic-native-executable")
+            with patch.object(script.sys, "frozen", True, create=True), patch.object(script.sys, "_MEIPASS", directory, create=True), patch.object(script.platform, "system", return_value="Darwin"), patch.dict(script.os.environ, {"SPACEFOOT_OSQUERYI": ""}):
+                self.assertEqual(script.find_osqueryi(), str(executable))
+
+    def test_osqueryd_is_invoked_in_interactive_mode(self):
+        script = load_script("macos_interactive_test", "scripts/collect-cross-platform.py")
+        with patch.object(script, "run", return_value="[]") as execute:
+            self.assertEqual(script.osquery_json("/bundle/osqueryd", "select 1;"), [])
+            execute.assert_called_once_with(["/bundle/osqueryd", "-S", "--json", "select 1;"], timeout=12)
+
     def test_source_package_has_only_reviewable_files_and_verified_checksums(self):
         packaging = load_script("source_packaging", "scripts/package-collector-source.py")
         with tempfile.TemporaryDirectory() as directory:

@@ -48,6 +48,7 @@ jobs:
             pyinstaller_icon: --icon frontend/assets/brand/app-icon.ico
             pyinstaller_bundle_id: ""
             pyinstaller_extra: ""
+            pyinstaller_tools: --add-data "installer-assets/bundled-tools;bundled-tools"
           - name: macos
             # Build the default macOS package for Intel. The x86_64 app runs
             # natively on Intel Macs and through Rosetta on Apple Silicon,
@@ -61,6 +62,7 @@ jobs:
             pyinstaller_icon: --icon build/app-icon.icns
             pyinstaller_bundle_id: "--osx-bundle-identifier com.spacefoot.itcollector"
             pyinstaller_extra: "--argv-emulation --target-arch x86_64"
+            pyinstaller_tools: ""
             macos_deployment_target: "13.0"
           - name: linux
             os: ubuntu-22.04
@@ -70,6 +72,7 @@ jobs:
             pyinstaller_icon: ""
             pyinstaller_bundle_id: ""
             pyinstaller_extra: ""
+            pyinstaller_tools: --add-data "installer-assets/bundled-tools:bundled-tools"
 
     steps:
       - name: Checkout
@@ -160,18 +163,19 @@ jobs:
           import shutil
 
           root = Path("installer-assets/osquery-root").resolve()
-          # The official package uses an osqueryi symlink to its multicall
-          # osqueryd binary. Do not follow absolute symlinks out of the package.
-          candidates = [p for p in root.rglob("osqueryi") if p.is_file() and not p.is_symlink()]
-          if not candidates:
-              candidates = [p for p in root.rglob("osqueryd") if p.is_file() and not p.is_symlink()]
-          if len(candidates) != 1 or not candidates[0].resolve().is_relative_to(root):
-              raise SystemExit("Expected one regular osquery multicall executable inside the verified package")
-          shutil.copy2(candidates[0], "installer-assets/bundled-tools/osqueryi")
+          # Keep the signed vendor bundle and Info.plist together. Extracting
+          # its executable alone invalidates the vendor bundle signature.
+          bundles = [p for p in root.rglob("osquery.app") if p.is_dir() and not p.is_symlink()]
+          if len(bundles) != 1 or not bundles[0].resolve().is_relative_to(root):
+              raise SystemExit("Expected one vendor osquery.app inside the verified package")
+          for path in bundles[0].rglob("*"):
+              if path.is_symlink() and not path.resolve().is_relative_to(bundles[0]):
+                  raise SystemExit("Vendor bundle symlink escapes the bundle")
+          shutil.copytree(bundles[0], "installer-assets/bundled-tools/osquery.app", symlinks=True)
           PY
-          lipo installer-assets/bundled-tools/osqueryi -verify_arch x86_64
-          codesign --verify --strict installer-assets/bundled-tools/osqueryi
-          chmod +x installer-assets/bundled-tools/osqueryi
+          lipo installer-assets/bundled-tools/osquery.app/Contents/MacOS/osqueryd -verify_arch x86_64
+          codesign --verify --deep --strict installer-assets/bundled-tools/osquery.app
+          installer-assets/bundled-tools/osquery.app/Contents/MacOS/osqueryd -S --version
 
       - name: Prepare macOS app icon
         if: matrix.name == 'macos'
@@ -205,7 +209,7 @@ jobs:
           --paths "collectors/desktop_collector"
           --add-data "scripts/collect-cross-platform.py${{ matrix.separator }}scripts"
           --add-data "frontend/assets/brand${{ matrix.separator }}assets/brand"
-          --add-data "installer-assets/bundled-tools${{ matrix.separator }}bundled-tools"
+          ${{ matrix.pyinstaller_tools }}
           --hidden-import argparse
           --hidden-import certifi
           --hidden-import cryptography.hazmat.primitives.asymmetric.ed25519
@@ -225,6 +229,10 @@ jobs:
           --hidden-import uuid
           --hidden-import winreg
           collectors/desktop_collector/collector_app.py
+
+      - name: Attach intact macOS osquery bundle
+        if: matrix.name == 'macos'
+        run: ditto installer-assets/bundled-tools/osquery.app dist/${{ matrix.artifact }}.app/Contents/Frameworks/osquery.app
 
       - name: Probe Windows collector without hardware scanning
         if: matrix.name == 'windows'
@@ -299,6 +307,7 @@ jobs:
             exit 1
           fi
           SPACEFOOT_COLLECTOR_STARTUP_PROBE=1 "$executable"
+          "$app/Contents/Frameworks/osquery.app/Contents/MacOS/osqueryd" -S --version
           echo "Collector startup probe completed successfully."
 
       - name: Sign Windows collector
@@ -434,6 +443,7 @@ jobs:
               SIGN_TARGET="dist/${{ matrix.artifact }}.app"
             fi
             codesign --force --deep --sign - "$SIGN_TARGET"
+            codesign --verify --deep --strict "$SIGN_TARGET"
             exit 0
           fi
           CERT_PATH="$RUNNER_TEMP/spacefoot-codesign.p12"

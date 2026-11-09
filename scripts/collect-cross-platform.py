@@ -502,6 +502,8 @@ def find_osqueryi():
     configured = os.environ.get("SPACEFOOT_OSQUERYI")
     bundled_candidates = []
     if getattr(sys, "frozen", False):
+        if platform.system() == "Darwin":
+            bundled_candidates.append(Path(getattr(sys, "_MEIPASS", "")) / "osquery.app" / "Contents" / "MacOS" / "osqueryd")
         frozen_bundle_root = Path(getattr(sys, "_MEIPASS", "")) / "bundled-tools"
         executable_bundle_root = Path(sys.executable).resolve().parent / "bundled-tools"
         bundled_candidates.extend([
@@ -545,7 +547,10 @@ def find_osqueryi():
 
 
 def osquery_json(osqueryi, sql, timeout=12):
-    raw = run([osqueryi, "--json", sql], timeout=timeout)
+    # osquery 5 on macOS ships a signed app bundle. Keep it intact and select
+    # its documented interactive mode instead of relocating the executable.
+    mode = ["-S"] if Path(osqueryi).name in {"osqueryd", "osqueryd.exe"} else []
+    raw = run([osqueryi, *mode, "--json", sql], timeout=timeout)
     return parse_json_array(raw)
 
 
