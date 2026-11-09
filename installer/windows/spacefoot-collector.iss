@@ -22,6 +22,7 @@ WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
+SetupIconFile={#RepoRoot}frontend\assets\brand\app-icon.ico
 UninstallDisplayIcon={app}\spacefoot-it-collector-windows.exe
 
 [Languages]

@@ -1,0 +1,34 @@
+name: Authorize Parceo production origin
+on:
+  push:
+    branches: [codex/parceo-sillage-production]
+    paths: [.github/workflows/parceo-origin.yml]
+permissions:
+  contents: read
+concurrency:
+  group: parceo-origin
+  cancel-in-progress: false
+jobs:
+  quality:
+    uses: ./.github/workflows/quality.yml
+  configure-origin:
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: supabase/setup-cli@afb1b15109756ea5cf9d8985a359d9095235ca2b # v2
+        with:
+          version: 2.101.0
+      - name: Allow dedicated and legacy web origins only
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase secrets set --project-ref oletfrcaptvardmdwacy ALLOWED_ORIGINS=https://badr-spacefoot.github.io,https://parceo.piqa.fr
+      - name: Verify CORS for both origins
+        run: |
+          python3 - <<'PY'
+          import urllib.request
+          for origin in ["https://badr-spacefoot.github.io", "https://parceo.piqa.fr"]:
+              req = urllib.request.Request("https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api/config", method="OPTIONS", headers={"Origin": origin, "Access-Control-Request-Method": "GET"})
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  assert response.headers["Access-Control-Allow-Origin"] == origin
+          print("Both exact origins accepted")
+          PY
