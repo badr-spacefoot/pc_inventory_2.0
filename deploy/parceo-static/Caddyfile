@@ -1,0 +1,17 @@
+{
+	admin off
+	auto_https off
+}
+:8080 {
+	root * /srv/current
+	encode zstd gzip
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		X-Frame-Options DENY
+		X-Robots-Tag "noindex, nofollow"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https://oletfrcaptvardmdwacy.supabase.co https://api.open-meteo.com; frame-src https://www.google.com https://www.openstreetmap.org; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+		Cache-Control "no-cache"
+	}
+	file_server
+}

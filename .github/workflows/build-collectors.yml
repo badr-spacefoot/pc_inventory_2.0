@@ -639,4 +639,4 @@ jobs:
           gh release create "$GITHUB_REF_NAME" release-upload/* --prerelease --latest=false \
             --repo "$GITHUB_REPOSITORY" --verify-tag \
             --title "Parcéo Collector 0.1.54 — Sillage, téléchargement manuel non signé" \
-            --notes-file docs/collector/manual-release-0.1.54.md
+            --notes-file docs/collector/manual-release.md

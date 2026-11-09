@@ -1,0 +1,30 @@
+name: parceo-static
+services:
+  web:
+    image: caddy@sha256:71d41fe4b1ae92a058abc87afe614178b996d8a6b96d0f4c71ae30606e5927e3
+    container_name: piqa-parceo-web
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 64m
+    cpus: 0.25
+    tmpfs: [/tmp, /config, /data]
+    volumes:
+      - ./site:/srv:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    networks: [proxy]
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+    healthcheck:
+      test: [CMD, wget, -q, --spider, http://127.0.0.1:8080/health.txt]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+networks:
+  proxy:
+    external: true
+    name: vaultwarden_proxy

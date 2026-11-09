@@ -1,0 +1,10 @@
+# BEGIN PARCEO MANAGED BLOCK
+parceo.piqa.fr {
+	encode zstd gzip
+	reverse_proxy piqa-parceo-web:8080
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+}
+# END PARCEO MANAGED BLOCK
