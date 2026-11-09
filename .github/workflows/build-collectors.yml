@@ -502,7 +502,7 @@ jobs:
           mkdir -p "$package_root/DEBIAN" "$install_root" "$package_root/usr/share/applications" "$package_root/usr/share/icons/hicolor/256x256/apps"
           cp "dist/${{ matrix.artifact }}" "$install_root/spacefoot-it-collector"
           chmod 755 "$install_root/spacefoot-it-collector"
-          cp frontend/assets/brand/app-icon.png "$package_root/usr/share/icons/hicolor/256x256/apps/spacefoot-it-collector.png"
+          cp frontend/assets/brand/parceo/collector-256.png "$package_root/usr/share/icons/hicolor/256x256/apps/spacefoot-it-collector.png"
           cat > "$package_root/DEBIAN/control" <<EOF
           Package: spacefoot-it-collector
           Version: $version
