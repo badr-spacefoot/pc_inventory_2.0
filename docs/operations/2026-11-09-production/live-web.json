@@ -1,0 +1,78 @@
+{
+  "origin": "https://parceo.piqa.fr",
+  "syntheticApi": false,
+  "authenticated": false,
+  "productionWrites": 0,
+  "views": [
+    {
+      "width": 1440,
+      "theme": "light",
+      "file": "production-light-1440.png",
+      "font": "Manrope, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+      "manropeLoaded": true,
+      "overflow": false,
+      "logos": [
+        {
+          "src": "./assets/brand/parceo/logo-light.svg",
+          "loaded": true
+        }
+      ],
+      "csp": []
+    },
+    {
+      "width": 1440,
+      "theme": "dark",
+      "file": "production-dark-1440.png",
+      "font": "Manrope, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+      "manropeLoaded": true,
+      "overflow": false,
+      "logos": [
+        {
+          "src": "./assets/brand/parceo/logo-dark.svg",
+          "loaded": true
+        }
+      ],
+      "csp": []
+    },
+    {
+      "width": 390,
+      "theme": "light",
+      "file": "production-light-390.png",
+      "font": "Manrope, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+      "manropeLoaded": true,
+      "overflow": false,
+      "logos": [
+        {
+          "src": "./assets/brand/parceo/logo-light.svg",
+          "loaded": true
+        }
+      ],
+      "csp": []
+    },
+    {
+      "width": 390,
+      "theme": "dark",
+      "file": "production-dark-390.png",
+      "font": "Manrope, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+      "manropeLoaded": true,
+      "overflow": false,
+      "logos": [
+        {
+          "src": "./assets/brand/parceo/logo-dark.svg",
+          "loaded": true
+        }
+      ],
+      "csp": []
+    }
+  ],
+  "errors": [],
+  "csp": [],
+  "httpFailures": [],
+  "tls": {
+    "issuer": "YE1",
+    "protocol": "TLS 1.3",
+    "subjectName": "parceo.piqa.fr",
+    "validFrom": 1794239530,
+    "validTo": 1802015529
+  }
+}

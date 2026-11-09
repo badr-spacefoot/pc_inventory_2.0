@@ -1,0 +1,49 @@
+{
+  "id": 439424916,
+  "tag": "collector-manual-v0.1.57",
+  "url": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/tag/collector-manual-v0.1.57",
+  "prerelease": true,
+  "publishedAt": "2026-11-09T17:18:23Z",
+  "assets": [
+    {
+      "name": "collector-releases.json",
+      "bytes": 1989,
+      "digest": "sha256:dfffd7f610da8c94d3734c35e9d33ba66c7eaf2ce6f62278378bf2d7f578de9b",
+      "url": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/download/collector-manual-v0.1.57/collector-releases.json"
+    },
+    {
+      "name": "parceo-collector-source-0.1.57.zip",
+      "bytes": 292421,
+      "digest": "sha256:780fe6ff404daa72b48ee85590fa33c311af0ed681e7e3c4eff8649257d92e09",
+      "url": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/download/collector-manual-v0.1.57/parceo-collector-source-0.1.57.zip"
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "bytes": 521,
+      "digest": "sha256:2bc60e774d5763e3d97f2cd67c41ab56bab68fbb328f263ec782f8cd9549ca69",
+      "url": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/download/collector-manual-v0.1.57/SHA256SUMS.txt"
+    },
+    {
+      "name": "spacefoot-it-collector-linux-0.1.57.deb",
+      "bytes": 95095232,
+      "digest": "sha256:af9de439b25d7037443b8f710eda01154bca718b4e4e664aa9ddca61925e6f95",
+      "url": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/download/collector-manual-v0.1.57/spacefoot-it-collector-linux-0.1.57.deb"
+    },
+    {
+      "name": "spacefoot-it-collector-macos-0.1.57.app.zip",
+      "bytes": 40647679,
+      "digest": "sha256:0d7fa3f26191f4a40a4e50061343604c60978678e7b9389d581ac9cdedf08881",
+      "url": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/download/collector-manual-v0.1.57/spacefoot-it-collector-macos-0.1.57.app.zip"
+    },
+    {
+      "name": "spacefoot-it-collector-windows-0.1.57-setup.exe",
+      "bytes": 33059080,
+      "digest": "sha256:fb79cc1f585ccc76da4d5d4fba59ea308806b91cd8736b28b6de6f2ea484ff34",
+      "url": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/download/collector-manual-v0.1.57/spacefoot-it-collector-windows-0.1.57-setup.exe"
+    }
+  ],
+  "workflowRun": 42662292491,
+  "reportedTargetCommitish": "main",
+  "tagCommit": "d569110218de1b02ee1ea23b30f8a2fec5b04154",
+  "stableLatestUnchanged": "collector-v0.1.52"
+}

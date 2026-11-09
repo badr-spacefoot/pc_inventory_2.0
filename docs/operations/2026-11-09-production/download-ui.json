@@ -1,0 +1,19 @@
+{
+  "note": "Téléchargement manuel non signé. Windows ou macOS peut afficher un avertissement de sécurité. Vérifiez le fichier sur la page de version.",
+  "noteEnabled": true,
+  "primary": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/download/collector-manual-v0.1.57/spacefoot-it-collector-windows-0.1.57-setup.exe",
+  "platforms": [
+    {
+      "platform": "windows",
+      "url": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/download/collector-manual-v0.1.57/spacefoot-it-collector-windows-0.1.57-setup.exe"
+    },
+    {
+      "platform": "macos",
+      "url": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/download/collector-manual-v0.1.57/spacefoot-it-collector-macos-0.1.57.app.zip"
+    },
+    {
+      "platform": "linux",
+      "url": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/download/collector-manual-v0.1.57/spacefoot-it-collector-linux-0.1.57.deb"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "repository": "badr-spacefoot/pc_inventory_2.0",
+  "tag": "collector-manual-v0.1.57",
+  "workflowRun": 42662292491,
+  "qualityJob": 129316703561,
+  "conclusion": "success",
+  "typescriptPassed": 233,
+  "typescriptNetworkSkipped": 3,
+  "pythonPassed": 39,
+  "frontendBuild": "passed",
+  "checks": ["format", "eslint", "typescript", "deno", "legacy-syntax", "python-compile", "typescript-tests", "python-tests", "frontend-build"],
+  "candidateNativeRun": 42661157731,
+  "candidateNativeConclusion": "success"
+}

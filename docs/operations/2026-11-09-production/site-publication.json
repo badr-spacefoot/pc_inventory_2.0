@@ -1,0 +1,12 @@
+{
+  "releaseId": "sillage-20261109-0-1-57",
+  "collectorVersion": "0.1.57",
+  "siteZipSha256": "1d607a6c5464f4f326e13ede6c8b7019af6ab9697a44f11c925dbb5e5d3fac4a",
+  "files": 61,
+  "releaseAssetsGithubDigestVerified": 6,
+  "reviewedSourceMatches": true,
+  "deployed": true,
+  "publicManifestMatchesRelease": true,
+  "publicManifestSha256": "dfffd7f610da8c94d3734c35e9d33ba66c7eaf2ce6f62278378bf2d7f578de9b",
+  "httpsCertificateValidated": true
+}

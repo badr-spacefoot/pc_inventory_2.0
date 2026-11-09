@@ -1,0 +1,28 @@
+[
+  {
+    "host": "parceo.piqa.fr",
+    "status": 200
+  },
+  {
+    "host": "atlas.piqa.fr",
+    "status": 200
+  },
+  {
+    "host": "pulse.piqa.fr",
+    "headStatus": 501,
+    "status": 200,
+    "method": "GET"
+  },
+  {
+    "host": "pimboost.piqa.fr",
+    "status": 401
+  },
+  {
+    "host": "vault.piqa.fr",
+    "status": 200
+  },
+  {
+    "host": "n8n.piqa.fr",
+    "status": 200
+  }
+]
