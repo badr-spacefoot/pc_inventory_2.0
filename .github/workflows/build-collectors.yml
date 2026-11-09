@@ -155,9 +155,22 @@ jobs:
           python scripts/download-osquery.py macos
           pkgutil --check-signature installer-assets/osquery.pkg
           pkgutil --expand-full installer-assets/osquery.pkg installer-assets/osquery-root
-          osqueryi_path="$(find installer-assets/osquery-root -name osqueryi -type f | head -n 1)"
-          test -n "$osqueryi_path"
-          cp "$osqueryi_path" installer-assets/bundled-tools/osqueryi
+          python - <<'PY'
+          from pathlib import Path
+          import shutil
+
+          root = Path("installer-assets/osquery-root").resolve()
+          # The official package uses an osqueryi symlink to its multicall
+          # osqueryd binary. Do not follow absolute symlinks out of the package.
+          candidates = [p for p in root.rglob("osqueryi") if p.is_file() and not p.is_symlink()]
+          if not candidates:
+              candidates = [p for p in root.rglob("osqueryd") if p.is_file() and not p.is_symlink()]
+          if len(candidates) != 1 or not candidates[0].resolve().is_relative_to(root):
+              raise SystemExit("Expected one regular osquery multicall executable inside the verified package")
+          shutil.copy2(candidates[0], "installer-assets/bundled-tools/osqueryi")
+          PY
+          lipo -verify_arch x86_64 installer-assets/bundled-tools/osqueryi
+          codesign --verify --strict installer-assets/bundled-tools/osqueryi
           chmod +x installer-assets/bundled-tools/osqueryi
 
       - name: Prepare macOS app icon
