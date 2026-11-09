@@ -169,7 +169,7 @@ jobs:
               raise SystemExit("Expected one regular osquery multicall executable inside the verified package")
           shutil.copy2(candidates[0], "installer-assets/bundled-tools/osqueryi")
           PY
-          lipo -verify_arch x86_64 installer-assets/bundled-tools/osqueryi
+          lipo installer-assets/bundled-tools/osqueryi -verify_arch x86_64
           codesign --verify --strict installer-assets/bundled-tools/osqueryi
           chmod +x installer-assets/bundled-tools/osqueryi
 

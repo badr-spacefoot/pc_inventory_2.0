@@ -1,4 +1,4 @@
-# Parcéo Collector 0.1.56 — Sillage
+# Parcéo Collector 0.1.57 — Sillage
 
 Nouvelle identité Parcéo Sillage : logos, icônes Windows/macOS/Linux, thèmes clair/sombre et polices locales Manrope/IBM Plex Mono. L’identité Windows et les raccourcis utilisent désormais Piqa.Parceo.Collector. Cette version inclut les corrections de sécurité et de fiabilité du collecteur préparées lors de l’audit.
 
