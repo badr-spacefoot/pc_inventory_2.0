@@ -47,6 +47,7 @@ def main():
                "productionInventoryTouched": False, "directPayloadExecution": False,
                "quarantineRemoved": False, "gatekeeperExceptionGranted": False,
                "launchSucceeded": False}
+    launcher = None
     try:
         spec = importlib.util.spec_from_file_location("binary_test_ui", Path(__file__).with_name("collector-binary-acceptance.py"))
         ui = importlib.util.module_from_spec(spec)
@@ -116,8 +117,7 @@ def main():
         receipt["adHocSignature"] = "Signature=adhoc" in identity.stderr
         assert not collector_running(), "Payload must not execute before LaunchServices test"
 
-        launch = command("/usr/bin/open", str(app), timeout=30)
-        receipt["launchServicesExitCode"] = launch.returncode
+        launcher = subprocess.Popen(["/usr/bin/open", str(app)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         until = time.monotonic() + 35
         blocked = False
         while time.monotonic() < until:
@@ -132,6 +132,7 @@ def main():
                 break
             time.sleep(1)
         receipt["gatekeeperBlockVisible"] = blocked
+        receipt["launchServicesExitCode"] = launcher.poll()
         receipt["collectorProcessObserved"] = collector_running()
         (root / "launch-result.png").write_bytes((root / "screen.png").read_bytes())
         assessment = command("/usr/sbin/spctl", "--assess", "--type", "execute", "--verbose=4", str(app))
@@ -155,6 +156,10 @@ def main():
             (root / "launch-result.png").write_bytes((root / "screen.png").read_bytes())
         raise
     finally:
+        if launcher and launcher.poll() is None:
+            # Stop only the waiting open client, without approving the alert.
+            launcher.terminate()
+            launcher.wait(timeout=10)
         (root / "result.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
         print(json.dumps(receipt, indent=2))
 
