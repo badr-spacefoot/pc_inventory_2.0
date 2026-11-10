@@ -17,6 +17,7 @@ import plistlib
 import subprocess
 import sys
 import threading
+import urllib.parse
 import urllib.request
 import zipfile
 
@@ -27,6 +28,45 @@ ASSETS = {
     "Darwin": ("parceo-collector-macos-0.1.58.app.zip", "69a54fe02b0cd340ea01ce5a4bad86c91eef923bb6a82bdd79e474b48204a0be"),
 }
 SOURCE = ("parceo-collector-source-0.1.58.zip", "a243faed748aa04d91bb31bf45dd334b708e80cb471891442c050ce3ed364b48")
+PRODUCTION_API = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
+
+
+def production_context() -> dict | None:
+    if os.environ.get("PARCEO_ACCEPTANCE_PRODUCTION") != "1":
+        return None
+    if not (os.environ.get("GITHUB_REF") == "refs/heads/main"
+            and os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+            and os.environ.get("GITHUB_REPOSITORY") == "badr-spacefoot/pc_inventory_2.0"):
+        raise ValueError("Production acceptance requires a manual run of protected main")
+    code = os.environ.get("PARCEO_PRODUCTION_INVITE", "")
+    if not code.startswith("inv_") or not all(c.isalnum() or c in "_-" for c in code):
+        raise ValueError("A dedicated one-use production invitation is required")
+
+    def request(path, body=None):
+        req = urllib.request.Request(
+            PRODUCTION_API + path,
+            data=json.dumps(body).encode() if body is not None else None,
+            headers={"Content-Type": "application/json"},
+        )
+        # Never forward an invitation to a redirect destination.
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *args, **kwargs):
+                raise ValueError("Production API redirects are forbidden")
+        with urllib.request.build_opener(NoRedirect()).open(req, timeout=25) as response:
+            return json.loads(response.read(1024 * 1024))
+
+    path = "/collect/invite/" + urllib.parse.quote(code, safe="")
+    invited = request(path)
+    assert str(invited.get("label", "")).startswith("RECETTE-VM-"), "Only dedicated VM test invitations are accepted"
+    assert invited.get("maxUses") == 1 and invited.get("useCount") == 0, "VM acceptance requires an unused one-use invitation"
+    assert invited.get("email"), "Production invitation must have a fixed recipient"
+    assert not invited.get("deviceId"), "VM acceptance must not target an existing PC"
+    prepared = request(path + "/prefill", {
+        "apiUrl": PRODUCTION_API,
+        "comment": f"RECETTE VM GitHub Actions {platform.system()} {platform.machine()} run {os.environ.get('GITHUB_RUN_ID')}",
+    })
+    assert prepared.get("prefillCode"), "Production prefill was not created"
+    return {"apiUrl": PRODUCTION_API, "prefillCode": prepared["prefillCode"], "email": invited["email"]}
 
 
 def run(*args, **kwargs):
@@ -103,7 +143,7 @@ def native_package(root: Path, package: Path, receipt: dict) -> Path:
     return osquery
 
 
-def source_ui_roundtrip(source: Path, osquery: Path, receipt: dict) -> None:
+def source_ui_roundtrip(source: Path, osquery: Path, receipt: dict, target: dict | None = None) -> None:
     os.environ["SPACEFOOT_COLLECTOR_STARTUP_PROBE"] = "1"
     os.environ["SPACEFOOT_OSQUERYI"] = str(osquery)
     sys.path.insert(0, str(source))
@@ -160,10 +200,11 @@ def source_ui_roundtrip(source: Path, osquery: Path, receipt: dict) -> None:
                 failures.append(type(error).__name__)
                 self.send_error(400)
 
-    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    endpoint = f"http://127.0.0.1:{server.server_port}"
-    worker = threading.Thread(target=server.serve_forever, daemon=True)
-    worker.start()
+    server = None if target else ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    endpoint = target["apiUrl"] if target else f"http://127.0.0.1:{server.server_port}"
+    worker = None if target else threading.Thread(target=server.serve_forever, daemon=True)
+    if worker:
+        worker.start()
     config = importlib.import_module("collectors.desktop_collector.config")
     config.DEFAULT_API_URL = endpoint
     config.DRAFT_PATH = source / "fixture-preferences.json"
@@ -172,7 +213,11 @@ def source_ui_roundtrip(source: Path, osquery: Path, receipt: dict) -> None:
     original_api = module.api_request
 
     def loopback_api(url, path, **kwargs):
-        assert url == endpoint, "Acceptance API must stay on loopback"
+        assert url == endpoint, "Acceptance API destination changed"
+        if target:
+            assert endpoint == PRODUCTION_API
+            assert path == "/organization" or path in ("/collect/profile", "/collect/scan", "/collect/access-token/validate") or path.startswith("/collect/prefill/")
+            requests.append("/collect/prefill/[redacted]" if path.startswith("/collect/prefill/") else path)
         return original_api(url, path, **kwargs)
 
     module.api_request = loopback_api
@@ -181,7 +226,7 @@ def source_ui_roundtrip(source: Path, osquery: Path, receipt: dict) -> None:
     app.withdraw()
     assert app.api_url.get() == endpoint, "Released source initialized with a non-fixture endpoint"
     assert module.COLLECTOR_VERSION == "0.1.58", "Wrong source imported by acceptance"
-    app.prefill_code.set("vm-fixture")
+    app.prefill_code.set(target["prefillCode"] if target else "vm-fixture")
     phase = "prefill"
     receipt["requests"] = requests
 
@@ -189,27 +234,33 @@ def source_ui_roundtrip(source: Path, osquery: Path, receipt: dict) -> None:
         nonlocal phase
         try:
             receipt["phase"] = phase
-            receipt["uiStatus"] = app.status.get()
-            receipt["connectionStatus"] = app.connection_status.get()
+            if not target:
+                receipt["uiStatus"] = app.status.get()
+                receipt["connectionStatus"] = app.connection_status.get()
             assert not failures, "Loopback fixture rejected a request"
             assert app.callback_exception_count == 0, "Tk callback failed"
-            if phase == "prefill" and app.access_token.get() == access:
+            if phase == "prefill" and (bool(app.access_token.get()) if target else app.access_token.get() == access):
                 phase = "organization"
                 app.validate_token()
             elif phase == "organization" and app.teams:
-                assert app.profile_body()["email"] == profile["email"]
+                assert app.profile_body()["email"] == (target["email"] if target else profile["email"])
                 phase = "scan"
                 app.scan_computer()
             elif phase == "scan" and app.payload:
                 phase = "submit"
                 app.submit_inventory()
             elif phase == "submit" and app.submitted:
-                assert app.submission_device_id == "vm-fixture-device"
-                assert len(received) == 1
+                if target:
+                    assert app.submission_device_id, "Production did not return a device identifier"
+                    receipt["productionDeviceFingerprint"] = hashlib.sha256(app.submission_device_id.encode()).hexdigest()
+                else:
+                    assert app.submission_device_id == "vm-fixture-device"
+                    assert len(received) == 1
                 assert requests.count("/collect/profile") == 1
+                assert requests.count("/collect/scan") == 1
                 receipt.update({"releasedSourceUiRoundtrip": True, "realVmHardwareScanned": True,
-                                "apiTarget": "loopback fixture", "receivedInventoryCount": 1,
-                                "engine": received[0].get("collectorEngine"), "requests": requests,
+                                "apiTarget": "Parcéo production" if target else "loopback fixture", "receivedInventoryCount": 1,
+                                "engine": app.payload.get("collectorEngine"), "requests": requests,
                                 "callbackExceptions": app.callback_exception_count})
                 app.destroy()
                 return
@@ -231,9 +282,10 @@ def source_ui_roundtrip(source: Path, osquery: Path, receipt: dict) -> None:
         assert receipt.get("releasedSourceUiRoundtrip"), "Submission did not complete"
     finally:
         receipt["fixtureFailures"] = failures
-        server.shutdown()
-        server.server_close()
-        worker.join(timeout=5)
+        if server:
+            server.shutdown()
+            server.server_close()
+            worker.join(timeout=5)
 
 
 def main():
@@ -250,10 +302,12 @@ def main():
         source = root / "released-source"
         extract_source(source_archive, source)
         osquery = native_package(root, package, receipt)
-        source_ui_roundtrip(source, osquery, receipt)
+        receipt["productionInventoryTouched"] = os.environ.get("PARCEO_ACCEPTANCE_PRODUCTION") == "1"
+        target = production_context()
+        source_ui_roundtrip(source, osquery, receipt, target)
         receipt["passed"] = True
     except Exception as error:
-        receipt["failure"] = f"{type(error).__name__}: {error}"
+        receipt["failure"] = type(error).__name__ if receipt["productionInventoryTouched"] else f"{type(error).__name__}: {error}"
         raise
     finally:
         (root / "result.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")

@@ -15,3 +15,11 @@ L’API destinataire est un serveur de recette en boucle locale qui vérifie les
 - Aucun `xattr` de suppression de quarantaine, aucune désactivation de Gatekeeper, aucun certificat de test et aucun jeton de production ne sont utilisés.
 - La vérification `spctl` reste obligatoire dans le parcours de mise à jour automatique signé. Pour une distribution explicitement manuelle (`signed: false`), la commande de support vérifie `codesign` puis appelle `open` : macOS conserve le contrôle et présente ses propres avertissements. Une décision de confiance éventuelle appartient à l’utilisateur. Voir [les indications Apple](https://support.apple.com/en-us/102445).
 - Les VM sont détruites en fin de tâche. Un test d’installation sur un poste utilisateur déjà géré reste une recette distincte.
+
+## Étape de production, désactivée sans autorisation
+
+Le workflow distinct `Collector production acceptance (manual only)` ne s’exécute que par déclenchement manuel sur `main`, dans l’environnement GitHub `production`. Il est inutilisable sans les trois secrets d’invitation dédiés `COLLECTOR_VM_INVITE_LINUX`, `COLLECTOR_VM_INVITE_MAC_INTEL` et `COLLECTOR_VM_INVITE_MAC_ARM`. Aucune invitation ni aucun secret ne sont créés par les workflows.
+
+Avant son utilisation, obtenir une confirmation pour créer les trois invitations, chacune valable 24 heures avec une seule utilisation, destinées aux VM GitHub Actions et à de nouvelles fiches de recette. Le script exige un libellé commençant par `RECETTE-VM-`, une utilisation disponible et aucun poste existant ciblé. Le destinataire et son profil proviennent de l’invitation ; les champs utilisateur ne sont pas inventés par le scénario. La destination est exclusivement l’API HTTPS Parcéo codée dans le script et les redirections sont refusées.
+
+La recette de production utilise le même source publié et le même scan réel. Le commentaire marque la VM avec le numéro de run. Les preuves ne publient ni le code d’invitation, ni le préremplissage, ni le profil, ni l’inventaire brut ; l’identifiant machine est remplacé par une empreinte. Après le run, contrôler les fiches dans Parcéo, passer les VM de recette en `Sorti du parc` et supprimer les trois secrets temporaires. Cette étape n’est pas incluse dans les résultats des tests isolés.
