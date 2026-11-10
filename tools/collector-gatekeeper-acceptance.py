@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import subprocess
 import time
 
@@ -67,11 +68,13 @@ def main():
                 text = " ".join(line["text"] for line in lines).casefold()
                 # Only the expected browser download permission is accepted.
                 # No Gatekeeper or system-security approval is ever clicked.
-                if ("allow downloads on" in text or "allow downloads from" in text) and "github.com" in text:
+                origin = re.search(r"(?<![a-z0-9.-])(github\.com|release-\s*assets\.githubusercontent\.com)(?![a-z0-9.-])", text)
+                if ("allow downloads on" in text or "allow downloads from" in text) and origin:
                     allow = [line for line in lines if line["text"].strip().casefold() == "allow"]
                     if len(allow) == 1:
                         driver.click(allow[0])
                         receipt["safariDownloadPermissionAccepted"] = True
+                        receipt["safariDownloadPermissionOrigin"] = re.sub(r"\s+", "", origin[0])
                 time.sleep(1)
             receipt["lastScreenText"] = [line["text"] for line in screen()]
             raise TimeoutError("Browser download/extraction did not finish")

@@ -4274,8 +4274,8 @@ function updateCollectorDownloadUi() {
     signingNote.hidden = !state.collectorReleases?.manualOnly;
     signingNote.textContent =
       state.language === "en"
-        ? "Unsigned manual download. Windows or macOS may show a security warning. Verify the download on the release page."
-        : "Téléchargement manuel non signé. Windows ou macOS peut afficher un avertissement de sécurité. Vérifiez le fichier sur la page de version.";
+        ? "Unsigned manual download. Windows may show a security warning; macOS Gatekeeper may block opening. Verify the download on the release page."
+        : "Téléchargement manuel non signé. Windows peut afficher un avertissement de sécurité ; macOS Gatekeeper peut bloquer l'ouverture. Vérifiez le fichier sur la page de version.";
   }
   updateUbuntuInstallGuide();
   updateMacosInstallGuide();
