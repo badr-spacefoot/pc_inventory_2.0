@@ -12,6 +12,11 @@ func output(_ value: Any) throws {
 switch args[1] {
 case "permissions":
     try output(["postEvents": CGPreflightPostEventAccess(), "screenCapture": CGPreflightScreenCaptureAccess()])
+case "activate":
+    guard let app = NSRunningApplication(processIdentifier: Int32(args[2])!) else { fatalError("Published application process missing") }
+    app.activate(options: [.activateIgnoringOtherApps])
+    try output(["activated": true, "screenWidth": CGDisplayBounds(CGMainDisplayID()).width,
+                "screenHeight": CGDisplayBounds(CGMainDisplayID()).height])
 case "click":
     guard CGPreflightPostEventAccess() else { fatalError("GUI event permission is unavailable") }
     let point = CGPoint(x: Double(args[2])!, y: Double(args[3])!)

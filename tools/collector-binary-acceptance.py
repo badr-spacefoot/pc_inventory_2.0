@@ -30,6 +30,7 @@ class ScreenDriver:
         self.mac = platform.system() == "Darwin"
         self.helper = root / "native-ui"
         self.last_lines = []
+        self.receipt = receipt
         if self.mac:
             packages.run("swiftc", str(Path(__file__).with_name("collector-native-ui.swift")), "-o", str(self.helper))
             permissions = json.loads(subprocess.check_output([str(self.helper), "permissions"]))
@@ -59,6 +60,14 @@ class ScreenDriver:
                 raise RuntimeError("Published executable exited before GUI acceptance completed")
             lines = self.observe()
             self.last_lines = lines
+            # A VM privacy prompt can cover the application. Deny optional LAN
+            # discovery rather than broadening access for an inventory test.
+            denial = [line for line in lines if normalize(line["text"]).replace("’", "'") == "don't allow"]
+            if denial and any("on local networks" in normalize(line["text"]) for line in lines):
+                self.click(denial[0])
+                self.receipt["optionalLocalNetworkPermission"] = "denied"
+                time.sleep(0.5)
+                continue
             hits = [line for line in lines if (normalize(line["text"]) == normalize(phrase) if exact else normalize(phrase) in normalize(line["text"]))]
             if hits:
                 # Footer action is lower than matching explanatory labels.
@@ -177,13 +186,17 @@ def main():
         else:
             server, worker, target, requests, received, failures = fixture(receipt)
         assert not preferences.exists(), "Disposable VM must have no pre-existing collector preferences"
-        preferences.write_text(json.dumps({"autoUpdate": False, "language": "en", "apiUrl": target["apiUrl"]}), encoding="utf-8")
+        preferences.write_text(json.dumps({"autoUpdate": False, "language": "en", "apiUrl": target["apiUrl"],
+                                           "themePreferenceExplicit": True, "themePreference": "light"}), encoding="utf-8")
         created_preferences = True
         env = {k: v for k, v in os.environ.items() if k not in ("SPACEFOOT_COLLECTOR_STARTUP_PROBE", "PYTHONPATH", "PYTHONHOME", "PARCEO_PRODUCTION_INVITE")}
         if platform.system() == "Linux":
             env["SPACEFOOT_OSQUERYI"] = str(osquery)
         with (root / "native-private.log").open("wb") as log:
             process = subprocess.Popen([str(binary), "--api-url", target["apiUrl"], "--prefill-code", target["prefillCode"]], env=env, stdout=log, stderr=log)
+            if platform.system() == "Darwin":
+                time.sleep(3)
+                receipt["windowActivation"] = json.loads(subprocess.check_output([str(driver.helper), "activate", str(process.pid)]))
             receipt["phase"] = "prefill"
             driver.wait_for("Profile ready", process)
             driver.click(driver.wait_for("Next", process, exact=True))
