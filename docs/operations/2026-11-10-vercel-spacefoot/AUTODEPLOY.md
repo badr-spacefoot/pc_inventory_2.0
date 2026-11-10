@@ -4,14 +4,14 @@ Le projet Vercel `parceo` de l’équipe `spacefoot1` est connecté au seul dép
 
 ## Branche et build
 
-- Branche de production : `codex/parceo-sillage-production`.
+- Branche de production unique : `main`.
 - Domaine de production : https://parceo.piqa.fr.
 - Node 22.x et pnpm 10.34.5, dépendances installées avec `pnpm install --frozen-lockfile`.
 - Commande : `pnpm run build:vercel`. Elle exécute lint, typecheck, 99 tests frontend/packaging, construit le frontend puis publie uniquement `dist/vercel-site`.
 - Le workflow GitHub Quality complet s’exécute également sur cette branche. Il ne déploie pas de schéma Supabase.
 - Les trois URL publiques API/script/manifeste sont configurées dans les variables Vercel de production et restent identiques à la migration validée.
 
-Les commits destinés à la production doivent être intégrés à `codex/parceo-sillage-production`. `main` reste une branche historique et ne constitue pas la source du site Parcéo actuel.
+Les commits destinés à la production doivent être intégrés à `main`, qui contient Sillage et la configuration Vercel validée. Les anciennes branches `codex/parceo-*` sont conservées pour l’historique et ne pilotent plus la production.
 
 Les builds qui échouent à l’installation, aux vérifications ou à la génération du paquet ne remplacent pas la production. Les previews conservent la protection Vercel existante ; aucun wildcard CORS n’est ajouté à Supabase. Les commentaires automatiques sur les pull requests sont désactivés.
 
@@ -25,4 +25,6 @@ L’affectation automatique des domaines est activée pour les prochaines public
 
 Consulter les déploiements sur https://vercel.com/spacefoot1/parceo/deployments. Un retour arrière Vercel peut désactiver l’affectation automatique des domaines : après correction, promouvoir le déploiement validé et vérifier que l’option est de nouveau active avant la publication suivante.
 
-Le collecteur natif et le backend Supabase gardent leurs mécanismes de publication séparés. Un build Vercel publie le site et ses liens de téléchargement ; il ne crée pas de nouvelle release native et n’applique aucune migration SQL.
+Le collecteur natif et le backend Supabase gardent leurs mécanismes de publication séparés, à partir de la version revue de `main`. Un build Vercel publie le site et ses liens de téléchargement ; il ne crée pas de nouvelle release native et n’applique aucune migration SQL. Le workflow Supabase et le réglage d’origine sont uniquement manuels. Le workflow Pages de secours est manuel et exige `PRODUCTION_FRONTEND=github-pages` ; la valeur de production actuelle est `vercel`.
+
+La maintenance programmée prix/CPU reste active depuis la branche par défaut `main`. Le nettoyage des factures nécessite `INVOICE_STORAGE_CLEANUP_ENABLED=true` après publication de la migration de file d’attente et de l’API correspondante ; cette option reste désactivée pendant la consolidation de branches.

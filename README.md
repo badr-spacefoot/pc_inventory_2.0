@@ -1,8 +1,10 @@
-# Spacefoot IT Inventory
+# Parcéo — Spacefoot IT Inventory
 
 Application web d'inventaire de parc informatique pour remplacer ou compléter l'ancien flux Google Sheets.
 
-Le front est statique et peut etre heberge sur GitHub Pages. La collecte complete du materiel passe par un script local volontaire, car un navigateur ne peut pas lire de maniere fiable et autorisee le numero de serie, le CPU, la RAM, le stockage, l'adresse MAC ou l'utilisateur Windows.
+Le site Sillage est publié automatiquement sur [parceo.piqa.fr](https://parceo.piqa.fr) par Vercel depuis `main`, l’unique branche de référence de production. Chaque build exécute lint, typecheck et les tests frontend avant publication. Voir [le fonctionnement des déploiements](docs/operations/2026-11-10-vercel-spacefoot/AUTODEPLOY.md).
+
+La collecte complète du matériel passe par le collecteur local lancé volontairement : un navigateur ne peut pas lire de manière fiable le numéro de série, le CPU, la RAM, le stockage, l’adresse MAC ou l’utilisateur Windows.
 
 ## Démarrage développeur
 
@@ -69,7 +71,8 @@ Responsabilités d'infrastructure :
 - `collectors/desktop_collector/` : application native avec relecture avant envoi.
 - `scripts/collect-windows.ps1` : fallback PowerShell de support Windows.
 - `.github/workflows/quality.yml` : contrôle qualité sur `main` et les pull requests.
-- `.github/workflows/pages.yml` : vérification, build et déploiement GitHub Pages.
+- `vercel.json` : vérification, build et publication automatique du site depuis `main`.
+- `.github/workflows/pages.yml` : publication GitHub Pages de secours, uniquement manuelle et sur sélection explicite de cet hébergeur.
 
 Flux:
 
@@ -134,7 +137,7 @@ supabase functions deploy inventory-api
 
 ### Deploiement cloud avec GitHub Actions
 
-Le workflow `.github/workflows/supabase-deploy.yml` deploie automatiquement l'API vers Supabase Cloud lorsque les fichiers `supabase/functions/` changent.
+Le workflow `.github/workflows/supabase-deploy.yml` se lance manuellement depuis GitHub Actions sur la version revue de `main`. Il applique les migrations SQL et publie l’API ; un simple push frontend ne le déclenche pas. Vérifier les migrations en attente et les sauvegardes avant de lancer une publication backend.
 
 Dans GitHub, configurer:
 
@@ -175,11 +178,17 @@ Ne pas ajouter de secret dans le frontend : tout son contenu est public sur GitH
 
 La météo de la barre supérieure utilise Open-Meteo côté navigateur. Par défaut, aucune clé API n'est nécessaire ; les coordonnées ci-dessus déterminent la ville affichée.
 
-## Deploiement GitHub Pages
+## Publication du site
+
+Intégrer les mises à jour à `main` après revue. Vercel construit `dist/vercel-site` et affecte automatiquement `parceo.piqa.fr` au build réussi. Le dernier déploiement réussi reste servi si le build échoue. Les anciennes branches `codex/parceo-*` ne sont plus des branches de production.
+
+### GitHub Pages de secours
+
+Ce mécanisme n’est pas utilisé en production. Il exige une sélection explicite de `PRODUCTION_FRONTEND=github-pages` et un lancement manuel du workflow Pages.
 
 1. Dans GitHub, ouvrir `Settings > Pages` et choisir GitHub Actions comme source.
 2. Vérifier que `ALLOWED_ORIGINS` contient l'URL GitHub Pages.
-3. Pousser sur `main` uniquement après validation de `.github/workflows/quality.yml`.
+3. Lancer manuellement le workflow Pages sur une version de `main` validée par le contrôle qualité.
 
 Le workflow `.github/workflows/pages.yml` installe les dépendances, exécute `pnpm run quality`, reconstruit `frontend/core.js`, puis utilise `scripts/package-site.mjs` pour publier uniquement les assets web et les deux scripts de collecte de secours. Les URLs publiques sont injectées dans `config.js`; les scripts de déploiement/import et les sources ne sont pas publiés.
 

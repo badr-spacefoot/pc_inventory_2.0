@@ -1,8 +1,6 @@
 name: Authorize Parceo production origin
 on:
-  push:
-    branches: [codex/parceo-sillage-production]
-    paths: [.github/workflows/parceo-origin.yml]
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:

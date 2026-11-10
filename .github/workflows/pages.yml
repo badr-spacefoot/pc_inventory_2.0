@@ -1,9 +1,6 @@
 name: Deploy GitHub Pages
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
@@ -17,7 +14,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: vars.PRODUCTION_FRONTEND != 'vps'
+    if: vars.PRODUCTION_FRONTEND == 'github-pages'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

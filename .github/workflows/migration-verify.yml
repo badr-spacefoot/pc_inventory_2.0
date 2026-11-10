@@ -1,7 +1,7 @@
 name: Verify Spacefoot migration access (read only)
 on:
   push:
-    branches: [codex/parceo-vercel-migration]
+    branches: [main]
     paths: [.github/workflows/migration-verify.yml]
 permissions:
   contents: read

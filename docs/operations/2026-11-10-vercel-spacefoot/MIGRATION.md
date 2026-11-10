@@ -35,7 +35,7 @@ Ces vérifications ne créent aucune collecte, session ou facture. Elles ne cons
 
 ## Prochaines publications
 
-Mise à jour : la publication automatique native GitHub/Vercel est configurée sur `codex/parceo-sillage-production`. Voir [AUTODEPLOY.md](AUTODEPLOY.md). Le paragraphe suivant décrit la situation initiale lors de la bascule.
+Mise à jour : la publication automatique native GitHub/Vercel est configurée sur `main`, consolidée avec Sillage. Voir [AUTODEPLOY.md](AUTODEPLOY.md). Le paragraphe suivant décrit la situation initiale lors de la bascule.
 
 La bascule utilise un déploiement Vercel de fichiers préconstruits. L’application GitHub Vercel n’a pas accès à ce dépôt personnel ; aucun accès supplémentaire n’a été accordé. Un push Git seul ne met donc pas Vercel à jour. Le domaine est explicitement associé au déploiement validé et l’affectation automatique des domaines est désactivée.
 

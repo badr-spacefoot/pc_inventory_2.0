@@ -1,15 +1,7 @@
 name: Deploy Supabase API
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "supabase/functions/**"
-      - "supabase/migrations/**"
-      - "supabase/schema.sql"
-      - "supabase/config.toml"
-      - ".github/workflows/supabase-deploy.yml"
+  # Backend/schema releases are deliberate, separate from automatic web releases.
   workflow_dispatch:
 
 permissions:

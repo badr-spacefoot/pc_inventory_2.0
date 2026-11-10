@@ -67,7 +67,8 @@ jobs:
           }
 
       - name: Retry pending invoice storage cleanup
-        if: always()
+        # Enable only after the cleanup queue migration and API are released.
+        if: always() && vars.INVOICE_STORAGE_CLEANUP_ENABLED == 'true'
         env:
           API_URL: ${{ vars.IT_INVENTORY_API_URL }}
           SYNC_TOKEN: ${{ secrets.ENRICHMENT_SYNC_TOKEN }}
