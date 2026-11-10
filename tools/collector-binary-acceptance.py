@@ -29,6 +29,7 @@ class ScreenDriver:
         self.root = root
         self.mac = platform.system() == "Darwin"
         self.helper = root / "native-ui"
+        self.last_lines = []
         if self.mac:
             packages.run("swiftc", str(Path(__file__).with_name("collector-native-ui.swift")), "-o", str(self.helper))
             permissions = json.loads(subprocess.check_output([str(self.helper), "permissions"]))
@@ -57,6 +58,7 @@ class ScreenDriver:
             if process.poll() is not None:
                 raise RuntimeError("Published executable exited before GUI acceptance completed")
             lines = self.observe()
+            self.last_lines = lines
             hits = [line for line in lines if (normalize(line["text"]) == normalize(phrase) if exact else normalize(phrase) in normalize(line["text"]))]
             if hits:
                 # Footer action is lower than matching explanatory labels.
@@ -157,7 +159,8 @@ def main():
     receipt = {"release": "0.1.58", "os": platform.system(), "architecture": platform.machine(),
                "passed": False, "collectorSourceDownloadedOrImported": False,
                "productionInventoryTouched": False, "apiTarget": "Parcéo production" if production else "loopback fixture"}
-    process = server = worker = None
+    process = server = worker = driver = None
+    requests = []
     preferences = Path.home() / ".spacefoot_it_collector.json"
     created_preferences = False
     try:
@@ -202,6 +205,13 @@ def main():
             receipt["passed"] = True
     except Exception as error:
         receipt["failure"] = type(error).__name__ if production else f"{type(error).__name__}: {error}"
+        if not production:
+            receipt["requests"] = requests
+            if driver:
+                receipt["lastScreenText"] = [line["text"] for line in driver.last_lines]
+                screen = root / "screen-private.png"
+                if screen.exists():
+                    (root / "binary-failure.png").write_bytes(screen.read_bytes())
         raise
     finally:
         if process:

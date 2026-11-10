@@ -60,5 +60,6 @@ jobs:
           path: |
             ${{ runner.temp }}/parceo-binary-acceptance/result.json
             ${{ runner.temp }}/parceo-binary-acceptance/binary-success.png
+            ${{ runner.temp }}/parceo-binary-acceptance/binary-failure.png
           if-no-files-found: warn
           retention-days: 14
