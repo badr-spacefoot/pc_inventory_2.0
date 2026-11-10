@@ -67,7 +67,7 @@ def main():
                 text = " ".join(line["text"] for line in lines).casefold()
                 # Only the expected browser download permission is accepted.
                 # No Gatekeeper or system-security approval is ever clicked.
-                if "download" in text and "github.com" in text:
+                if ("allow downloads on" in text or "allow downloads from" in text) and "github.com" in text:
                     allow = [line for line in lines if line["text"].strip().casefold() == "allow"]
                     if len(allow) == 1:
                         driver.click(allow[0])
