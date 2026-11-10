@@ -20,6 +20,21 @@ def load_script(name, path):
 
 
 class CollectorDistributionTests(unittest.TestCase):
+    def test_windows_resource_contains_the_release_version_and_parceo_identity(self):
+        script = load_script("windows_version", "scripts/prepare-windows-version.py")
+        resource = script.version_resource("0.1.58")
+        fields = {}
+        namespace = {name: lambda *args, **kwargs: (args, kwargs)
+                     for name in ("VSVersionInfo", "FixedFileInfo", "StringFileInfo", "StringTable", "StringStruct", "VarFileInfo", "VarStruct")}
+        namespace["StringStruct"] = lambda key, value: fields.update({key: value})
+        tree = eval(resource, {"__builtins__": {}}, namespace)
+        self.assertEqual(tree[1]["ffi"][1]["filevers"], (0, 1, 58, 0))
+        self.assertEqual(fields["ProductName"], "Parcéo Collector")
+        self.assertEqual(fields["OriginalFilename"], "parceo-collector-windows.exe")
+        self.assertEqual(fields["ProductVersion"], "0.1.58")
+        with self.assertRaises(ValueError):
+            script.version_resource("0.1.58';evil")
+
     def test_macos_frozen_collector_finds_intact_vendor_bundle(self):
         script = load_script("macos_bundle_test", "scripts/collect-cross-platform.py")
         with tempfile.TemporaryDirectory() as directory:

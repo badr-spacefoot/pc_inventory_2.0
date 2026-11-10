@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Spacefoot desktop collector with transparent step-by-step UX."""
+"""Parcéo desktop collector with transparent step-by-step UX."""
 
 from __future__ import annotations
 
@@ -101,7 +101,7 @@ try:
         SCRIPT_PATH = Path(getattr(sys, "_MEIPASS")) / "scripts" / "collect-cross-platform.py"
     else:
         SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "collect-cross-platform.py"
-    SPEC = importlib.util.spec_from_file_location("spacefoot_cross_collector", SCRIPT_PATH)
+    SPEC = importlib.util.spec_from_file_location("parceo_cross_collector", SCRIPT_PATH)
     collector = importlib.util.module_from_spec(SPEC)
     assert SPEC and SPEC.loader
     SPEC.loader.exec_module(collector)
@@ -410,7 +410,7 @@ class CollectorApp(CollectorUpdateMixin, PrefillMixin, ScanPresentationMixin, tk
         def handle_open_event(*args) -> str:
             for value in args:
                 text = str(value or "").strip()
-                if text.startswith("spacefoot-collector://"):
+                if text.startswith(("parceo-collector://", "spacefoot-collector://")):
                     self.after(0, lambda launch_url=text: self.apply_launch_prefill_url(launch_url))
             return ""
 
@@ -1618,7 +1618,7 @@ def _exercise_startup_probe(app: CollectorApp) -> None:
     """Rebuild the profile as complete to catch stale conditional widgets."""
     app.first_name.set("Startup")
     app.last_name.set("Probe")
-    app.email.set("startup.probe@spacefoot.test")
+    app.email.set("startup.probe@parceo.test")
     app.team.set("Probe team")
     app.establishment.set("Probe location")
     app.access_token.set("startup-probe-token")

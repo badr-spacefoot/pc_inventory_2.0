@@ -25,7 +25,7 @@ def register_linux_url_scheme() -> None:
     if not executable.exists():
         return
     applications_dir = Path.home() / ".local" / "share" / "applications"
-    desktop_file = applications_dir / "spacefoot-it-collector.desktop"
+    desktop_file = applications_dir / "parceo-collector.desktop"
     exec_line = f"{desktop_exec_quote(str(executable))} %u"
     if not getattr(sys, "frozen", False):
         exec_line = f"{desktop_exec_quote(sys.executable)} {desktop_exec_quote(str(executable))} %u"
@@ -38,7 +38,7 @@ def register_linux_url_scheme() -> None:
             f"Exec={exec_line}",
             "Terminal=false",
             "Categories=Utility;",
-            "MimeType=x-scheme-handler/spacefoot-collector;",
+            "MimeType=x-scheme-handler/parceo-collector;x-scheme-handler/spacefoot-collector;",
             "",
         ]
     )
@@ -46,12 +46,13 @@ def register_linux_url_scheme() -> None:
         applications_dir.mkdir(parents=True, exist_ok=True)
         if not desktop_file.exists() or desktop_file.read_text(encoding="utf-8") != content:
             desktop_file.write_text(content, encoding="utf-8")
-        subprocess.run(
-            ["xdg-mime", "default", desktop_file.name, "x-scheme-handler/spacefoot-collector"],
-            check=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=3,
-        )
+        for scheme in ("parceo-collector", "spacefoot-collector"):
+            subprocess.run(
+                ["xdg-mime", "default", desktop_file.name, f"x-scheme-handler/{scheme}"],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=3,
+            )
     except Exception:
         pass

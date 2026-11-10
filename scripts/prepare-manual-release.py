@@ -17,9 +17,9 @@ base = f"https://github.com/{repo}/releases"
 output = Path("release-upload")
 output.mkdir(exist_ok=False)
 inputs = {
-    "windows": (f"Spacefoot-IT-Collector-{version}-Setup.exe", f"parceo-collector-windows-{version}-setup.exe"),
-    "macos": (f"spacefoot-it-collector-macos-{version}.app.zip", f"spacefoot-it-collector-macos-{version}.app.zip"),
-    "linux": (f"spacefoot-it-collector-linux-{version}.deb", f"spacefoot-it-collector-linux-{version}.deb"),
+    "windows": (f"Parceo-Collector-{version}-Setup.exe", f"parceo-collector-windows-{version}-setup.exe"),
+    "macos": (f"parceo-collector-macos-{version}.app.zip", f"parceo-collector-macos-{version}.app.zip"),
+    "linux": (f"parceo-collector-linux-{version}.deb", f"parceo-collector-linux-{version}.deb"),
     "source": ("collector-source.zip", f"parceo-collector-source-{version}.zip"),
 }
 manifest = {"latestVersion": f"collector-v{version}", "releasePageUrl": f"{base}/tag/{tag}",

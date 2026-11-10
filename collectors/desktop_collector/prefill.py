@@ -74,7 +74,7 @@ class PrefillMixin:
             return
         code = str(data.get("prefillCode") or "").strip()
         launch_url = str(data.get("launchUrl") or "").strip()
-        if launch_url.startswith("spacefoot-collector://"):
+        if launch_url.startswith(("parceo-collector://", "spacefoot-collector://")):
             launch_prefill = launch_prefill_from_args([sys.argv[0], launch_url])
             code = code or str(launch_prefill.get("prefillCode") or "").strip()
             if launch_prefill.get("apiUrl") and not data.get("apiUrl"):
@@ -185,7 +185,7 @@ class PrefillMixin:
         loaded = str(getattr(self, "last_loaded_prefill_file", "") or "")
         if loaded:
             path = Path(loaded)
-            if path.name.startswith("spacefoot-collector-prefill") and path.suffix == ".json" and path.parent in downloads_dirs():
+            if path.name.startswith(("parceo-collector-prefill", "spacefoot-collector-prefill")) and path.suffix == ".json" and path.parent in downloads_dirs():
                 try:
                     path.unlink(missing_ok=True)
                 except OSError:

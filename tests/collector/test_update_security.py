@@ -140,7 +140,7 @@ class SecurityTests(unittest.TestCase):
         app = UpdateHarness()
         with self.assertRaises(ValueError):
             app.macos_target_app_path("x/../../outside")
-        self.assertEqual(app.macos_target_app_path("collector-v1.2.3").name, "spacefoot-it-collector-macos-1.2.3.app")
+        self.assertEqual(app.macos_target_app_path("collector-v1.2.3").name, "parceo-collector-macos-1.2.3.app")
 
     def test_api_response_is_bounded_before_json_parsing(self):
         from unittest.mock import MagicMock

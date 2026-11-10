@@ -34,7 +34,7 @@ def main():
         raise ValueError("Release verification key does not match signing key")
     version = os.environ["GITHUB_REF_NAME"].removeprefix("collector-v")
     root = Path("release-upload")
-    names = {"windows": f"spacefoot-it-collector-windows-{version}-setup.exe", "macos": f"spacefoot-it-collector-macos-{version}.app.zip", "linux": f"spacefoot-it-collector-linux-{version}.deb"}
+    names = {"windows": f"parceo-collector-windows-{version}-setup.exe", "macos": f"parceo-collector-macos-{version}.app.zip", "linux": f"parceo-collector-linux-{version}.deb"}
     manifest = {"latestVersion": f"collector-v{version}", "expiresAt": int(time.time()) + 30 * 86400, "assets": {}}
     for platform, name in names.items():
         path = root / name

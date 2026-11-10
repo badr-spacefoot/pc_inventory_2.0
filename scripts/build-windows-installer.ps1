@@ -89,12 +89,15 @@ python scripts/download-osquery.py windows
 if ($LASTEXITCODE -ne 0) { throw "osquery verification failed" }
 if ((Get-AuthenticodeSignature installer-assets/osquery.msi).Status -ne "Valid") { throw "Invalid osquery signature" }
 
+python scripts/prepare-windows-version.py --version $Version
+if ($LASTEXITCODE -ne 0) { throw "Windows version metadata generation failed" }
 python -m PyInstaller `
   -y `
   --onedir `
   --noupx `
   --windowed `
-  --name "spacefoot-it-collector-windows" `
+  --version-file "build/windows-version.txt" `
+  --name "parceo-collector-windows" `
   --icon "frontend/assets/brand/app-icon.ico" `
   --add-data "scripts/collect-cross-platform.py;scripts" `
   --add-data "frontend/assets/brand;assets/brand" `
@@ -123,7 +126,7 @@ if ($LASTEXITCODE -ne 0) {
   throw "PyInstaller build failed."
 }
 
-$collectorExe = "dist\spacefoot-it-collector-windows\spacefoot-it-collector-windows.exe"
+$collectorExe = "dist\parceo-collector-windows\parceo-collector-windows.exe"
 Sign-File $collectorExe
 
 & $iscc "installer\windows\spacefoot-collector.iss" "/DAppVersion=$Version"
@@ -131,7 +134,7 @@ if ($LASTEXITCODE -ne 0) {
   throw "Inno Setup build failed."
 }
 
-$installer = "dist\installer\Spacefoot-IT-Collector-$Version-Setup.exe"
+$installer = "dist\installer\Parceo-Collector-$Version-Setup.exe"
 Sign-File $installer
 
 Write-Host "Built $installer"

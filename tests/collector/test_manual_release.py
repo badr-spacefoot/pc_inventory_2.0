@@ -46,7 +46,7 @@ class ManualReleaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             assets = Path(directory) / "release-assets"
             assets.mkdir()
-            for name in ["Spacefoot-IT-Collector-0.1.54-Setup.exe", "spacefoot-it-collector-macos-0.1.54.app.zip", "spacefoot-it-collector-linux-0.1.54.deb"]:
+            for name in ["Parceo-Collector-0.1.54-Setup.exe", "parceo-collector-macos-0.1.54.app.zip", "parceo-collector-linux-0.1.54.deb"]:
                 (assets / name).write_bytes(b"synthetic-build")
             with zipfile.ZipFile(assets / "collector-source.zip", "w") as archive:
                 archive.writestr("SOURCE-MANIFEST.json", json.dumps({"version": "0.1.54"}))

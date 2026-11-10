@@ -87,7 +87,7 @@ class CollectorUpdateMixin:
                 return
             asset = release_asset(manifest, platform_key)
             # Keep the directory alive until the installer has consumed the package.
-            update_directory = Path(tempfile.mkdtemp(prefix="spacefoot-update-"))
+            update_directory = Path(tempfile.mkdtemp(prefix="parceo-update-"))
             installer_path = update_directory / asset["fileName"]
             self.after(
                 0,
@@ -137,7 +137,7 @@ class CollectorUpdateMixin:
                 "apiUrl": normalize_api_url(self.api_url.get()),
             }
         )
-        return f"spacefoot-collector://collect?{params}"
+        return f"parceo-collector://collect?{params}"
 
     def linux_update_command(self, installer_path: Path) -> str:
         return f"sudo apt install -y {shlex.quote(str(installer_path))}"
@@ -169,7 +169,7 @@ class CollectorUpdateMixin:
         return env
 
     def launch_linux_update_terminal(self, installer_path: Path) -> bool:
-        script_path = installer_path.parent / "spacefoot-it-collector-update.sh"
+        script_path = installer_path.parent / "parceo-collector-update.sh"
         script = "\n".join(
             [
                 "#!/bin/sh",
@@ -228,7 +228,7 @@ class CollectorUpdateMixin:
     def installed_linux_collector_version(self) -> str:
         try:
             result = subprocess.run(
-                ["dpkg-query", "-W", "-f=${Version}", "spacefoot-it-collector"],
+                ["dpkg-query", "-W", "-f=${Version}", "parceo-collector"],
                 capture_output=True,
                 text=True,
                 timeout=4,
@@ -250,7 +250,7 @@ class CollectorUpdateMixin:
             and is_newer_version(installed, COLLECTOR_VERSION)
             and not is_newer_version(expected_version, installed)
         ):
-            executable = Path("/opt/spacefoot-it-collector/spacefoot-it-collector")
+            executable = Path("/opt/parceo-collector/parceo-collector")
             try:
                 xdg_open = self.linux_executable("xdg-open")
                 subprocess.Popen(
@@ -339,7 +339,7 @@ class CollectorUpdateMixin:
         )
         try:
             with tempfile.TemporaryDirectory(
-                prefix="spacefoot-collector-macos-"
+                prefix="parceo-collector-macos-"
             ) as temp_dir:
                 extract_dir = Path(temp_dir)
                 with zipfile.ZipFile(installer_path) as archive:

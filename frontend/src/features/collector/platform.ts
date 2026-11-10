@@ -66,7 +66,7 @@ export function downloadLabel(platform: string, translate: (value: string) => st
 }
 
 export function ubuntuInstallCommand(asset?: CollectorAsset | null): string {
-  const fileName = safeAssetFileName(asset?.fileName, ".deb", "spacefoot-it-collector-linux.deb");
+  const fileName = safeAssetFileName(asset?.fileName, ".deb", "parceo-collector-linux.deb");
   return [
     'downloads="$(xdg-user-dir DOWNLOAD 2>/dev/null || echo "$HOME/Téléchargements")"',
     'cd "$downloads" || cd "$HOME/Downloads"',
@@ -75,17 +75,21 @@ export function ubuntuInstallCommand(asset?: CollectorAsset | null): string {
 }
 
 export function macosInstallCommand(asset?: CollectorAsset | null): string {
-  const fileName = safeAssetFileName(asset?.fileName, ".app.zip", "spacefoot-it-collector-macos.app.zip");
+  const fileName = safeAssetFileName(asset?.fileName, ".app.zip", "parceo-collector-macos.app.zip");
   const candidateVersion = String(asset?.version || "").replace(/^collector-v/i, "");
   const version = /^\d+\.\d+\.\d+(?:-[A-Za-z0-9][A-Za-z0-9.-]*)?$/.test(candidateVersion) ? candidateVersion : "";
-  const appName = version ? `spacefoot-it-collector-macos-${version}.app` : fileName.replace(/\.zip$/i, "");
+  const appName = asset?.fileName
+    ? fileName.replace(/\.zip$/i, "")
+    : version
+      ? `parceo-collector-macos-${version}.app`
+      : fileName.replace(/\.zip$/i, "");
   return [
     `app="$HOME/Applications/${appName}"`,
     `if [ ! -d "$app" ]; then app="$HOME/Downloads/${appName}"; fi`,
     `if [ ! -d "$app" ]; then app="$HOME/Téléchargements/${appName}"; fi`,
-    'if [ ! -d "$app" ]; then app="/Applications/spacefoot-it-collector-macos.app"; fi',
-    'if [ ! -d "$app" ]; then app="$HOME/Downloads/spacefoot-it-collector-macos.app"; fi',
-    'if [ ! -d "$app" ]; then app="$HOME/Téléchargements/spacefoot-it-collector-macos.app"; fi',
+    'if [ ! -d "$app" ]; then app="/Applications/parceo-collector-macos.app"; fi',
+    'if [ ! -d "$app" ]; then app="$HOME/Downloads/parceo-collector-macos.app"; fi',
+    'if [ ! -d "$app" ]; then app="$HOME/Téléchargements/parceo-collector-macos.app"; fi',
     'if [ ! -d "$app" ]; then echo "Application Parcéo introuvable. Décompressez le téléchargement puis relancez cette commande."; exit 1; fi',
     'codesign --verify --deep --strict "$app" || exit 1',
     'spctl --assess --type execute "$app" || exit 1',

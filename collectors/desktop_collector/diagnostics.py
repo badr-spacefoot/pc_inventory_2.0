@@ -26,10 +26,10 @@ def default_log_path(system: str | None = None, home: Path | None = None) -> Pat
     system = system or platform.system()
     home = home or Path.home()
     if system == "Darwin":
-        return home / "Library" / "Logs" / "Spacefoot IT Collector" / "collector.log"
+        return home / "Library" / "Logs" / "Parcéo Collector" / "collector.log"
     if system == "Windows":
-        return home / "AppData" / "Local" / "Spacefoot IT Collector" / "collector.log"
-    return home / ".local" / "state" / "spacefoot-it-collector" / "collector.log"
+        return home / "AppData" / "Local" / "Parcéo Collector" / "collector.log"
+    return home / ".local" / "state" / "parceo-collector" / "collector.log"
 
 
 def write_diagnostic(message: str) -> None:

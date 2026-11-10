@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cross-platform Spacefoot inventory collector using only the Python standard library."""
+"""Cross-platform Parcéo inventory collector using only the Python standard library."""
 
 import argparse
 import getpass
@@ -633,8 +633,8 @@ def collect_with_osquery(include_mac):
     osqueryi = find_osqueryi()
     if not osqueryi:
         raise RuntimeError(
-            "osquery is required for Spacefoot Inventory collection. "
-            "Install osquery or use a Spacefoot installer that bundles it."
+            "osquery is required for Parcéo Inventory collection. "
+            "Install osquery or use a Parcéo installer that bundles it."
         )
 
     system_info = first_row(osquery_json(osqueryi, "select * from system_info limit 1;"))
@@ -1334,7 +1334,7 @@ class NoApiRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Collect and send Spacefoot hardware inventory.")
+    parser = argparse.ArgumentParser(description="Collect and send Parcéo hardware inventory.")
     parser.add_argument("--api-url", required=True)
     parser.add_argument("--token", required=True)
     parser.add_argument("--include-mac", action="store_true")
