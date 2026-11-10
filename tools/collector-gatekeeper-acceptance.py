@@ -54,10 +54,17 @@ def main():
         spec.loader.exec_module(ui)
         driver = ui.ScreenDriver(root, receipt)
 
-        def screen():
+        def screen(*, dialog=False):
             path = root / "screen.png"
             captured = command("/usr/sbin/screencapture", "-x", str(path))
             assert captured.returncode == 0, "Screen capture unavailable"
+            if dialog:
+                # Keep the complete screenshot as evidence, but recognize the
+                # central system alert at native resolution on large desktops.
+                width, height = (int(receipt["vmDisplay"][key]) for key in ("width", "height"))
+                path = root / "dialog.png"
+                crop = command("/usr/sbin/screencapture", "-x", "-R", f"{width // 4},{height // 4},{width // 2},{height // 2}", str(path))
+                assert crop.returncode == 0, "System dialog capture unavailable"
             return json.loads(command(str(driver.helper), "ocr", str(path)).stdout)
 
         def wait_files(predicate, timeout=150):
@@ -121,7 +128,7 @@ def main():
         until = time.monotonic() + 35
         blocked = False
         while time.monotonic() < until:
-            lines = screen()
+            lines = screen(dialog=True)
             text = " ".join(line["text"] for line in lines).casefold()
             if any(phrase in text for phrase in ("could not verify", "cannot be opened", "can't be opened", "is damaged", "unidentified developer", "developer cannot be verified", "apple cannot check")):
                 blocked = True
