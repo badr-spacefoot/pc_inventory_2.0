@@ -8,8 +8,8 @@
     "windows": {
       "platform": "windows",
       "version": "collector-v0.1.57",
-      "fileName": "spacefoot-it-collector-windows-0.1.57-setup.exe",
-      "downloadUrl": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/download/collector-manual-v0.1.57/spacefoot-it-collector-windows-0.1.57-setup.exe",
+      "fileName": "parceo-collector-windows-0.1.57-setup.exe",
+      "downloadUrl": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/download/collector-manual-v0.1.57/parceo-collector-windows-0.1.57-setup.exe",
       "releasePageUrl": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/tag/collector-manual-v0.1.57",
       "signed": false,
       "size": 33059080,

@@ -17,7 +17,7 @@ base = f"https://github.com/{repo}/releases"
 output = Path("release-upload")
 output.mkdir(exist_ok=False)
 inputs = {
-    "windows": (f"Spacefoot-IT-Collector-{version}-Setup.exe", f"spacefoot-it-collector-windows-{version}-setup.exe"),
+    "windows": (f"Spacefoot-IT-Collector-{version}-Setup.exe", f"parceo-collector-windows-{version}-setup.exe"),
     "macos": (f"spacefoot-it-collector-macos-{version}.app.zip", f"spacefoot-it-collector-macos-{version}.app.zip"),
     "linux": (f"spacefoot-it-collector-linux-{version}.deb", f"spacefoot-it-collector-linux-{version}.deb"),
     "source": ("collector-source.zip", f"parceo-collector-source-{version}.zip"),

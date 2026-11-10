@@ -5,6 +5,37 @@ export interface CollectorAsset {
   version?: string;
 }
 
+export function buildCollectorLaunchUrl(prefillCode: string, apiBaseUrl: string): string {
+  if (!prefillCode) return "";
+  const api = new URL(apiBaseUrl);
+  if (
+    api.username ||
+    api.password ||
+    api.hash ||
+    (api.protocol !== "https:" &&
+      !(api.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(api.hostname)))
+  ) {
+    throw new Error("Invalid collector API URL");
+  }
+  const params = new URLSearchParams({ prefillCode, apiUrl: api.href.replace(/\/$/, "") });
+  return `spacefoot-collector://collect?${params}`;
+}
+
+export async function launchCollectorWithPrefill(
+  platform: CollectorPlatform,
+  actions: {
+    downloadPrefillFile: (options: { silent: boolean; revokeDelayMs: number }) => unknown;
+    waitForDownload: (milliseconds: number) => Promise<void>;
+    openCollector: () => void;
+  },
+): Promise<void> {
+  if (platform === "windows" || platform === "macos") {
+    actions.downloadPrefillFile({ silent: true, revokeDelayMs: 5000 });
+    await actions.waitForDownload(450);
+  }
+  actions.openCollector();
+}
+
 interface NavigatorSnapshot {
   platform?: string;
   userAgent?: string;
