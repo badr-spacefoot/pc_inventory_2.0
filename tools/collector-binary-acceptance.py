@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import signal
 import subprocess
 import threading
@@ -205,7 +206,7 @@ def main():
         receipt["executableSha256"] = hashlib.sha256(binary.read_bytes()).hexdigest()
         requests, received, failures = [], [], []
         if production:
-            target = packages.production_context()
+            target = packages.production_context(native=True)
             receipt["productionInventoryTouched"] = True
         else:
             server, worker, target, requests, received, failures = fixture(receipt)
@@ -227,12 +228,19 @@ def main():
             receipt["phase"] = "scan"
             driver.wait_for("Hardware scan", process)
             driver.primary_action(process)
-            driver.wait_for("Inventory ready to submit", process, timeout=180)
+            driver.wait_for("Scan completed", process, timeout=180)
             receipt["publishedBinaryHardwareScan"] = True
             receipt["phase"] = "submit"
             driver.primary_action(process)
             driver.wait_for("Submission sent", process, timeout=90)
             receipt["publishedBinarySubmissionSuccessVisible"] = True
+            if production:
+                for line in driver.last_lines:
+                    compact = re.sub(r"\s+", "", line["text"])
+                    if compact.casefold().startswith("deviceid:"):
+                        identifier = re.search(r"[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}", compact)
+                        if identifier:
+                            receipt["productionDeviceFingerprint"] = hashlib.sha256(identifier[0].lower().encode()).hexdigest()
             assert not failures, "Fixture rejected the native inventory"
             if not production:
                 assert len(received) == 1 and requests.count("/collect/scan") == 1
