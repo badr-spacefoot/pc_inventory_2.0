@@ -17,7 +17,9 @@ Les builds qui échouent à l’installation, aux vérifications ou à la géné
 
 ## Validation initiale
 
-Le build local passe : 99 tests, lint et typecheck. Le paquet reconstruit avec les variables de production correspond aux 61 fichiers de la version déjà en ligne. La première exécution Git est vérifiée en staging de production avant activation de l’affectation automatique du domaine.
+Le build local passe : 99 tests, lint et typecheck. Le paquet reconstruit avec les variables de production correspond aux 61 fichiers de la version déjà en ligne. Le push `4c4581a` a déclenché le déploiement Git natif `dpl_E57xEgCZPFggNtRTDaErf6ZBQdiH`, READY en staging de production. Les 99 tests passent également sur Vercel ; health, configuration publique et manifeste 0.1.57 sont accessibles. Le champ engines est limité à Node 22 pour éviter que Vercel choisisse Node 24 malgré le réglage 22.x du projet.
+
+L’affectation automatique des domaines est activée pour les prochaines publications de cette branche. Tout push réussi produit un nouveau déploiement de production et met à jour `parceo.piqa.fr` sans promotion manuelle. Le dernier déploiement réussi reste servi si un build échoue.
 
 ## Exploitation
 

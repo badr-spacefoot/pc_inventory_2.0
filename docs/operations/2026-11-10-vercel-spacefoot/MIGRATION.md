@@ -35,6 +35,8 @@ Ces vérifications ne créent aucune collecte, session ou facture. Elles ne cons
 
 ## Prochaines publications
 
+Mise à jour : la publication automatique native GitHub/Vercel est configurée sur `codex/parceo-sillage-production`. Voir [AUTODEPLOY.md](AUTODEPLOY.md). Le paragraphe suivant décrit la situation initiale lors de la bascule.
+
 La bascule utilise un déploiement Vercel de fichiers préconstruits. L’application GitHub Vercel n’a pas accès à ce dépôt personnel ; aucun accès supplémentaire n’a été accordé. Un push Git seul ne met donc pas Vercel à jour. Le domaine est explicitement associé au déploiement validé et l’affectation automatique des domaines est désactivée.
 
 Pour publier à nouveau : construire depuis la source revue, vérifier `dist/vercel-site`, déployer sous `spacefoot1`, contrôler le déploiement puis affecter explicitement `parceo.piqa.fr`. Le `vercel.json` du dépôt prépare ce build avec Node 22.x. Ne pas sélectionner aveuglément `main` : cette branche contient encore le site historique et son workflow backend peut appliquer des migrations SQL.

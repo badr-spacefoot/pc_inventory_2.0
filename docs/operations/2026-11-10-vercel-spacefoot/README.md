@@ -2,6 +2,8 @@
 
 **Migration effectuée le 10 novembre 2026.** Voir [le compte rendu de production](MIGRATION.md), `execution.json`, `live-integrity.json`, `live-web.json` et les captures. Le texte ci-dessous et `preparation.json` sont le relevé historique de préparation, avant autorisation et exécution.
 
+**Publication automatique GitHub/Vercel :** voir [la configuration et la branche à utiliser](AUTODEPLOY.md). Les passages historiques concernant la publication manuelle décrivent uniquement l’état initial de migration.
+
 État au 10 novembre 2026 : faisabilité et comptes vérifiés, configuration statique préparée localement. La production reste celle publiée le 9 novembre. Le transfert vers une organisation payante attend la validation du coût et des conditions d’accès.
 
 ## Cibles vérifiées
