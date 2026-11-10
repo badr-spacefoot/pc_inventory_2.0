@@ -1,4 +1,6 @@
-# Parcéo — préparation Vercel et organisation Supabase Spacefoot Pro
+# Parcéo — Vercel et organisation Supabase Spacefoot Pro
+
+**Migration effectuée le 10 novembre 2026.** Voir [le compte rendu de production](MIGRATION.md), `execution.json`, `live-integrity.json`, `live-web.json` et les captures. Le texte ci-dessous et `preparation.json` sont le relevé historique de préparation, avant autorisation et exécution.
 
 État au 10 novembre 2026 : faisabilité et comptes vérifiés, configuration statique préparée localement. La production reste celle publiée le 9 novembre. Le transfert vers une organisation payante attend la validation du coût et des conditions d’accès.
 

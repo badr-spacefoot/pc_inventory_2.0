@@ -1,0 +1,339 @@
+{
+  "origin": "https://parceo.piqa.fr",
+  "resolvedIPv4": "216.150.1.1",
+  "hosting": "Vercel",
+  "filesCompared": 61,
+  "allFilesMatch": true,
+  "files": [
+    {
+      "path": ".nojekyll",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "matches": true
+    },
+    {
+      "path": "app.js",
+      "sha256": "6568c757feb7ba332cb6345e8c07b09dece15e49927da1e16086a58e18d1e89d",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/app-icon.icns",
+      "sha256": "018126f123f71df1636d50790f7ce88bbecdd79a0809fc3a198a9ec964bd1db3",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/app-icon.ico",
+      "sha256": "7c3cd58f2fb688a9ca1f60c4ba470ee616a2a5fb17c8760ac4146ae1db062aeb",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/app-icon.png",
+      "sha256": "12b2d5eb3174bde936bd6698ab853dd3a4c0c984fbceb5cf794e90a56a253087",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/favicon.svg",
+      "sha256": "c6e096bd328d5ec3cb0ddd12d3c42896677fee3dcce965d254d66b18ca8eebdc",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/apple-touch-icon.png",
+      "sha256": "7f4b8fcdea1b1bed97bc5d366e8a2c0e96d994e3df4799ef467d6f81586b5ee1",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/brand-manifest.json",
+      "sha256": "183b644108f41d54f0edaf64ee097877379abb4351cdb1dc1d4d1c884fa0548d",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/collector-1024.png",
+      "sha256": "12b2d5eb3174bde936bd6698ab853dd3a4c0c984fbceb5cf794e90a56a253087",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/collector-256.png",
+      "sha256": "420b4b3e9a685b646c4a78661c811f457b27cf37a931494e02b725774813b2e6",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/collector-64.png",
+      "sha256": "47d0870fdf04bd84e38fe1b6d71ad8512e7c32a9f1c31715f4058868b5a52340",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/collector-square-1024.png",
+      "sha256": "ebcfbd49ee4dd8e999cc40a75f62bb417f945e9c4a636d71efd8f8b1b1660186",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/collector.icns",
+      "sha256": "018126f123f71df1636d50790f7ce88bbecdd79a0809fc3a198a9ec964bd1db3",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/collector.ico",
+      "sha256": "7c3cd58f2fb688a9ca1f60c4ba470ee616a2a5fb17c8760ac4146ae1db062aeb",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/favicon-16.png",
+      "sha256": "deb90fd2eeeae3318d73ecf6b26693ae075bb53371c15735ed95a187aa26cf9c",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/favicon-32.png",
+      "sha256": "18e041a9e8589f60aa960293f34d681102f672d7de2edbbaaadc2a14eb6f8e95",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/favicon-48.png",
+      "sha256": "cc1af0035b595a270f9e28ec4b486846b2644792983322afd17aaeaf7668efa9",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/favicon.ico",
+      "sha256": "8dd1a068f0482802155a92aeeaf02c1db655dd83da70e4b42d53d82fb2c1afcd",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/favicon.svg",
+      "sha256": "c6e096bd328d5ec3cb0ddd12d3c42896677fee3dcce965d254d66b18ca8eebdc",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/fonts/IBMPlexMono-OFL.txt",
+      "sha256": "7e6b2818edbd8f6a01ae80641cc8f16a51080d08fb4e532be3a0b6f74adb07da",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/fonts/IBMPlexMono-Regular.ttf",
+      "sha256": "6a3412f058c7d8dfd9170c41e85ade48e5156ecb89356110ca57a0a27734af46",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/fonts/Manrope-Bold.ttf",
+      "sha256": "f1676ec85f58958fe4bf9fa9a3a26e7e21f8fa22d2cd64767c5f6e60b2418fc0",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/fonts/Manrope-OFL.txt",
+      "sha256": "58172e0c0fac2cda8a37b348164bb55e44b0e69051e557e92b1d3f6910141f7b",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/fonts/Manrope-Regular.ttf",
+      "sha256": "89e9499c404545b98edf701becd4ce5e0b8d6690bb183760534d89c77a3f2327",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/fonts/Manrope-Variable.ttf",
+      "sha256": "3ae11c49db0455a3cc33e37d380f20fdb8c7f8b41dc07625c177e3d87a9d6ae6",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/icon-192.png",
+      "sha256": "93da886b47e7854f120bb779ad0bb9818665ff950517da274746b9dc8f5f2ac6",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/icon-512.png",
+      "sha256": "08c9a106dbab519f0576bf597a88335904fa58aba2b4ee55355247fb18a01d3b",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/logo-dark.png",
+      "sha256": "80570fcb9da25a039c42091e6e89e9264d580346e5c9f74afbc022cdeea9579a",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/logo-dark.svg",
+      "sha256": "ba25571b56757dadf31dbb19d952341da567036678886f0e429122abbf665320",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/logo-light.png",
+      "sha256": "08ab168a8be26dac0c7bbe2c5133b17e4d0861c88e170583df8fbeea0a53d03c",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/logo-light.svg",
+      "sha256": "d9c6ea786b832324fcea4fd9421c1c42897697b06c7787e9c0c8ae2259555181",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/maskable-512.png",
+      "sha256": "8782336d60a0da5aa4d4fd9ca524bd1c879bbc317e4679f987a38c6afcda202b",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/site.webmanifest",
+      "sha256": "0639cadf4e725a83aad1b73012f82c81e41b8de1ae381f668b5d3849b3f02e37",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/parceo/symbol.svg",
+      "sha256": "400dfef961728e2892ab8c8353295abd599f1b0baf174823d5f2f9c411a9c896",
+      "matches": true
+    },
+    {
+      "path": "assets/brand/spacefoot-logo.svg",
+      "sha256": "cc084f7f1cb9bd9eeb6e3ba1bcfd11c085885b79c958cd72c08e065f6760cdf5",
+      "matches": true
+    },
+    {
+      "path": "assets/logos/oem/acer.svg",
+      "sha256": "412f02b7b6b468258b8c285f88eb829654d4817fbd510cd2f48c773016f7befb",
+      "matches": true
+    },
+    {
+      "path": "assets/logos/oem/apple.svg",
+      "sha256": "cbc36e6e70deb9764f033108a090de80df021a665b6209e4cf44f8bad06fd8db",
+      "matches": true
+    },
+    {
+      "path": "assets/logos/oem/asus.svg",
+      "sha256": "056c49186453c7d7587277945de6cca18e6aba81212b51dfa2bae327b7aab7a1",
+      "matches": true
+    },
+    {
+      "path": "assets/logos/oem/dell.svg",
+      "sha256": "ae54d23986bac617dbfbae0c78dfc88e1630a2ba3b2ca36c904b95c5b10eaa0b",
+      "matches": true
+    },
+    {
+      "path": "assets/logos/oem/dynabook.svg",
+      "sha256": "b53f5ef0e0b8319c859a07ba59477c095a8d0b1e6f663180082dd577bc0b483b",
+      "matches": true
+    },
+    {
+      "path": "assets/logos/oem/framework.svg",
+      "sha256": "59bce9779db5cfb9527caad901c1b5b0eb179dbeae46743eae2e51472a46c3c3",
+      "matches": true
+    },
+    {
+      "path": "assets/logos/oem/fujitsu.svg",
+      "sha256": "c003befc10a3b73e2416e92ebf649eec233351005af11db37895e5d8849ec74b",
+      "matches": true
+    },
+    {
+      "path": "assets/logos/oem/gigabyte.svg",
+      "sha256": "5e3355b344d644da0f7c97a5a2c8d0c5538d51ec88ea469d30436b9f35d7ed74",
+      "matches": true
+    },
+    {
+      "path": "assets/logos/oem/hp.svg",
+      "sha256": "cbd2b75c85f651669224aa8fea4fd8cb28299f4eabfc4e71115714c6f7df0868",
+      "matches": true
+    },
+    {
+      "path": "assets/logos/oem/huawei.svg",
+      "sha256": "c5b0b049b2022d5b2391e34b7871d2580f97ad67dcae053499da49ff58ac27ac",
+      "matches": true
+    },
+    {
+      "path": "assets/logos/oem/intel.svg",
+      "sha256": "1aaabc290721962add2932064d9a235cfdcaa6763b1e2c774daf3ff34416df98",
+      "matches": true
+    },
+    {
+      "path": "assets/logos/oem/lenovo.svg",
+      "sha256": "3c9f6d789731619ff915008f1aaaae26ea1e0df453acecc53a68fc54103bc8e8",
+      "matches": true
+    },
+    {
+      "path": "assets/logos/oem/microsoft.svg",
+      "sha256": "35196f31434604ad80338a8848d79281cb9076a2240f6c1376dfd971c23270ff",
+      "matches": true
+    },
+    {
+      "path": "assets/logos/oem/msi.svg",
+      "sha256": "968bfe8c0e7e77f8c482f71c95f1cf8d269ebf1e6e93ac2d33b6483bcc481184",
+      "matches": true
+    },
+    {
+      "path": "assets/logos/oem/samsung.svg",
+      "sha256": "f187e2e69fcdc4f119707652bcd97a1516d796442d7790e8d7a129f771c1e36e",
+      "matches": true
+    },
+    {
+      "path": "assets/logos/oem/toshiba.svg",
+      "sha256": "3ec59ff293e3464221d2fdb5bfde7465be60fc70bb4f06c8295b221f768aa6a8",
+      "matches": true
+    },
+    {
+      "path": "assets/logos/oem/unknown.svg",
+      "sha256": "fa16ac2a973e71d768c2b0f77c54c36b1de2306000934ea2f7b2b5cae01853b7",
+      "matches": true
+    },
+    {
+      "path": "collector-releases.json",
+      "sha256": "dfffd7f610da8c94d3734c35e9d33ba66c7eaf2ce6f62278378bf2d7f578de9b",
+      "matches": true
+    },
+    {
+      "path": "config.js",
+      "sha256": "7f26a2006f0b4740dcb3e502ef6781a5262780cda3a353c84f438724b2d0b93f",
+      "matches": true
+    },
+    {
+      "path": "core.js",
+      "sha256": "a57ea92e7e16eb994dceeb6b7eba8e251897c3e08e817e6799bb71258c27ab87",
+      "matches": true
+    },
+    {
+      "path": "health.txt",
+      "sha256": "dc51b8c96c2d745df3bd5590d990230a482fd247123599548e0632fdbf97fc22",
+      "matches": true
+    },
+    {
+      "path": "index.html",
+      "sha256": "c6243f4196f115c5bd7d2aed86b3bfe9b8543612f6d6baae168b6629b7f7407b",
+      "matches": true
+    },
+    {
+      "path": "scripts/collect-cross-platform.py",
+      "sha256": "66c6ba6d3f1e4390689ba9e596a1331cc5cacb66cf4ca23d321e8790933c4b7b",
+      "matches": true
+    },
+    {
+      "path": "scripts/collect-windows.ps1",
+      "sha256": "5587e538854d29f92da82179e83f212b99d73b3c0ac8316b6246f81c78e74e4e",
+      "matches": true
+    },
+    {
+      "path": "styles.css",
+      "sha256": "4a3a673a5b663809bd12e41c9cfdb35b92f8d52bf0e80459d92a5e37f2f98770",
+      "matches": true
+    },
+    {
+      "path": "theme-init.js",
+      "sha256": "78aea53bf71107dc641672841ab057d6274aa5e3e5871370aac0b15f813d7a17",
+      "matches": true
+    }
+  ],
+  "publicOrganizationApi": 200,
+  "exactOriginCors": true,
+  "anonymousAdminStatus": 403,
+  "collectorVersion": "collector-v0.1.57",
+  "manualOnly": true,
+  "signed": false,
+  "collectorManifestSha256": "dfffd7f610da8c94d3734c35e9d33ba66c7eaf2ce6f62278378bf2d7f578de9b",
+  "downloads": [
+    {
+      "platform": "windows",
+      "available": true,
+      "expectedBytes": 33059080
+    },
+    {
+      "platform": "macos",
+      "available": true,
+      "expectedBytes": 40647679
+    },
+    {
+      "platform": "linux",
+      "available": true,
+      "expectedBytes": 95095232
+    }
+  ],
+  "productionWrites": 0
+}
