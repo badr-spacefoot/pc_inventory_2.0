@@ -31,7 +31,7 @@ SOURCE = ("parceo-collector-source-0.1.58.zip", "a243faed748aa04d91bb31bf45dd334
 PRODUCTION_API = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api"
 
 
-def production_context() -> dict | None:
+def production_context(*, native: bool = False) -> dict | None:
     if os.environ.get("PARCEO_ACCEPTANCE_PRODUCTION") != "1":
         return None
     if not (os.environ.get("GITHUB_REF") == "refs/heads/main"
@@ -63,7 +63,8 @@ def production_context() -> dict | None:
     assert not invited.get("deviceId"), "VM acceptance must not target an existing PC"
     prepared = request(path + "/prefill", {
         "apiUrl": PRODUCTION_API,
-        "comment": f"RECETTE VM GitHub Actions {platform.system()} {platform.machine()} run {os.environ.get('GITHUB_RUN_ID')}",
+        "comment": f"RECETTE VM {'BINAIRE ' if native else ''}GitHub Actions {platform.system()} {platform.machine()} run {os.environ.get('GITHUB_RUN_ID')}",
+        **({"language": "en", "theme": "light"} if native else {}),
     })
     assert prepared.get("prefillCode"), "Production prefill was not created"
     return {"apiUrl": PRODUCTION_API, "prefillCode": prepared["prefillCode"], "email": invited["email"]}

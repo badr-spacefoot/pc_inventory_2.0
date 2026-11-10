@@ -1,5 +1,17 @@
 # Recette macOS et Linux du collecteur publié
 
+## Parcours directement dans les binaires publiés
+
+Le workflow `Collector published binary GUI acceptance` télécharge uniquement le paquet natif immuable 0.1.58 adapté à la VM. Il ne télécharge pas le source du collecteur, ne charge aucun de ses modules dans le scénario de test, ne recompile pas l'application et n'injecte pas de code dans son processus.
+
+Après vérification SHA-256 et installation/extraction, le scénario lance le vrai exécutable avec ses arguments normaux de préremplissage, sans forcer un chemin osquery externe (`SPACEFOOT_OSQUERYI` est retiré de son environnement). Il observe les étapes à l'écran par reconnaissance de texte, mesure la fenêtre native puis clique sur son bouton principal : continuation du profil, scan matériel, envoi. Le succès doit apparaître dans l'interface. L'API locale exige exactement un envoi, la version `0.1.58`, le canal natif `manual-unsigned`, le moteur `osquery` et des champs matériels réels non vides.
+
+Sur Linux, une seule fenêtre visible portant le titre exact du collecteur est acceptée dans l'affichage Xvfb privé au test ; son processus propriétaire est vérifié lorsqu'il est publié par Tk. Sur macOS, les permissions de capture d'écran et d'événements doivent être déjà accordées ; la recette ne les contourne pas. La résolution de la session de VM est adaptée pour afficher la fenêtre complète, et toute demande facultative de découverte du réseau local est refusée. Le thème clair et la langue anglaise servent à stabiliser la reconnaissance de texte dans les VM. Les groupes de processus lancés par le test sont arrêtés en fin de recette.
+
+Les résultats `publishedBinaryHardwareScan` et `publishedBinarySubmissionSuccessVisible` distinguent cette recette du test du source décrit ci-dessous. Les captures de succès ne sont conservées que pour les profils synthétiques de la recette isolée. Les tests de production ne publient aucune capture, aucun profil et aucun inventaire brut.
+
+## Recette complémentaire du source publié
+
 Le workflow `Collector platform acceptance` utilise des VM éphémères GitHub : Ubuntu 22.04 x64, macOS 15 Intel et macOS 15 Apple Silicon. Il peut être lancé manuellement et s’exécute sur les pull requests qui modifient sa recette ou les aides au lancement.
 
 La recette télécharge les paquets **0.1.58 réellement publiés**, vérifie leurs empreintes SHA-256 figées, installe le paquet Linux ou extrait le bundle macOS, vérifie la version native et démarre le binaire en mode de contrôle sans scan. Elle contrôle les deux protocoles et l’intégrité du bundle macOS. Le paquet macOS Intel est également essayé sur Apple Silicon avec l’émulation fournie par la VM ; aucune installation automatique de Rosetta n’est effectuée.
@@ -22,4 +34,4 @@ Le workflow distinct `Collector production acceptance (manual only)` ne s’exé
 
 Avant son utilisation, obtenir une confirmation pour créer les trois invitations, chacune valable 24 heures avec une seule utilisation, destinées aux VM GitHub Actions et à de nouvelles fiches de recette. Le script exige un libellé commençant par `RECETTE-VM-`, une utilisation disponible et aucun poste existant ciblé. Le destinataire et son profil proviennent de l’invitation ; les champs utilisateur ne sont pas inventés par le scénario. La destination est exclusivement l’API HTTPS Parcéo codée dans le script et les redirections sont refusées.
 
-La recette de production utilise le même source publié et le même scan réel. Le commentaire marque la VM avec le numéro de run. Les preuves ne publient ni le code d’invitation, ni le préremplissage, ni le profil, ni l’inventaire brut ; l’identifiant machine est remplacé par une empreinte. Après le run, contrôler les fiches dans Parcéo, passer les VM de recette en `Sorti du parc` et supprimer les trois secrets temporaires. Cette étape n’est pas incluse dans les résultats des tests isolés.
+La recette de production pilote désormais directement les binaires publiés avec le même scénario externe que le workflow natif isolé. Le scénario Python prépare seulement le préremplissage : les requêtes de profil et d'envoi du scan partent du binaire lancé. Le commentaire marque la VM avec `RECETTE VM BINAIRE` et le numéro de run. Les preuves ne publient ni le code d’invitation, ni le préremplissage, ni le profil, ni l’inventaire brut. Si l'identifiant renvoyé à l'écran est reconnu, seule son empreinte est conservée. Après le run, contrôler indépendamment les fiches dans Parcéo, la version, le canal `manual-unsigned`, le moteur et les affectations ; passer les VM de recette en `Sorti du parc` et supprimer les trois secrets temporaires. Cette étape n’est pas incluse dans les résultats des tests isolés.
