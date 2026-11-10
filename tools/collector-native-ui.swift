@@ -10,6 +10,24 @@ func output(_ value: Any) throws {
     print(String(decoding: data, as: UTF8.self))
 }
 switch args[1] {
+case "display":
+    let display = CGMainDisplayID()
+    let modes = CGDisplayCopyAllDisplayModes(display, nil) as? [CGDisplayMode] ?? []
+    let suitable = modes.filter { $0.width >= 1280 && $0.height >= 960 }
+        .sorted { $0.width * $0.height < $1.width * $1.height }
+    if let mode = suitable.first {
+        var configuration: CGDisplayConfigRef?
+        guard CGBeginDisplayConfiguration(&configuration) == .success,
+              let configuration = configuration,
+              CGConfigureDisplayWithDisplayMode(configuration, display, mode, nil) == .success,
+              CGCompleteDisplayConfiguration(configuration, .forSession) == .success else {
+            fatalError("Cannot resize disposable VM display")
+        }
+        Thread.sleep(forTimeInterval: 1)
+    }
+    let bounds = CGDisplayBounds(display)
+    try output(["width": bounds.width, "height": bounds.height,
+                "availableModes": modes.map { ["width": $0.width, "height": $0.height] }])
 case "permissions":
     try output(["postEvents": CGPreflightPostEventAccess(), "screenCapture": CGPreflightScreenCaptureAccess()])
 case "activate":

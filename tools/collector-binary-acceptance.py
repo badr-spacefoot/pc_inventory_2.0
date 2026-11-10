@@ -33,6 +33,7 @@ class ScreenDriver:
         self.receipt = receipt
         if self.mac:
             packages.run("swiftc", str(Path(__file__).with_name("collector-native-ui.swift")), "-o", str(self.helper))
+            receipt["vmDisplay"] = json.loads(subprocess.check_output([str(self.helper), "display"]))
             permissions = json.loads(subprocess.check_output([str(self.helper), "permissions"]))
             receipt["macGuiPermissions"] = permissions
             if not all(permissions.values()):
