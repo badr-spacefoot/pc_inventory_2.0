@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import signal
 import subprocess
 import threading
 import time
@@ -61,8 +62,14 @@ class ScreenDriver:
             bounds = json.loads(subprocess.check_output([str(self.helper), "window", str(process.pid)]))
             x, y, width, height = (bounds[k] for k in ("X", "Y", "Width", "Height"))
         else:
-            windows = subprocess.check_output(["xdotool", "search", "--onlyvisible", "--pid", str(process.pid)], text=True).split()
-            windows = [window for window in windows if "Collector 0.1.58" in subprocess.check_output(["xdotool", "getwindowname", window], text=True)]
+            # The published Linux onefile bootloader runs its UI in a child.
+            windows = subprocess.check_output(["xdotool", "search", "--onlyvisible", "--name", "Collector 0.1.58"], text=True).split()
+            verified = []
+            for window in windows:
+                pid = subprocess.check_output(["xdotool", "getwindowpid", window], text=True).strip()
+                if Path(f"/proc/{pid}/exe").resolve() == Path("/opt/parceo-collector/parceo-collector"):
+                    verified.append(window)
+            windows = verified
             assert len(windows) == 1, "Expected one published collector window"
             data = subprocess.check_output(["xdotool", "getwindowgeometry", "--shell", windows[0]], text=True)
             bounds = dict(line.split("=", 1) for line in data.splitlines() if "=" in line)
@@ -210,7 +217,7 @@ def main():
         if platform.system() == "Linux":
             env["SPACEFOOT_OSQUERYI"] = str(osquery)
         with (root / "native-private.log").open("wb") as log:
-            process = subprocess.Popen([str(binary), "--api-url", target["apiUrl"], "--prefill-code", target["prefillCode"]], env=env, stdout=log, stderr=log)
+            process = subprocess.Popen([str(binary), "--api-url", target["apiUrl"], "--prefill-code", target["prefillCode"]], env=env, stdout=log, stderr=log, start_new_session=True)
             if platform.system() == "Darwin":
                 time.sleep(3)
                 receipt["windowActivation"] = json.loads(subprocess.check_output([str(driver.helper), "activate", str(process.pid)]))
@@ -246,7 +253,10 @@ def main():
         raise
     finally:
         if process:
-            process.terminate()
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
             try:
                 process.wait(timeout=10)
             except subprocess.TimeoutExpired:
