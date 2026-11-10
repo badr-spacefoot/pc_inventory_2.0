@@ -179,12 +179,18 @@ def source_ui_roundtrip(source: Path, osquery: Path, receipt: dict) -> None:
     prefill.api_request = loopback_api
     app = module.CollectorApp()
     app.withdraw()
+    assert app.api_url.get() == endpoint, "Released source initialized with a non-fixture endpoint"
+    assert module.COLLECTOR_VERSION == "0.1.58", "Wrong source imported by acceptance"
     app.prefill_code.set("vm-fixture")
     phase = "prefill"
+    receipt["requests"] = requests
 
     def poll():
         nonlocal phase
         try:
+            receipt["phase"] = phase
+            receipt["uiStatus"] = app.status.get()
+            receipt["connectionStatus"] = app.connection_status.get()
             assert not failures, "Loopback fixture rejected a request"
             assert app.callback_exception_count == 0, "Tk callback failed"
             if phase == "prefill" and app.teams and app.access_token.get() == access:
@@ -210,7 +216,7 @@ def source_ui_roundtrip(source: Path, osquery: Path, receipt: dict) -> None:
             app.destroy()
 
     def timeout():
-        failures.append("Released source UI acceptance timed out")
+        failures.append(f"Released source UI acceptance timed out in {phase}")
         app.destroy()
 
     app.after(100, app.load_prefill)
@@ -221,6 +227,7 @@ def source_ui_roundtrip(source: Path, osquery: Path, receipt: dict) -> None:
         assert not failures, "; ".join(failures)
         assert receipt.get("releasedSourceUiRoundtrip"), "Submission did not complete"
     finally:
+        receipt["fixtureFailures"] = failures
         server.shutdown()
         server.server_close()
         worker.join(timeout=5)
@@ -242,6 +249,9 @@ def main():
         osquery = native_package(root, package, receipt)
         source_ui_roundtrip(source, osquery, receipt)
         receipt["passed"] = True
+    except Exception as error:
+        receipt["failure"] = f"{type(error).__name__}: {error}"
+        raise
     finally:
         (root / "result.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
         print(json.dumps(receipt, indent=2))
