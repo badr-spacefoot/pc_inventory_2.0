@@ -9,13 +9,13 @@ AppId={{D8F2992B-38FA-4B9F-9D8D-9B63D71CBBF8}
 AppName=Parcéo Collector
 AppVersion={#AppVersion}
 AppPublisher=Piqa
-AppPublisherURL=https://github.com/badr-spacefoot/pc_inventory_2.0
+AppPublisherURL=https://parceo.piqa.fr
 AppSupportURL=https://github.com/badr-spacefoot/pc_inventory_2.0/issues
-DefaultDirName={autopf}\Spacefoot IT Collector
+DefaultDirName={autopf}\Parceo Collector
 DefaultGroupName=Parcéo Collector
 DisableProgramGroupPage=yes
 OutputDir={#RepoRoot}dist\installer
-OutputBaseFilename=Spacefoot-IT-Collector-{#AppVersion}-Setup
+OutputBaseFilename=Parceo-Collector-{#AppVersion}-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -23,32 +23,38 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
 SetupIconFile={#RepoRoot}frontend\assets\brand\app-icon.ico
-UninstallDisplayIcon={app}\spacefoot-it-collector-windows.exe
+UninstallDisplayIcon={app}\parceo-collector-windows.exe
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "french"; MessagesFile: "compiler:Languages\French.isl"
 
 [Files]
-Source: "{#RepoRoot}dist\spacefoot-it-collector-windows\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#RepoRoot}dist\parceo-collector-windows\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#RepoRoot}installer-assets\osquery.msi"; DestDir: "{app}\dependencies"; DestName: "osquery.msi"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\Parcéo Collector"; Filename: "{app}\spacefoot-it-collector-windows.exe"; AppUserModelID: "Piqa.Parceo.Collector"
-Name: "{autodesktop}\Parcéo Collector"; Filename: "{app}\spacefoot-it-collector-windows.exe"; AppUserModelID: "Piqa.Parceo.Collector"; Tasks: desktopicon
+Name: "{group}\Parcéo Collector"; Filename: "{app}\parceo-collector-windows.exe"; AppUserModelID: "Piqa.Parceo.Collector"
+Name: "{autodesktop}\Parcéo Collector"; Filename: "{app}\parceo-collector-windows.exe"; AppUserModelID: "Piqa.Parceo.Collector"; Tasks: desktopicon
 
 [Registry]
+Root: HKCR; Subkey: "parceo-collector"; ValueType: string; ValueData: "URL:Parcéo Collector"; Flags: uninsdeletekey
+Root: HKCR; Subkey: "parceo-collector"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
+Root: HKCR; Subkey: "parceo-collector\DefaultIcon"; ValueType: string; ValueData: "{app}\parceo-collector-windows.exe,0"
+Root: HKCR; Subkey: "parceo-collector\shell\open\command"; ValueType: string; ValueData: """{app}\parceo-collector-windows.exe"" ""%1"""
+
+; Keep existing web links working after upgrading.
 Root: HKCR; Subkey: "spacefoot-collector"; ValueType: string; ValueData: "URL:Parcéo Collector"; Flags: uninsdeletekey
 Root: HKCR; Subkey: "spacefoot-collector"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
-Root: HKCR; Subkey: "spacefoot-collector\DefaultIcon"; ValueType: string; ValueData: "{app}\spacefoot-it-collector-windows.exe,0"
-Root: HKCR; Subkey: "spacefoot-collector\shell\open\command"; ValueType: string; ValueData: """{app}\spacefoot-it-collector-windows.exe"" ""%1"""
+Root: HKCR; Subkey: "spacefoot-collector\DefaultIcon"; ValueType: string; ValueData: "{app}\parceo-collector-windows.exe,0"
+Root: HKCR; Subkey: "spacefoot-collector\shell\open\command"; ValueType: string; ValueData: """{app}\parceo-collector-windows.exe"" ""%1"""
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Run]
 Filename: "msiexec.exe"; Parameters: "/i ""{app}\dependencies\osquery.msi"" /quiet /norestart"; StatusMsg: "Installing osquery inventory engine..."; Flags: waituntilterminated runhidden; Check: ShouldInstallOsquery
-Filename: "{app}\spacefoot-it-collector-windows.exe"; Parameters: """{param:LaunchUrl|}"" --prefill-code ""{param:PrefillCode|}"""; Flags: nowait runasoriginaluser; Check: ShouldLaunchAfterInstall
+Filename: "{app}\parceo-collector-windows.exe"; Parameters: """{param:LaunchUrl|}"" --prefill-code ""{param:PrefillCode|}"""; Flags: nowait runasoriginaluser; Check: ShouldLaunchAfterInstall
 
 [Code]
 function ShouldInstallOsquery(): Boolean;

@@ -16,7 +16,7 @@ class CollectorDiagnosticsTests(unittest.TestCase):
             home
             / "Library"
             / "Logs"
-            / "Spacefoot IT Collector"
+            / "Parcéo Collector"
             / "collector.log",
         )
 
@@ -28,7 +28,7 @@ class CollectorDiagnosticsTests(unittest.TestCase):
             home
             / ".local"
             / "state"
-            / "spacefoot-it-collector"
+            / "parceo-collector"
             / "collector.log",
         )
 

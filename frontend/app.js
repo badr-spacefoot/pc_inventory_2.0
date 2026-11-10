@@ -4185,7 +4185,7 @@ function downloadPrefillFile(options = {}) {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = `spacefoot-collector-prefill-${state.prefillCode || "draft"}.json`;
+  link.download = `parceo-collector-prefill-${state.prefillCode || "draft"}.json`;
   link.style.display = "none";
   document.body.appendChild(link);
   link.click();

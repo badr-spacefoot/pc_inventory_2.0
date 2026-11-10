@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 import tempfile
 import unittest
 
@@ -8,12 +9,36 @@ from collectors.desktop_collector.support import (
     is_newer_version,
     launch_prefill_from_args,
     normalize_api_url,
+    newest_prefill_file,
     version_label,
 )
 from collectors.desktop_collector.platform_integration import desktop_exec_quote
 
 
 class CollectorSupportTests(unittest.TestCase):
+    def test_parceo_and_legacy_links_accept_the_same_https_prefill(self) -> None:
+        for scheme in ("parceo-collector", "spacefoot-collector"):
+            with self.subTest(scheme=scheme):
+                url = f"{scheme}://collect?prefillCode=fixture&apiUrl=http%3A%2F%2Fproject.supabase.co%2Finventory-api"
+                result = launch_prefill_from_args(["parceo-collector.exe", url])
+                self.assertEqual(result["prefillCode"], "fixture")
+                self.assertEqual(result["apiUrl"], "https://project.supabase.co/functions/v1/inventory-api")
+
+    def test_discovers_current_and_legacy_prefill_files(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            downloads = home / "Downloads"
+            downloads.mkdir()
+            legacy = downloads / "spacefoot-collector-prefill-old.json"
+            current = downloads / "parceo-collector-prefill-new.json"
+            legacy.write_text('{}')
+            current.write_text('{}')
+            os.utime(legacy, (100, 100))
+            os.utime(current, (200, 200))
+            self.assertEqual(newest_prefill_file(home), current)
+            current.unlink()
+            self.assertEqual(newest_prefill_file(home), legacy)
+
     def test_legacy_supabase_launch_is_upgraded_before_any_connection(self) -> None:
         launch_url = (
             "spacefoot-collector://collect?prefillCode=synthetic-prefill&"

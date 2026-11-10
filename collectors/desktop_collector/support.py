@@ -135,7 +135,7 @@ def fetch_json_url(url: str, timeout: float = 10) -> dict[str, Any]:
     request = urllib.request.Request(
         uncached_url,
         headers={
-            "User-Agent": f"spacefoot-it-collector/{COLLECTOR_VERSION}",
+            "User-Agent": f"parceo-collector/{COLLECTOR_VERSION}",
             "Cache-Control": "no-cache",
             "Pragma": "no-cache",
         },
@@ -153,7 +153,7 @@ def download_file(url: str, destination: Path, timeout: float = 60, max_bytes: i
     validate_update_url(url)
     request = urllib.request.Request(
         url,
-        headers={"User-Agent": f"spacefoot-it-collector/{COLLECTOR_VERSION}"},
+        headers={"User-Agent": f"parceo-collector/{COLLECTOR_VERSION}"},
     )
     with update_opener().open(request, timeout=timeout) as response:
         validate_update_url(response.geturl())
@@ -291,7 +291,8 @@ def newest_prefill_file(home: Path | None = None) -> Path | None:
     candidates: list[Path] = []
     for directory in downloads_dirs(home):
         try:
-            candidates.extend(directory.glob("spacefoot-collector-prefill*.json"))
+            for prefix in ("parceo-collector-prefill", "spacefoot-collector-prefill"):
+                candidates.extend(directory.glob(f"{prefix}*.json"))
         except OSError:
             continue
     if not candidates:
@@ -332,7 +333,7 @@ def launch_prefill_from_args(argv: list[str]) -> dict[str, str]:
             launch_url = text.split("=", 1)[1].strip().strip('"')
             break
 
-    if launch_url.startswith("spacefoot-collector://"):
+    if launch_url.startswith(("parceo-collector://", "spacefoot-collector://")):
         result["launchUrl"] = launch_url
         parsed = urllib.parse.urlparse(launch_url)
         params = urllib.parse.parse_qs(parsed.query)

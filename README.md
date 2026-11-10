@@ -1,4 +1,4 @@
-# Parcéo — Spacefoot IT Inventory
+# Parcéo — Gestion du parc informatique
 
 Application web d'inventaire de parc informatique pour remplacer ou compléter l'ancien flux Google Sheets.
 
@@ -229,54 +229,25 @@ Secrets optionnels pour signature:
 - `MACOS_CODESIGN_IDENTITY`: identite de signature Apple Developer ID.
 - `MACOS_NOTARY_APPLE_ID`, `MACOS_NOTARY_TEAM_ID`, `MACOS_NOTARY_PASSWORD`: notarisation Apple.
 
-### Distribution et signature low-cost
+### Distribution et signature
 
-Chaque release collecteur contient:
+La version manuelle Parcéo Collector 0.1.58 fournit les paquets Windows, macOS et Linux, le source inspectable et `SHA256SUMS.txt`. Voir [les notes de publication](docs/collector/manual-release.md).
 
-- builds Windows, macOS et Linux;
-- `SHA256SUMS.txt` pour verifier l'integrite des fichiers;
-- `spacefoot-it-collector-internal-test.cer` lorsque Windows est signe avec le certificat self-signed interne de test.
-
-Verifier un fichier Windows:
+Les téléchargements sont nommés `parceo-collector-windows-0.1.58-setup.exe`, `parceo-collector-macos-0.1.58.app.zip` et `parceo-collector-linux-0.1.58.deb`. Le téléchargement proposé par le site est mis à jour seulement après vérification des fichiers publiés.
 
 ```powershell
-Get-FileHash .\spacefoot-it-collector-windows.exe -Algorithm SHA256
-Get-AuthenticodeSignature .\spacefoot-it-collector-windows.exe
+Get-FileHash .\parceo-collector-windows-0.1.58-setup.exe -Algorithm SHA256
+Get-AuthenticodeSignature .\parceo-collector-windows-0.1.58-setup.exe
 ```
-
-Verifier un fichier Linux/macOS:
 
 ```bash
 sha256sum -c SHA256SUMS.txt
+sudo apt install ./parceo-collector-linux-0.1.58.deb
 ```
 
-Windows:
+Le paquet Linux installe `/opt/parceo-collector/parceo-collector` et remplace l’ancien paquet. Les liens `parceo-collector://` et l’alias historique `spacefoot-collector://` sont enregistrés. Sous Windows, l’identifiant d’installation reste stable pour la mise à niveau et les nouvelles installations utilisent `Parceo Collector`.
 
-- Si `WINDOWS_CODESIGN_PFX_BASE64` est configure, le workflow signe avec ce certificat officiel.
-- Sinon, le workflow généré un certificat self-signed `Spacefoot IT Collector Internal Testing` et signe l'exe pour les tests internes.
-- Le certificat self-signed ne donne pas de reputation publique SmartScreen. Pour eviter les alertes en interne, deployer le certificat `.cer` dans `Trusted Root Certification Authorities` et `Trusted Publishers` via GPO, Intune ou outil MDM.
-- Pour une diffusion externe, utiliser un certificat Code Signing OV/IV ou EV.
-
-Linux:
-
-- Le téléchargement recommandé est maintenant un `.deb` Ubuntu/Debian.
-- Le paquet installe le collecteur dans `/opt/spacefoot-it-collector`, enregistre `spacefoot-collector://` et embarque le moteur `osqueryi` utilisé pour l'inventaire local.
-- Si osquery n'est pas exploitable sur un poste, le collecteur bascule sur sa collecte Python locale au lieu de bloquer l'utilisateur.
-- Verifier `SHA256SUMS.txt`; ajouter une signature GPG ou un dépôt APT signe plus tard si nécessaire.
-
-Commande Ubuntu utilisateur:
-
-```bash
-downloads="$(xdg-user-dir DOWNLOAD 2>/dev/null || echo "$HOME/Téléchargements")"
-cd "$downloads" || cd "$HOME/Downloads"
-sudo apt install ./spacefoot-it-collector-linux-0.1.48.deb
-```
-
-macOS:
-
-- Sans Apple Developer ID + notarisation, Gatekeeper peut bloquer ou avertir l'utilisateur.
-- Phase 1: installation manuelle/interne avec documentation. Si Safari indique que l'app est endommagee, placer l'app dans Applications puis executer `xattr -dr com.apple.quarantine /Applications/spacefoot-it-collector-macos.app`.
-- Phase future: Apple Developer Program, certificat Developer ID Application, `codesign`, `notarytool`, puis stapling.
+Cette distribution est explicitement non signée : Windows peut afficher SmartScreen et macOS peut afficher Gatekeeper. Aucun certificat de test n’est généré ou installé. Les vérifications de sécurité ne sont pas désactivées. Le canal signé nécessite les certificats Windows, Apple Developer ID et la notarisation ; les mises à jour automatiques nécessitent le manifeste signé distinct.
 
 Regles de securite du collecteur:
 
@@ -805,7 +776,7 @@ Les valeurs placeholder (`To be filled by O.E.M.`, `Default string`, `System Ser
 
 Une permission manquante produit un champ vide; elle ne doit pas interrompre l'envoi de l'inventaire.
 
-Le collecteur desktop `Spacefoot IT Collector` propose un flux en quatre etapes:
+Le collecteur desktop `Parcéo Collector` propose un flux en quatre etapes:
 
 1. connexion API et validation du token temporaire;
 2. affectation utilisateur avec equipes/etablissements charges depuis l'admin;
