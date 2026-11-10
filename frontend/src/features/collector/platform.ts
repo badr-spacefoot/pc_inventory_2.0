@@ -3,6 +3,7 @@ export type CollectorPlatform = "windows" | "macos" | "linux" | "unknown";
 export interface CollectorAsset {
   fileName?: string;
   version?: string;
+  signed?: boolean;
 }
 
 export function buildCollectorLaunchUrl(prefillCode: string, apiBaseUrl: string): string {
@@ -29,7 +30,7 @@ export async function launchCollectorWithPrefill(
     openCollector: () => void;
   },
 ): Promise<void> {
-  if (platform === "windows" || platform === "macos") {
+  if (platform === "windows" || platform === "macos" || platform === "linux") {
     actions.downloadPrefillFile({ silent: true, revokeDelayMs: 5000 });
     await actions.waitForDownload(450);
   }
@@ -85,6 +86,7 @@ export function macosInstallCommand(asset?: CollectorAsset | null): string {
       : fileName.replace(/\.zip$/i, "");
   return [
     `app="$HOME/Applications/${appName}"`,
+    `if [ ! -d "$app" ]; then app="/Applications/${appName}"; fi`,
     `if [ ! -d "$app" ]; then app="$HOME/Downloads/${appName}"; fi`,
     `if [ ! -d "$app" ]; then app="$HOME/Téléchargements/${appName}"; fi`,
     'if [ ! -d "$app" ]; then app="/Applications/parceo-collector-macos.app"; fi',
@@ -92,7 +94,7 @@ export function macosInstallCommand(asset?: CollectorAsset | null): string {
     'if [ ! -d "$app" ]; then app="$HOME/Téléchargements/parceo-collector-macos.app"; fi',
     'if [ ! -d "$app" ]; then echo "Application Parcéo introuvable. Décompressez le téléchargement puis relancez cette commande."; exit 1; fi',
     'codesign --verify --deep --strict "$app" || exit 1',
-    'spctl --assess --type execute "$app" || exit 1',
+    ...(asset?.signed === false ? [] : ['spctl --assess --type execute "$app" || exit 1']),
     'open "$app"',
   ].join("\n");
 }
