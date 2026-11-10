@@ -35,6 +35,13 @@ case "activate":
     app.activate(options: [.activateIgnoringOtherApps])
     try output(["activated": true, "screenWidth": CGDisplayBounds(CGMainDisplayID()).width,
                 "screenHeight": CGDisplayBounds(CGMainDisplayID()).height])
+case "window":
+    let pid = Int32(args[2])!
+    let windows = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] ?? []
+    let matches = windows.filter { ($0[kCGWindowOwnerPID as String] as? Int32) == pid && ($0[kCGWindowLayer as String] as? Int) == 0 }
+    guard let window = matches.first,
+          let bounds = window[kCGWindowBounds as String] as? [String: Any] else { fatalError("Published collector window missing") }
+    try output(bounds)
 case "click":
     guard CGPreflightPostEventAccess() else { fatalError("GUI event permission is unavailable") }
     let point = CGPoint(x: Double(args[2])!, y: Double(args[3])!)

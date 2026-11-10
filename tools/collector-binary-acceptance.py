@@ -54,6 +54,22 @@ class ScreenDriver:
         else:
             packages.run("xdotool", "mousemove", str(round(line["x"])), str(round(line["y"])), "click", "1")
 
+    def primary_action(self, process):
+        # The published two-step UI keeps its primary action at the bottom
+        # right. Measure the actual native window, after observing its stage.
+        if self.mac:
+            bounds = json.loads(subprocess.check_output([str(self.helper), "window", str(process.pid)]))
+            x, y, width, height = (bounds[k] for k in ("X", "Y", "Width", "Height"))
+        else:
+            windows = subprocess.check_output(["xdotool", "search", "--onlyvisible", "--pid", str(process.pid)], text=True).split()
+            windows = [window for window in windows if "Collector 0.1.58" in subprocess.check_output(["xdotool", "getwindowname", window], text=True)]
+            assert len(windows) == 1, "Expected one published collector window"
+            data = subprocess.check_output(["xdotool", "getwindowgeometry", "--shell", windows[0]], text=True)
+            bounds = dict(line.split("=", 1) for line in data.splitlines() if "=" in line)
+            x, y, width, height = (int(bounds[k]) for k in ("X", "Y", "WIDTH", "HEIGHT"))
+        assert width >= 1040 and height >= 760, "Collector window is unexpectedly small"
+        self.click({"x": x + width - 65, "y": y + height - 42})
+
     def wait_for(self, phrase, process, timeout=75, exact=False):
         until = time.monotonic() + timeout
         while time.monotonic() < until:
@@ -200,13 +216,14 @@ def main():
                 receipt["windowActivation"] = json.loads(subprocess.check_output([str(driver.helper), "activate", str(process.pid)]))
             receipt["phase"] = "prefill"
             driver.wait_for("Profile ready", process)
-            driver.click(driver.wait_for("Next", process, exact=True))
+            driver.primary_action(process)
             receipt["phase"] = "scan"
-            driver.click(driver.wait_for("Scan this computer", process, exact=True))
-            submit = driver.wait_for("Submit inventory", process, timeout=180, exact=True)
+            driver.wait_for("Hardware scan", process)
+            driver.primary_action(process)
+            driver.wait_for("Inventory ready to submit", process, timeout=180)
             receipt["publishedBinaryHardwareScan"] = True
             receipt["phase"] = "submit"
-            driver.click(submit)
+            driver.primary_action(process)
             driver.wait_for("Submission sent", process, timeout=90)
             receipt["publishedBinarySubmissionSuccessVisible"] = True
             assert not failures, "Fixture rejected the native inventory"
