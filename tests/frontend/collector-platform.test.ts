@@ -34,7 +34,7 @@ describe("collector platform helpers", () => {
     ).toBe("http://127.0.0.1:54321/inventory-api");
   });
 
-  it.each(["windows", "macos"] as const)("keeps a prefill fallback before opening on %s", async (platform) => {
+  it.each(["windows", "macos", "linux"] as const)("keeps a prefill fallback before opening on %s", async (platform) => {
     const steps: string[] = [];
     let finishDownload!: () => void;
     const downloadReady = new Promise<void>((resolve) => {
@@ -99,5 +99,22 @@ describe("collector platform helpers", () => {
     expect(command).not.toContain("$(id)");
     expect(command).not.toContain("touch");
     expect(command).toContain("$HOME/Applications/parceo-collector-macos.app");
+  });
+
+  it("opens explicitly manual macOS releases through Gatekeeper instead of rejecting them in advance", () => {
+    const asset = { fileName: "parceo-collector-macos-0.1.58.app.zip", signed: false };
+    const command = macosInstallCommand(asset);
+    expect(command).toContain("/Applications/parceo-collector-macos-0.1.58.app");
+    expect(command).toContain('codesign --verify --deep --strict "$app" || exit 1');
+    expect(command).toContain('open "$app"');
+    expect(command).not.toContain("spctl");
+    expect(command).not.toContain("xattr");
+    expect(macosInstallCommand({ ...asset, signed: true })).toContain('spctl --assess --type execute "$app" || exit 1');
+  });
+
+  it("finds a versioned macOS bundle dragged into the system Applications folder", () => {
+    expect(macosInstallCommand({ fileName: "parceo-collector-macos-0.1.58.app.zip" })).toContain(
+      'then app="/Applications/parceo-collector-macos-0.1.58.app"; fi',
+    );
   });
 });

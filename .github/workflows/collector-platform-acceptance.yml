@@ -1,0 +1,63 @@
+name: Collector platform acceptance
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/collector-platform-acceptance.yml
+      - tools/collector-release-acceptance.py
+      - frontend/src/features/collector/platform.ts
+      - tests/frontend/collector-platform.test.ts
+
+permissions:
+  contents: read
+
+jobs:
+  released-collector:
+    name: Released 0.1.58 / ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x64
+            os: ubuntu-22.04
+          - name: macOS Intel
+            os: macos-15-intel
+          - name: macOS Apple Silicon
+            os: macos-15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - name: Install verified Python dependencies
+        run: python -m pip install --require-hashes -r collectors/requirements-build.lock
+      - name: Prepare Linux display and verified osquery
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+          python scripts/download-osquery.py linux
+          dpkg-deb -x installer-assets/osquery.deb "$RUNNER_TEMP/acceptance-osquery"
+      - name: Exercise the published Linux release
+        if: runner.os == 'Linux'
+        env:
+          PARCEO_ACCEPTANCE_ROOT: ${{ runner.temp }}/parceo-release-acceptance
+        run: xvfb-run -a python tools/collector-release-acceptance.py
+      - name: Exercise the published macOS release
+        if: runner.os == 'macOS'
+        env:
+          PARCEO_ACCEPTANCE_ROOT: ${{ runner.temp }}/parceo-release-acceptance
+        run: python tools/collector-release-acceptance.py
+      - name: Keep sanitized acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: collector-acceptance-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/parceo-release-acceptance/result.json
+          if-no-files-found: warn
+          retention-days: 14
