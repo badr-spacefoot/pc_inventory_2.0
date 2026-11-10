@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - codex/parceo-sillage-production
   workflow_dispatch:
   workflow_call:
 

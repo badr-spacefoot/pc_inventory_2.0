@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "pnpm run build:frontend",
+    "build:vercel": "pnpm run lint && pnpm run typecheck && pnpm exec vitest run tests/frontend tests/tooling/site-packaging.test.ts && pnpm run build:frontend && node scripts/package-site.mjs dist/vercel-site",
     "build:frontend": "node scripts/build-frontend.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint frontend/app.js frontend/theme-init.js frontend/config.js frontend/src tests scripts/*.mjs supabase/functions --max-warnings 0",
