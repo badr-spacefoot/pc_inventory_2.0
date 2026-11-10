@@ -1,5 +1,13 @@
 # Recette macOS et Linux du collecteur publié
 
+## Téléchargement Safari et Gatekeeper
+
+Le workflow distinct `Collector macOS Gatekeeper acceptance` utilise des VM neuves macOS Intel et Apple Silicon, sans invitation ni secret d'inventaire. Il vérifie que Gatekeeper est activé, télécharge le ZIP publié 0.1.58 avec Safari, contrôle son SHA-256 et la quarantaine Safari, puis utilise Archive Utility pour obtenir une application qui conserve cette quarantaine. Le contrôle `codesign --verify` porte sur l'intégrité ; il ne constitue pas une signature Developer ID reconnue par Apple.
+
+La tentative d'ouverture passe uniquement par LaunchServices (`open`), jamais par l'exécutable contenu dans le bundle. Le scénario observe la boîte de refus sans la valider ; il ne retire pas la quarantaine, n'accorde aucune exception et ne désactive aucune protection. Il ne clique que sur l'autorisation de téléchargement Safari du dépôt GitHub et de son CDN officiel, lorsque cette demande apparaît.
+
+Pour la version manuelle ad hoc non notariée, `outcome=blocked-by-gatekeeper` et `launchSucceeded=false` sont les résultats attendus. Un `passed=true` certifie alors que le téléchargement et le refus de sécurité ont été observés de manière concluante ; il ne certifie pas que la distribution est acceptée par Gatekeeper. Une ouverture standard sans exception nécessite une nouvelle distribution signée avec un certificat Developer ID et notariée par Apple. Un déplacement dans Applications ne remplace pas ces exigences. Voir les [indications Apple sur l'ouverture sûre](https://support.apple.com/en-us/102445) et la [notarisation avant distribution](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution).
+
 ## Parcours directement dans les binaires publiés
 
 Le workflow `Collector published binary GUI acceptance` télécharge uniquement le paquet natif immuable 0.1.58 adapté à la VM. Il ne télécharge pas le source du collecteur, ne charge aucun de ses modules dans le scénario de test, ne recompile pas l'application et n'injecte pas de code dans son processus.

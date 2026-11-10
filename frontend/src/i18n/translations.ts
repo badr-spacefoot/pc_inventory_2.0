@@ -792,8 +792,8 @@ export const englishTranslations = {
   "Application native recommandée": "Recommended native app",
   "Après le téléchargement, copiez-collez cette commande dans le terminal.":
     "After downloading, copy and paste this command into the terminal.",
-  "Build interne non notarisé. Si macOS indique que l'app est endommagée, placez l'app dans Applications puis lancez cette commande.":
-    "Internal non-notarized build. If macOS reports that the app is damaged, move it to Applications and run this command.",
+  "Cette version macOS n'est pas notariée. Gatekeeper peut bloquer son ouverture. Déplacer l'app dans Applications ou utiliser cette commande ne lève pas ce refus. Contactez l'équipe IT pour une version signée et notariée.":
+    "This macOS version is not notarized. Gatekeeper may block it from opening. Moving the app to Applications or using this command does not remove that block. Contact IT for a signed and notarized version.",
   "Installez l'application, revenez sur cette page, puis ouvrez le collecteur pour charger le profil pré-rempli.":
     "Install the app, return to this page, then open the collector to load the prefilled profile.",
   "Copier la commande Ubuntu": "Copy Ubuntu command",
