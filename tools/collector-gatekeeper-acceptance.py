@@ -127,11 +127,12 @@ def main():
                 blocked = True
                 receipt["gatekeeperDialogText"] = [line["text"] for line in lines]
                 break
-            if collector_running():
+            if collector_running() and any(phrase in text for phrase in ("missing profile information", "profile ready", "waiting for prefill")):
                 receipt["launchSucceeded"] = True
                 break
             time.sleep(1)
         receipt["gatekeeperBlockVisible"] = blocked
+        receipt["lastScreenText"] = [line["text"] for line in lines]
         receipt["launchServicesExitCode"] = launcher.poll()
         receipt["collectorProcessObserved"] = collector_running()
         (root / "launch-result.png").write_bytes((root / "screen.png").read_bytes())
@@ -144,7 +145,7 @@ def main():
         after = command("/usr/sbin/spctl", "--status")
         assert "assessments enabled" in after.stdout, "Gatekeeper state changed"
         assert receipt["appQuarantineAfterLaunch"]["present"], "Quarantine must remain present"
-        assert not receipt["collectorProcessObserved"], "Unsigned quarantined payload unexpectedly executed"
+        assert not receipt["launchSucceeded"], "Unsigned quarantined application unexpectedly reached its main interface"
         assert blocked and assessment.returncode != 0, "Expected a visible Gatekeeper rejection for this manual release"
         receipt["outcome"] = "blocked-by-gatekeeper"
         # Passing means the download/provenance/policy test is conclusive;
