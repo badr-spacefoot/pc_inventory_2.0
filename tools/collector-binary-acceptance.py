@@ -187,7 +187,7 @@ def main():
             server, worker, target, requests, received, failures = fixture(receipt)
         assert not preferences.exists(), "Disposable VM must have no pre-existing collector preferences"
         preferences.write_text(json.dumps({"autoUpdate": False, "language": "en", "apiUrl": target["apiUrl"],
-                                           "themePreferenceExplicit": True, "themePreference": "light"}), encoding="utf-8")
+                                           "themePreferenceExplicit": True, "themePreference": "light", "savedAt": time.time()}), encoding="utf-8")
         created_preferences = True
         env = {k: v for k, v in os.environ.items() if k not in ("SPACEFOOT_COLLECTOR_STARTUP_PROBE", "PYTHONPATH", "PYTHONHOME", "PARCEO_PRODUCTION_INVITE")}
         if platform.system() == "Linux":
