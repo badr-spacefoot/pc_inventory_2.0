@@ -193,7 +193,10 @@ def source_ui_roundtrip(source: Path, osquery: Path, receipt: dict) -> None:
             receipt["connectionStatus"] = app.connection_status.get()
             assert not failures, "Loopback fixture rejected a request"
             assert app.callback_exception_count == 0, "Tk callback failed"
-            if phase == "prefill" and app.teams and app.access_token.get() == access:
+            if phase == "prefill" and app.access_token.get() == access:
+                phase = "organization"
+                app.validate_token()
+            elif phase == "organization" and app.teams:
                 assert app.profile_body()["email"] == profile["email"]
                 phase = "scan"
                 app.scan_computer()
