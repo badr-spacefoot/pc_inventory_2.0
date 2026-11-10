@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildCollectorLaunchUrl,
   detectClientPlatform,
   downloadLabel,
+  launchCollectorWithPrefill,
   macosInstallCommand,
   osIconSvg,
   platformLabel,
@@ -10,6 +12,52 @@ import {
 } from "../../frontend/src/features/collector/platform";
 
 describe("collector platform helpers", () => {
+  it("builds launch links from the public HTTPS API used by the page", () => {
+    const api = "https://project.supabase.co/functions/v1/inventory-api";
+    const url = new URL(buildCollectorLaunchUrl("prefill+code&safe", api));
+    expect(url.protocol).toBe("spacefoot-collector:");
+    expect(url.searchParams.get("apiUrl")).toBe(api);
+    expect(url.searchParams.get("prefillCode")).toBe("prefill+code&safe");
+    expect(buildCollectorLaunchUrl("", api)).toBe("");
+  });
+
+  it("keeps non-local cleartext and credential-bearing API URLs out of launch links", () => {
+    for (const api of [
+      "http://project.supabase.co/inventory-api",
+      "https://user:secret@example.com/api",
+      "javascript:alert(1)",
+    ]) {
+      expect(() => buildCollectorLaunchUrl("fixture", api)).toThrow();
+    }
+    expect(
+      new URL(buildCollectorLaunchUrl("fixture", "http://127.0.0.1:54321/inventory-api")).searchParams.get("apiUrl"),
+    ).toBe("http://127.0.0.1:54321/inventory-api");
+  });
+
+  it.each(["windows", "macos"] as const)("keeps a prefill fallback before opening on %s", async (platform) => {
+    const steps: string[] = [];
+    let finishDownload!: () => void;
+    const downloadReady = new Promise<void>((resolve) => {
+      finishDownload = resolve;
+    });
+    const opening = launchCollectorWithPrefill(platform, {
+      downloadPrefillFile: () => {
+        steps.push("prefill-file");
+      },
+      waitForDownload: async () => {
+        steps.push("download-started");
+        await downloadReady;
+      },
+      openCollector: () => {
+        steps.push("protocol");
+      },
+    });
+    expect(steps).toEqual(["prefill-file", "download-started"]);
+    finishDownload();
+    await opening;
+    expect(steps).toEqual(["prefill-file", "download-started", "protocol"]);
+  });
+
   it.each([
     [{ platform: "Win32", userAgent: "" }, "windows"],
     [{ platform: "MacIntel", userAgent: "" }, "macos"],

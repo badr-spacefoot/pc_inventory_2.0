@@ -4227,8 +4227,8 @@ function updateCollectorDownloadUi() {
     $("#collector-os-icon").innerHTML = osIconSvg(detected);
     $("#collector-platform-copy").textContent = compatibleCollectorKnown
       ? state.language === "en"
-        ? `Collector ${asset.version || ""} already opened from this browser. Launch it to load the profile.`
-        : `Collecteur ${asset.version || ""} déjà lancé depuis ce navigateur. Ouvrez-le pour charger le profil.`
+        ? `Opening Collector ${asset.version || ""} was requested from this browser. Launch it to load the profile.`
+        : `L’ouverture du collecteur ${asset.version || ""} a été demandée depuis ce navigateur. Ouvrez-le pour charger le profil.`
       : `${translate("Collecteur detecte pour")} ${platformLabel(detected)} (${asset.version || ""}).`;
     if (!compatibleCollectorKnown) {
       $("#collector-platform-copy").textContent = downloadedExpectedCollector
@@ -5697,7 +5697,7 @@ function bindEvents() {
       $("#command-result").classList.remove("is-hidden");
       $("#collector-prefill-code").textContent = result.prefillCode || "";
       state.prefillCode = result.prefillCode || "";
-      state.collectorLaunchUrl = result.launchUrl || "";
+      state.collectorLaunchUrl = collectorDomain.buildCollectorLaunchUrl(result.prefillCode || "", CONFIG.apiBaseUrl);
       state.prefillPayload = {
         ...payload,
         prefillCode: result.prefillCode || "",
@@ -5707,8 +5707,8 @@ function bindEvents() {
             ? `invite_${state.currentInviteCode || form.inviteCode || result.inviteCode || ""}`
             : form.accessToken || ""),
         expiresAt: result.expiresAt || "",
-        apiUrl: result.apiUrl || CONFIG.apiBaseUrl,
-        launchUrl: result.launchUrl || "",
+        apiUrl: CONFIG.apiBaseUrl,
+        launchUrl: state.collectorLaunchUrl,
       };
       $("#powershell-command").textContent =
         state.language === "en"
@@ -5762,17 +5762,19 @@ function bindEvents() {
       toast("Aucun code de pré-remplissage", "error");
       return;
     }
-    if (state.detectedPlatform === "macos") {
-      downloadPrefillFile({ silent: true, revokeDelayMs: 5000 });
-      await new Promise((resolve) => window.setTimeout(resolve, 450));
-    }
-    if (state.detectedPlatform === "windows") rememberCollectorLaunch();
-    updateCollectorDownloadUi();
-    window.location.href = state.collectorLaunchUrl;
+    await collectorDomain.launchCollectorWithPrefill(state.detectedPlatform, {
+      downloadPrefillFile,
+      waitForDownload: (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds)),
+      openCollector: () => {
+        if (state.detectedPlatform === "windows") rememberCollectorLaunch();
+        updateCollectorDownloadUi();
+        window.location.href = state.collectorLaunchUrl;
+      },
+    });
     toast(
       state.language === "en"
-        ? "Opening the collector. If nothing happens, install it first."
-        : "Ouverture du collecteur. Si rien ne se passe, installez-le d'abord.",
+        ? "Opening requested. If no window appears, open Parcéo Collector from your applications."
+        : "Ouverture demandée. Si aucune fenêtre ne s’ouvre, lancez Parcéo Collector depuis vos applications.",
       "success",
     );
   });

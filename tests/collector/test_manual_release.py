@@ -56,6 +56,11 @@ class ManualReleaseTests(unittest.TestCase):
             manifest = json.loads((output / "collector-releases.json").read_text())
             self.assertTrue(manifest["manualOnly"])
             self.assertFalse(manifest["signed"])
+            windows = manifest["assets"]["windows"]
+            self.assertEqual(windows["fileName"], "parceo-collector-windows-0.1.54-setup.exe")
+            self.assertTrue(windows["downloadUrl"].endswith("/collector-manual-v0.1.54/" + windows["fileName"]))
+            self.assertEqual((output / windows["fileName"]).read_bytes(), b"synthetic-build")
+            self.assertFalse((output / "spacefoot-it-collector-windows-0.1.54-setup.exe").exists())
             self.assertEqual(set(manifest["assets"]), {"windows", "macos", "linux"})
             self.assertFalse((output / "collector-releases.signed.json").exists())
             for line in (output / "SHA256SUMS.txt").read_text().splitlines():

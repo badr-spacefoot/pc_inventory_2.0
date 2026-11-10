@@ -14,6 +14,20 @@ from collectors.desktop_collector.platform_integration import desktop_exec_quote
 
 
 class CollectorSupportTests(unittest.TestCase):
+    def test_legacy_supabase_launch_is_upgraded_before_any_connection(self) -> None:
+        launch_url = (
+            "spacefoot-collector://collect?prefillCode=synthetic-prefill&"
+            "apiUrl=http%3A%2F%2Foletfrcaptvardmdwacy.supabase.co%2Finventory-api"
+        )
+        parsed = launch_prefill_from_args(["collector.exe", launch_url])
+        self.assertEqual(parsed["apiUrl"], "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api")
+        self.assertEqual(parsed["prefillCode"], "synthetic-prefill")
+
+    def test_legacy_supabase_compatibility_does_not_allow_other_cleartext_servers(self) -> None:
+        for endpoint in ["http://example.com/inventory-api", "http://supabase.co.example.com/inventory-api", "ftp://project.supabase.co/inventory-api"]:
+            with self.subTest(endpoint=endpoint), self.assertRaises(ValueError):
+                normalize_api_url(endpoint)
+
     def test_normalizes_supabase_project_url_to_edge_function(self) -> None:
         self.assertEqual(
             normalize_api_url("oletfrcaptvardmdwacy.supabase.co/anything"),

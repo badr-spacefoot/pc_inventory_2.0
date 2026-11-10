@@ -93,6 +93,11 @@ def normalize_api_url(value: object) -> str:
     parsed = urllib.parse.urlparse(text)
     if parsed.username or parsed.password or not parsed.hostname:
         raise ValueError("Invalid API address")
+    # Supabase can expose its internal HTTP request URL in legacy launch links.
+    # Canonicalize that known public service before any request, never allow HTTP.
+    host = parsed.netloc.lower()
+    if parsed.scheme == "http" and (host.endswith(".supabase.co") or host == "supabase.co"):
+        parsed = parsed._replace(scheme="https")
     if parsed.scheme != "https" and not (
         parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1", "::1"}
     ):
