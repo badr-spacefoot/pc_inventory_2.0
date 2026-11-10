@@ -208,7 +208,7 @@ def main():
         driver = ScreenDriver(root, receipt)
         package = packages.download(root, packages.ASSETS[platform.system()])
         receipt["publishedDownloadChecksumsVerified"] = True
-        osquery = packages.native_package(root, package, receipt)
+        packages.native_package(root, package, receipt)
         binary = Path("/opt/parceo-collector/parceo-collector") if platform.system() == "Linux" else root / "macos/parceo-collector-macos-0.1.58.app/Contents/MacOS/parceo-collector-macos"
         receipt["executableSha256"] = hashlib.sha256(binary.read_bytes()).hexdigest()
         requests, received, failures = [], [], []
@@ -221,9 +221,8 @@ def main():
         preferences.write_text(json.dumps({"autoUpdate": False, "language": "en", "apiUrl": target["apiUrl"],
                                            "themePreferenceExplicit": True, "themePreference": "light", "savedAt": time.time()}), encoding="utf-8")
         created_preferences = True
-        env = {k: v for k, v in os.environ.items() if k not in ("SPACEFOOT_COLLECTOR_STARTUP_PROBE", "PYTHONPATH", "PYTHONHOME", "PARCEO_PRODUCTION_INVITE")}
-        if platform.system() == "Linux":
-            env["SPACEFOOT_OSQUERYI"] = str(osquery)
+        env = {k: v for k, v in os.environ.items() if k not in ("SPACEFOOT_COLLECTOR_STARTUP_PROBE", "SPACEFOOT_OSQUERYI", "PYTHONPATH", "PYTHONHOME", "PARCEO_PRODUCTION_INVITE")}
+        receipt["osqueryRuntimeOverride"] = False
         with (root / "native-private.log").open("wb") as log:
             process = subprocess.Popen([str(binary), "--api-url", target["apiUrl"], "--prefill-code", target["prefillCode"]], env=env, stdout=log, stderr=log, start_new_session=True)
             driver.pid = process.pid
