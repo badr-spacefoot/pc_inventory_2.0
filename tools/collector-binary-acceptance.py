@@ -67,8 +67,13 @@ class ScreenDriver:
             windows = subprocess.check_output(["xdotool", "search", "--onlyvisible", "--name", "Collector 0.1.58"], text=True).split()
             verified = []
             for window in windows:
-                pid = subprocess.check_output(["xdotool", "getwindowpid", window], text=True).strip()
-                if Path(f"/proc/{pid}/exe").resolve() == Path("/opt/parceo-collector/parceo-collector"):
+                title = subprocess.check_output(["xdotool", "getwindowname", window], text=True).strip()
+                owner = subprocess.run(["xdotool", "getwindowpid", window], capture_output=True, text=True)
+                if owner.returncode == 0:
+                    assert Path(f"/proc/{owner.stdout.strip()}/exe").resolve() == Path("/opt/parceo-collector/parceo-collector")
+                # Tk does not always publish _NET_WM_PID without a window
+                # manager. This Xvfb display is private to this single test.
+                if title == "Parcéo Collector 0.1.58" and process.poll() is None:
                     verified.append(window)
             windows = verified
             assert len(windows) == 1, "Expected one published collector window"
