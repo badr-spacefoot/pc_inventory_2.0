@@ -11,9 +11,18 @@ Le projet Vercel `parceo` de l’équipe `spacefoot1` est connecté au seul dép
 - Le workflow GitHub Quality complet s’exécute également sur cette branche. Il ne déploie pas de schéma Supabase.
 - Les trois URL publiques API/script/manifeste sont configurées dans les variables Vercel de production et restent identiques à la migration validée.
 
-Les commits destinés à la production doivent être intégrés à `main`, qui contient Sillage et la configuration Vercel validée. Les anciennes branches `codex/parceo-*` sont conservées pour l’historique et ne pilotent plus la production.
+Les commits destinés à la production doivent être intégrés à `main`, qui contient Sillage et la configuration Vercel validée. Les anciennes branches de migration fusionnées ont été supprimées ; leurs commits restent dans l’historique de `main`.
 
 Les builds qui échouent à l’installation, aux vérifications ou à la génération du paquet ne remplacent pas la production. Les previews conservent la protection Vercel existante ; aucun wildcard CORS n’est ajouté à Supabase. Les commentaires automatiques sur les pull requests sont désactivés.
+
+## Parcours de publication protégé
+
+1. Créer une branche de travail et ouvrir une pull request vers `main`.
+2. Attendre la réussite du contrôle obligatoire `quality` fourni par GitHub Actions. Mettre la branche à jour avec `main` si nécessaire et résoudre les conversations de revue.
+3. Fusionner la pull request après validation des contrôles. Une approbation par une seconde personne n’est pas exigée tant que le dépôt ne compte qu’un collaborateur.
+4. Vérifier que Vercel termine le build de production du commit fusionné et associe automatiquement `parceo.piqa.fr` à ce déploiement.
+
+La protection de `main` s’applique aussi aux administrateurs : les pushes directs, les pushes forcés et la suppression de la branche sont bloqués.
 
 ## Validation initiale
 
