@@ -51,18 +51,33 @@ case "click":
     }
 case "ocr":
     let image = NSImage(contentsOfFile: args[2])!
-    let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)!
+    var cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)!
     let bounds = CGDisplayBounds(CGMainDisplayID())
+    var region = bounds
+    if args.count > 3 {
+        let pid = Int32(args[3])!
+        let windows = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] ?? []
+        if let window = windows.first(where: { ($0[kCGWindowOwnerPID as String] as? Int32) == pid && ($0[kCGWindowLayer as String] as? Int) == 0 }),
+           let raw = window[kCGWindowBounds as String] as? [String: Any],
+           let windowBounds = CGRect(dictionaryRepresentation: raw as CFDictionary) {
+            region = windowBounds.intersection(bounds)
+            let scaleX = Double(cgImage.width) / bounds.width
+            let scaleY = Double(cgImage.height) / bounds.height
+            cgImage = cgImage.cropping(to: CGRect(x: region.minX * scaleX, y: region.minY * scaleY,
+                                                 width: region.width * scaleX, height: region.height * scaleY))!
+        }
+    }
     let request = VNRecognizeTextRequest()
     request.recognitionLevel = .accurate
     request.recognitionLanguages = ["en-US"]
     request.usesLanguageCorrection = false
+    request.minimumTextHeight = 0.004
     try VNImageRequestHandler(cgImage: cgImage).perform([request])
     let lines: [[String: Any]] = (request.results ?? []).compactMap { item in
         guard let text = item.topCandidates(1).first?.string else { return nil }
         let box = item.boundingBox
-        return ["text": text, "x": bounds.minX + box.midX * bounds.width,
-                "y": bounds.minY + (1 - box.midY) * bounds.height]
+        return ["text": text, "x": region.minX + box.midX * region.width,
+                "y": region.minY + (1 - box.midY) * region.height]
     }
     try output(lines)
 default:

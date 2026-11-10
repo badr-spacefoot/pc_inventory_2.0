@@ -33,6 +33,7 @@ class ScreenDriver:
         self.helper = root / "native-ui"
         self.last_lines = []
         self.receipt = receipt
+        self.pid = None
         if self.mac:
             packages.run("swiftc", str(Path(__file__).with_name("collector-native-ui.swift")), "-o", str(self.helper))
             receipt["vmDisplay"] = json.loads(subprocess.check_output([str(self.helper), "display"]))
@@ -45,7 +46,7 @@ class ScreenDriver:
         screen = self.root / "screen-private.png"
         if self.mac:
             packages.run("/usr/sbin/screencapture", "-x", str(screen), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return json.loads(subprocess.check_output([str(self.helper), "ocr", str(screen)]))
+            return json.loads(subprocess.check_output([str(self.helper), "ocr", str(screen), str(self.pid)]))
         packages.run("import", "-window", "root", str(screen), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         raw = subprocess.check_output(["tesseract", str(screen), "stdout", "--psm", "11", "tsv"], stderr=subprocess.DEVNULL, text=True)
         return ocr_lines(raw)
@@ -84,6 +85,7 @@ class ScreenDriver:
         self.click({"x": x + width - 65, "y": y + height - 42})
 
     def wait_for(self, phrase, process, timeout=75, exact=False):
+        expected = (phrase,) if isinstance(phrase, str) else phrase
         until = time.monotonic() + timeout
         while time.monotonic() < until:
             if process.poll() is not None:
@@ -98,12 +100,12 @@ class ScreenDriver:
                 self.receipt["optionalLocalNetworkPermission"] = "denied"
                 time.sleep(0.5)
                 continue
-            hits = [line for line in lines if (normalize(line["text"]) == normalize(phrase) if exact else normalize(phrase) in normalize(line["text"]))]
+            hits = [line for line in lines if any(normalize(line["text"]) == normalize(text) if exact else normalize(text) in normalize(line["text"]) for text in expected)]
             if hits:
                 # Footer action is lower than matching explanatory labels.
                 return max(hits, key=lambda line: line["y"])
             time.sleep(0.5)
-        raise TimeoutError("Published GUI did not reach expected stage: " + phrase)
+        raise TimeoutError("Published GUI did not reach expected stage: " + " / ".join(expected))
 
 
 def normalize(text):
@@ -224,6 +226,7 @@ def main():
             env["SPACEFOOT_OSQUERYI"] = str(osquery)
         with (root / "native-private.log").open("wb") as log:
             process = subprocess.Popen([str(binary), "--api-url", target["apiUrl"], "--prefill-code", target["prefillCode"]], env=env, stdout=log, stderr=log, start_new_session=True)
+            driver.pid = process.pid
             if platform.system() == "Darwin":
                 time.sleep(3)
                 receipt["windowActivation"] = json.loads(subprocess.check_output([str(driver.helper), "activate", str(process.pid)]))
@@ -233,7 +236,7 @@ def main():
             receipt["phase"] = "scan"
             driver.wait_for("Hardware scan", process)
             driver.primary_action(process)
-            driver.wait_for("Scan completed", process, timeout=180)
+            driver.wait_for(("Scan completed", "COLLECTION ENGINE"), process, timeout=180)
             receipt["publishedBinaryHardwareScan"] = True
             receipt["phase"] = "submit"
             driver.primary_action(process)
