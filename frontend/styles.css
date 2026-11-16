@@ -2395,6 +2395,7 @@ pre {
 
 .confirm-dialog form {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   padding: 24px;
 }
@@ -2402,6 +2403,7 @@ pre {
 .confirm-dialog h3,
 .confirm-dialog p {
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .confirm-dialog p {
@@ -2431,6 +2433,7 @@ pre {
 
 .confirm-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
   margin-top: 4px;
