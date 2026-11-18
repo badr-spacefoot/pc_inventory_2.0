@@ -1,7 +1,7 @@
 {
   "latestVersion": "collector-v0.1.58",
-  "releasePageUrl": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/tag/collector-manual-v0.1.58",
-  "fallbackReleasePageUrl": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases",
+  "releasePageUrl": "https://github.com/spacefoot-citizen/pc_inventory_2.0/releases/tag/collector-manual-v0.1.58",
+  "fallbackReleasePageUrl": "https://github.com/spacefoot-citizen/pc_inventory_2.0/releases",
   "manualOnly": true,
   "signed": false,
   "assets": {
@@ -9,8 +9,8 @@
       "platform": "windows",
       "version": "collector-v0.1.58",
       "fileName": "parceo-collector-windows-0.1.58-setup.exe",
-      "downloadUrl": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/download/collector-manual-v0.1.58/parceo-collector-windows-0.1.58-setup.exe",
-      "releasePageUrl": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/tag/collector-manual-v0.1.58",
+      "downloadUrl": "https://github.com/spacefoot-citizen/pc_inventory_2.0/releases/download/collector-manual-v0.1.58/parceo-collector-windows-0.1.58-setup.exe",
+      "releasePageUrl": "https://github.com/spacefoot-citizen/pc_inventory_2.0/releases/tag/collector-manual-v0.1.58",
       "signed": false,
       "size": 33058728,
       "sha256": "8f224a57f826afffa0d35a75306127187587eb99fd82a028610c49e020276e64"
@@ -19,8 +19,8 @@
       "platform": "macos",
       "version": "collector-v0.1.58",
       "fileName": "parceo-collector-macos-0.1.58.app.zip",
-      "downloadUrl": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/download/collector-manual-v0.1.58/parceo-collector-macos-0.1.58.app.zip",
-      "releasePageUrl": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/tag/collector-manual-v0.1.58",
+      "downloadUrl": "https://github.com/spacefoot-citizen/pc_inventory_2.0/releases/download/collector-manual-v0.1.58/parceo-collector-macos-0.1.58.app.zip",
+      "releasePageUrl": "https://github.com/spacefoot-citizen/pc_inventory_2.0/releases/tag/collector-manual-v0.1.58",
       "signed": false,
       "size": 40640718,
       "sha256": "69a54fe02b0cd340ea01ce5a4bad86c91eef923bb6a82bdd79e474b48204a0be"
@@ -29,8 +29,8 @@
       "platform": "linux",
       "version": "collector-v0.1.58",
       "fileName": "parceo-collector-linux-0.1.58.deb",
-      "downloadUrl": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/download/collector-manual-v0.1.58/parceo-collector-linux-0.1.58.deb",
-      "releasePageUrl": "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/tag/collector-manual-v0.1.58",
+      "downloadUrl": "https://github.com/spacefoot-citizen/pc_inventory_2.0/releases/download/collector-manual-v0.1.58/parceo-collector-linux-0.1.58.deb",
+      "releasePageUrl": "https://github.com/spacefoot-citizen/pc_inventory_2.0/releases/tag/collector-manual-v0.1.58",
       "signed": false,
       "size": 95096100,
       "sha256": "926c24ea0b21dc73d8e8eb875fdb5333c48733143f403c00b481a56d610bce2a"

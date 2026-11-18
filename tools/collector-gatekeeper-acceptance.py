@@ -18,7 +18,7 @@ import time
 
 ASSET = "parceo-collector-macos-0.1.58.app.zip"
 APP = ASSET.removesuffix(".zip")
-URL = "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/download/collector-manual-v0.1.58/" + ASSET
+URL = "https://github.com/spacefoot-citizen/pc_inventory_2.0/releases/download/collector-manual-v0.1.58/" + ASSET
 DIGEST = "69a54fe02b0cd340ea01ce5a4bad86c91eef923bb6a82bdd79e474b48204a0be"
 
 

@@ -9,7 +9,7 @@ COLLECTOR_BUILD_CHANNEL = "source"
 # Injected into packaged builds only after verifying against the signing key.
 UPDATE_PUBLIC_KEY = ""
 COLLECTOR_RELEASES_URL = (
-    "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/latest/download/collector-releases.signed.json"
+    "https://github.com/spacefoot-citizen/pc_inventory_2.0/releases/latest/download/collector-releases.signed.json"
 )
 MACOS_APP_BUNDLE_PREFIX = "parceo-collector-macos"
 DRAFT_PATH = Path.home() / ".spacefoot_it_collector.json"

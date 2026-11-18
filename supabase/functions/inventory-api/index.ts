@@ -105,7 +105,7 @@ const allowedInvoiceMimeTypes = new Set([
 ]);
 
 const defaultAllowedOrigins =
-  "https://badr-spacefoot.github.io,http://localhost:8080,http://127.0.0.1:8080";
+  "https://parceo.piqa.fr,http://localhost:8080,http://127.0.0.1:8080";
 
 const allowedOrigins =
   (Deno.env.get("ALLOWED_ORIGINS") ?? defaultAllowedOrigins).split(",").map((
@@ -132,7 +132,7 @@ const googleMapsApiKey = Deno.env.get("GOOGLE_MAPS_API_KEY") ?? "";
 const enrichmentCacheDays = Number(Deno.env.get("ENRICHMENT_CACHE_DAYS") ?? 90);
 const defaultCpuBenchmarkSourceUrls =
   (Deno.env.get("CPU_BENCHMARK_SOURCE_URLS") ||
-    "https://www.cpubenchmark.net/cpu-list/,https://raw.githubusercontent.com/badr-spacefoot/pc_inventory_2.0/main/data/cpu_benchmarks.csv")
+    "https://www.cpubenchmark.net/cpu-list/,https://raw.githubusercontent.com/spacefoot-citizen/pc_inventory_2.0/main/data/cpu_benchmarks.csv")
     .split(",")
     .map((url) => url.trim())
     .filter(Boolean);
@@ -1765,8 +1765,7 @@ async function fetchCpuReferenceText(url: string) {
       headers: {
         "accept": "text/html,application/xhtml+xml",
         "accept-language": "en-US,en;q=0.9,fr;q=0.8",
-        "user-agent":
-          "SpacefootInventory/1.0 (+https://badr-spacefoot.github.io/pc_inventory_2.0/)",
+        "user-agent": "SpacefootInventory/1.0 (+https://parceo.piqa.fr/)",
       },
     });
     if (!response.ok) return "";
@@ -3233,7 +3232,7 @@ function applicationPublicUrl(
   value: string,
 ) {
   const origin = request.headers.get("origin") ||
-    "https://badr-spacefoot.github.io";
+    "https://parceo.piqa.fr";
   try {
     const url = new URL(origin);
     url.pathname = url.hostname.includes("github.io")
@@ -3242,7 +3241,7 @@ function applicationPublicUrl(
     url.searchParams.set(parameter, value);
     return url.toString();
   } catch {
-    const url = new URL("https://badr-spacefoot.github.io/pc_inventory_2.0/");
+    const url = new URL("https://parceo.piqa.fr/");
     url.searchParams.set(parameter, value);
     return url.toString();
   }
@@ -5462,7 +5461,7 @@ async function handleAdminSyncCpuBenchmarks(request: Request) {
 
 function cpuReleaseAdapters() {
   const client = new BoundedCpuReleaseHttpClient(
-    "SpacefootInventory/1.0 (+https://badr-spacefoot.github.io/pc_inventory_2.0/)",
+    "SpacefootInventory/1.0 (+https://parceo.piqa.fr/)",
   );
   return [
     new IntelReleaseAdapter(client),

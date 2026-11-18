@@ -24,7 +24,7 @@ class CollectorDistributionTests(unittest.TestCase):
     def test_vm_acceptance_cannot_reach_production_from_pull_requests(self):
         script = load_script("acceptance_guards", "tools/collector-release-acceptance.py")
         base = {"PARCEO_ACCEPTANCE_PRODUCTION": "1", "GITHUB_REF": "refs/heads/main",
-                "GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_REPOSITORY": "badr-spacefoot/pc_inventory_2.0",
+                "GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_REPOSITORY": "spacefoot-citizen/pc_inventory_2.0",
                 "PARCEO_PRODUCTION_INVITE": "inv_fixture"}
         for changes in ({"GITHUB_REF": "refs/pull/5/merge"}, {"GITHUB_EVENT_NAME": "pull_request"},
                         {"GITHUB_REPOSITORY": "someone/else"}, {"PARCEO_PRODUCTION_INVITE": ""}):
@@ -36,7 +36,7 @@ class CollectorDistributionTests(unittest.TestCase):
     def test_vm_acceptance_rejects_existing_devices_and_broad_or_used_invites(self):
         script = load_script("acceptance_invite_scope", "tools/collector-release-acceptance.py")
         environment = {"PARCEO_ACCEPTANCE_PRODUCTION": "1", "GITHUB_REF": "refs/heads/main",
-                       "GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_REPOSITORY": "badr-spacefoot/pc_inventory_2.0",
+                       "GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_REPOSITORY": "spacefoot-citizen/pc_inventory_2.0",
                        "PARCEO_PRODUCTION_INVITE": "inv_fixture"}
         invite = {"label": "RECETTE-VM-LINUX-058", "maxUses": 1, "useCount": 0, "email": "vm@example.invalid"}
         for changes in ({"label": "Employee invitation"}, {"maxUses": 2}, {"useCount": 1}, {"deviceId": "real-device"}):
