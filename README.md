@@ -2,7 +2,7 @@
 
 Application web d'inventaire de parc informatique pour remplacer ou compléter l'ancien flux Google Sheets.
 
-Le site Sillage est publié automatiquement sur [parceo.piqa.fr](https://parceo.piqa.fr) par Vercel depuis `main`, l’unique branche de référence de production. Chaque build exécute lint, typecheck et les tests frontend avant publication. Voir [le fonctionnement des déploiements](docs/operations/2026-11-10-vercel-spacefoot/AUTODEPLOY.md).
+Le dépôt de référence est [`spacefoot-citizen/pc_inventory_2.0`](https://github.com/spacefoot-citizen/pc_inventory_2.0). Le site [parceo.piqa.fr](https://parceo.piqa.fr) est hébergé par le projet Vercel [`parceo`](https://vercel.com/spacefoot1/parceo) et utilise le projet Supabase [`parceo`](https://supabase.com/dashboard/project/oletfrcaptvardmdwacy). La branche de production est `main`. Le build Vercel exécute lint, typecheck et les tests frontend avant publication.
 
 La collecte complète du matériel passe par le collecteur local lancé volontairement : un navigateur ne peut pas lire de manière fiable le numéro de série, le CPU, la RAM, le stockage, l’adresse MAC ou l’utilisateur Windows.
 
@@ -11,6 +11,8 @@ La collecte complète du matériel passe par le collecteur local lancé volontai
 Prérequis : Node.js 22, pnpm 10.34.5, Deno 2, Python 3.12+ et la CLI Supabase pour les opérations cloud.
 
 ```powershell
+git clone https://github.com/spacefoot-citizen/pc_inventory_2.0.git
+cd pc_inventory_2.0
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --require-hashes -r collectors/requirements-build.lock
@@ -20,6 +22,8 @@ python -m http.server 8090 --directory frontend
 ```
 
 Ouvrir ensuite `http://127.0.0.1:8090/`. Le fichier `frontend/core.js` est généré depuis `frontend/src/`; il ne doit pas être modifié à la main.
+
+Pour un clone existant, mettre à jour `origin` avec `git remote set-url origin https://github.com/spacefoot-citizen/pc_inventory_2.0.git`.
 
 Commandes principales :
 
@@ -117,16 +121,14 @@ Flux:
 1. Créer un projet Supabase.
 2. Ouvrir le SQL Editor.
 3. Exécuter le contenu de `supabase/schema.sql`.
-4. Installer la CLI Supabase si besoin.
-5. Configurer les secrets de l'Edge Function:
+4. Installer la CLI Supabase, puis associer le clone à ce nouveau projet avec `supabase link --project-ref YOUR_PROJECT_REF`.
+5. Configurer les secrets propres à Parcéo. Les Edge Functions reçoivent automatiquement `SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY`. [Documentation Supabase](https://supabase.com/docs/guides/functions/secrets#default-secrets)
 
 ```powershell
-supabase secrets set SUPABASE_URL="https://YOUR_PROJECT.supabase.co"
-supabase secrets set SUPABASE_SERVICE_ROLE_KEY="YOUR_SERVICE_ROLE_KEY"
 supabase secrets set ADMIN_PASSWORD="un-mot-de-passe-long"
 supabase secrets set ADMIN_SESSION_SECRET="une-valeur-aléatoire-longue"
 supabase secrets set COLLECTION_ACCESS_TOKEN="token-utilisateur-de-collecte"
-supabase secrets set ALLOWED_ORIGINS="https://YOUR_GITHUB_USER.github.io,http://localhost:8080"
+supabase secrets set ALLOWED_ORIGINS="https://YOUR_FRONTEND_DOMAIN,http://127.0.0.1:8090"
 ```
 
 6. Deployer l'API:
@@ -137,11 +139,11 @@ supabase functions deploy inventory-api
 
 ### Deploiement cloud avec GitHub Actions
 
-Le workflow `.github/workflows/supabase-deploy.yml` se lance manuellement depuis GitHub Actions sur la version revue de `main`. Il applique les migrations SQL et publie l’API ; un simple push frontend ne le déclenche pas. Vérifier les migrations en attente et les sauvegardes avant de lancer une publication backend.
+Le workflow [Deploy Supabase API](https://github.com/spacefoot-citizen/pc_inventory_2.0/actions/workflows/supabase-deploy.yml) se lance manuellement sur la version revue de `main`. Il applique les migrations SQL et publie l’API. Vérifier les migrations en attente et les sauvegardes avant de lancer une publication backend.
 
 Dans GitHub, configurer:
 
-- Variable Actions `SUPABASE_PROJECT_REF`
+- Variables Actions `SUPABASE_PROJECT_REF` et `ALLOWED_ORIGINS`. Pour la production Parcéo, utiliser `oletfrcaptvardmdwacy` et `https://parceo.piqa.fr`.
 - Secret Actions `SUPABASE_ACCESS_TOKEN`
 - Secret Actions `ADMIN_PASSWORD`
 - Secret Actions `ADMIN_SESSION_SECRET`
@@ -161,26 +163,21 @@ https://YOUR_PROJECT.supabase.co/functions/v1/inventory-api
 
 ## Configuration frontend
 
-La configuration est lue par `frontend/src/core/config.ts`. Pour conserver un build unique entre les environnements, injecter les valeurs runtime avant `core.js` dans `frontend/index.html` :
+La configuration est lue par `frontend/src/core/config.ts`. À la publication, `scripts/package-site.mjs` génère `config.js` à partir des variables d’environnement publiques. Renseigner ces variables dans les paramètres Vercel pour le site de production :
 
-```html
-<script>
-  window.IT_INVENTORY_API_URL = "https://YOUR_PROJECT.supabase.co/functions/v1/inventory-api";
-  window.IT_INVENTORY_SCRIPT_URL = "https://badr-spacefoot.github.io/pc_inventory_2.0/scripts/collect-windows.ps1";
-  window.IT_INVENTORY_STALE_DAYS = 30;
-  window.IT_INVENTORY_WEATHER_LATITUDE = 48.8932;
-  window.IT_INVENTORY_WEATHER_LONGITUDE = 2.2879;
-  window.IT_INVENTORY_WEATHER_LOCATION = "Levallois-Perret";
-</script>
+```dotenv
+IT_INVENTORY_API_URL=https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api
+IT_INVENTORY_SCRIPT_URL=https://parceo.piqa.fr/scripts/collect-windows.ps1
+IT_INVENTORY_COLLECTOR_RELEASES_URL=https://parceo.piqa.fr/collector-releases.json
 ```
 
-Ne pas ajouter de secret dans le frontend : tout son contenu est public sur GitHub Pages. Les secrets eBay, Supabase service-role et synchronisation CPU restent dans les secrets Supabase/GitHub documentés dans `.env.example`.
+Le navigateur peut lire le contenu de `config.js`. Stocker les secrets eBay, Supabase service-role et synchronisation CPU dans Supabase ou GitHub Actions selon `.env.example`.
 
-La météo de la barre supérieure utilise Open-Meteo côté navigateur. Par défaut, aucune clé API n'est nécessaire ; les coordonnées ci-dessus déterminent la ville affichée.
+La météo de la barre supérieure utilise Open-Meteo côté navigateur. Les variables `IT_INVENTORY_WEATHER_LATITUDE`, `IT_INVENTORY_WEATHER_LONGITUDE` et `IT_INVENTORY_WEATHER_LOCATION` permettent de changer la ville affichée.
 
 ## Publication du site
 
-Intégrer les mises à jour à `main` après revue. Vercel construit `dist/vercel-site` et affecte automatiquement `parceo.piqa.fr` au build réussi. Le dernier déploiement réussi reste servi si le build échoue. Les anciennes branches `codex/parceo-*` ne sont plus des branches de production.
+Ouvrir une pull request vers `main` dans [Spacefoot Citizen](https://github.com/spacefoot-citizen/pc_inventory_2.0/pulls), puis attendre le contrôle GitHub Actions `quality` avant de fusionner. Vercel construit `dist/vercel-site` et affecte automatiquement `parceo.piqa.fr` au build réussi. Le dernier déploiement réussi reste servi si le build échoue. Suivre la publication dans [les déploiements Vercel](https://vercel.com/spacefoot1/parceo/deployments).
 
 ### GitHub Pages de secours
 
@@ -199,7 +196,7 @@ Les navigateurs, extensions et antivirus peuvent bloquer les fichiers `.ps1` ou 
 La strategie recommandee est:
 
 1. Generer un token de collecteur depuis la page de collecte.
-2. Télécharger l'application native officielle depuis les Releases GitHub.
+2. Télécharger l’application native depuis les [Releases du dépôt Spacefoot Citizen](https://github.com/spacefoot-citizen/pc_inventory_2.0/releases).
 3. Ouvrir l'application Windows, macOS ou Linux.
 4. Coller le token temporaire dans l'application.
 5. Collecter, relire les donnees affichees, puis envoyer.
@@ -215,12 +212,12 @@ Les scripts `.cmd`, `.ps1`, `.command` et `.sh` restent des modes avances IT. Il
 Un workflow GitHub Actions `Build collector apps` produit des applications natives via PyInstaller:
 
 1. Pour un test interne, ouvrir l'onglet GitHub `Actions`, lancer `Build collector apps`, puis récupérer les artefacts.
-2. Pour une release visible depuis le bouton `Télécharger l'application`, créer et pousser un tag `collector-vX.Y.Z`.
-3. Le workflow créé une release avec les builds Windows, macOS et Linux.
+2. Pour une distribution manuelle non signée, pousser un tag `collector-manual-vX.Y.Z`. Le workflow publie une préversion avec les paquets et leurs sommes de contrôle. Après vérification des fichiers, mettre à jour le manifeste utilisé par le site.
+3. Pour le canal de mises à jour signées, utiliser `collector-vX.Y.Z` après configuration des certificats et des clés du manifeste.
 
 Ces builds embarquent le collecteur Python cross-platform. Avant une diffusion large, signer le `.exe` Windows et notariser l'application macOS pour limiter les alertes systeme/antivirus. Aucun packaging ne peut garantir zero alerte si l'application est non signee ou sans reputation SmartScreen.
 
-Secrets optionnels pour signature:
+Secrets de signature du canal `collector-vX.Y.Z` :
 
 - `WINDOWS_CODESIGN_PFX_BASE64`: certificat Windows `.pfx` encode en base64.
 - `WINDOWS_CODESIGN_PASSWORD`: mot de passe du certificat.
@@ -231,7 +228,7 @@ Secrets optionnels pour signature:
 
 ### Distribution et signature
 
-La version manuelle Parcéo Collector 0.1.58 fournit les paquets Windows, macOS et Linux, le source inspectable et `SHA256SUMS.txt`. Voir [les notes de publication](docs/collector/manual-release.md).
+La [release manuelle Parcéo Collector 0.1.58](https://github.com/spacefoot-citizen/pc_inventory_2.0/releases/tag/collector-manual-v0.1.58) fournit les paquets Windows, macOS et Linux, le source inspectable et `SHA256SUMS.txt`. Voir [les notes de publication](docs/collector/manual-release.md).
 
 Les téléchargements sont nommés `parceo-collector-windows-0.1.58-setup.exe`, `parceo-collector-macos-0.1.58.app.zip` et `parceo-collector-linux-0.1.58.deb`. Le téléchargement proposé par le site est mis à jour seulement après vérification des fichiers publiés.
 
@@ -357,7 +354,7 @@ Secrets backend:
 - `CPU_BENCHMARK_SYNC_TOKEN` optionnel, requis pour declencher le job CPU sans session admin
 - `ENRICHMENT_CACHE_DAYS` optionnel
 
-Ne jamais mettre `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_PASSWORD` ou `ADMIN_SESSION_SECRET` dans le front GitHub Pages.
+Conserver `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_PASSWORD` et `ADMIN_SESSION_SECRET` dans les secrets du backend.
 
 ## API
 
@@ -590,7 +587,7 @@ supabase secrets set EBAY_MARKETPLACE_ID="EBAY_FR"
 # Optionnel pour test manuel seulement. Preferer EBAY_CLIENT_ID + EBAY_CLIENT_SECRET en production.
 supabase secrets set EBAY_BROWSE_API_TOKEN="..."
 supabase secrets set GOOGLE_MAPS_API_KEY="..."
-supabase secrets set CPU_BENCHMARK_SOURCE_URLS="https://www.cpubenchmark.net/cpu-list/,https://raw.githubusercontent.com/badr-spacefoot/pc_inventory_2.0/main/data/cpu_benchmarks.csv"
+supabase secrets set CPU_BENCHMARK_SOURCE_URLS="https://www.cpubenchmark.net/cpu-list/,https://raw.githubusercontent.com/spacefoot-citizen/pc_inventory_2.0/main/data/cpu_benchmarks.csv"
 supabase secrets set CPU_BENCHMARK_SYNC_TOKEN="..."
 supabase secrets set CPU_RELEASE_SYNC_TOKEN="..."
 supabase secrets set ENRICHMENT_CACHE_DAYS="90"
