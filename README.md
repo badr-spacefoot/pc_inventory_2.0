@@ -76,7 +76,7 @@ Responsabilités d'infrastructure :
 - `scripts/collect-windows.ps1` : fallback PowerShell de support Windows.
 - `.github/workflows/quality.yml` : contrôle qualité sur `main` et les pull requests.
 - `vercel.json` : vérification, build et publication automatique du site depuis `main`.
-- `.github/workflows/pages.yml` : publication GitHub Pages de secours, uniquement manuelle et sur sélection explicite de cet hébergeur.
+- `.github/workflows/pages.yml` : publication manuelle de GitHub Pages, avec une option de mise à jour du site de secours.
 
 Flux:
 
@@ -181,10 +181,10 @@ Ouvrir une pull request vers `main` dans [Spacefoot Citizen](https://github.com/
 
 ### GitHub Pages de secours
 
-Ce mécanisme n’est pas utilisé en production. Il exige une sélection explicite de `PRODUCTION_FRONTEND=github-pages` et un lancement manuel du workflow Pages.
+Le site Pages de secours est publié manuellement. Lorsque Vercel sert la production, utiliser l’option `refresh_fallback` du workflow Pages pour mettre à jour le site de secours.
 
 1. Dans GitHub, ouvrir `Settings > Pages` et choisir GitHub Actions comme source.
-2. Vérifier que `ALLOWED_ORIGINS` contient l'URL GitHub Pages.
+2. Vérifier que `ALLOWED_ORIGINS` contient l’origine `https://spacefoot-citizen.github.io`.
 3. Lancer manuellement le workflow Pages sur une version de `main` validée par le contrôle qualité.
 
 Le workflow `.github/workflows/pages.yml` installe les dépendances, exécute `pnpm run quality`, reconstruit `frontend/core.js`, puis utilise `scripts/package-site.mjs` pour publier uniquement les assets web et les deux scripts de collecte de secours. Les URLs publiques sont injectées dans `config.js`; les scripts de déploiement/import et les sources ne sont pas publiés.

@@ -1,7 +1,7 @@
 import type { InventoryConfig, RuntimeConfiguration } from "./types";
 
 const DEFAULT_API_URL = "https://oletfrcaptvardmdwacy.supabase.co/functions/v1/inventory-api";
-const DEFAULT_SCRIPT_URL = "https://badr-spacefoot.github.io/pc_inventory_2.0/scripts/collect-windows.ps1";
+const DEFAULT_SCRIPT_URL = "https://parceo.piqa.fr/scripts/collect-windows.ps1";
 
 function finiteNumber(value: string | number | undefined, fallback: number): number {
   const parsed = Number(value);

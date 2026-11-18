@@ -22,7 +22,7 @@ import urllib.request
 import zipfile
 
 
-BASE = "https://github.com/badr-spacefoot/pc_inventory_2.0/releases/download/collector-manual-v0.1.58/"
+BASE = "https://github.com/spacefoot-citizen/pc_inventory_2.0/releases/download/collector-manual-v0.1.58/"
 ASSETS = {
     "Linux": ("parceo-collector-linux-0.1.58.deb", "926c24ea0b21dc73d8e8eb875fdb5333c48733143f403c00b481a56d610bce2a"),
     "Darwin": ("parceo-collector-macos-0.1.58.app.zip", "69a54fe02b0cd340ea01ce5a4bad86c91eef923bb6a82bdd79e474b48204a0be"),
@@ -36,7 +36,7 @@ def production_context(*, native: bool = False) -> dict | None:
         return None
     if not (os.environ.get("GITHUB_REF") == "refs/heads/main"
             and os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
-            and os.environ.get("GITHUB_REPOSITORY") == "badr-spacefoot/pc_inventory_2.0"):
+            and os.environ.get("GITHUB_REPOSITORY") == "spacefoot-citizen/pc_inventory_2.0"):
         raise ValueError("Production acceptance requires a manual run of protected main")
     code = os.environ.get("PARCEO_PRODUCTION_INVITE", "")
     if not code.startswith("inv_") or not all(c.isalnum() or c in "_-" for c in code):

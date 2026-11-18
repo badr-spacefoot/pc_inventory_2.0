@@ -1,6 +1,6 @@
 # Publication automatique Parcéo depuis GitHub
 
-Le projet Vercel `parceo` de l’équipe `spacefoot1` est connecté au seul dépôt `badr-spacefoot/pc_inventory_2.0` par l’application officielle Vercel. L’installation et ses droits sur ce dépôt ont été approuvés explicitement ; les autres dépôts ne sont pas sélectionnés.
+Le projet Vercel `parceo` de l’équipe `spacefoot1` est connecté au seul dépôt `spacefoot-citizen/pc_inventory_2.0` par l’application officielle Vercel. L’installation et ses droits sur ce dépôt ont été approuvés explicitement ; les autres dépôts ne sont pas sélectionnés.
 
 ## Branche et build
 
@@ -34,6 +34,6 @@ L’affectation automatique des domaines est activée pour les prochaines public
 
 Consulter les déploiements sur https://vercel.com/spacefoot1/parceo/deployments. Un retour arrière Vercel peut désactiver l’affectation automatique des domaines : après correction, promouvoir le déploiement validé et vérifier que l’option est de nouveau active avant la publication suivante.
 
-Le collecteur natif et le backend Supabase gardent leurs mécanismes de publication séparés, à partir de la version revue de `main`. Un build Vercel publie le site et ses liens de téléchargement ; il ne crée pas de nouvelle release native et n’applique aucune migration SQL. Le workflow Supabase et le réglage d’origine sont uniquement manuels. Le workflow Pages de secours est manuel et exige `PRODUCTION_FRONTEND=github-pages` ; la valeur de production actuelle est `vercel`.
+Le collecteur natif et le backend Supabase gardent leurs mécanismes de publication séparés, à partir de la version revue de `main`. Un build Vercel publie le site et ses liens de téléchargement ; il ne crée pas de nouvelle release native et n’applique aucune migration SQL. Le workflow Supabase et le réglage d’origine sont uniquement manuels. Lorsque `PRODUCTION_FRONTEND=vercel`, lancer le workflow Pages manuellement avec `refresh_fallback` pour mettre à jour le site de secours.
 
 La maintenance programmée prix/CPU reste active depuis la branche par défaut `main`. Le nettoyage des factures nécessite `INVOICE_STORAGE_CLEANUP_ENABLED=true` après publication de la migration de file d’attente et de l’API correspondante ; cette option reste désactivée pendant la consolidation de branches.

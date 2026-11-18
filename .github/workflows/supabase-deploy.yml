@@ -74,7 +74,7 @@ jobs:
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
           ADMIN_SESSION_SECRET: ${{ secrets.ADMIN_SESSION_SECRET }}
           COLLECTION_ACCESS_TOKEN: ${{ secrets.COLLECTION_ACCESS_TOKEN }}
-          ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS || 'https://badr-spacefoot.github.io' }}
+          ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS || 'https://parceo.piqa.fr' }}
           ENRICHMENT_CACHE_DAYS: "90"
           EBAY_CLIENT_ID: ${{ secrets.EBAY_CLIENT_ID }}
           EBAY_CLIENT_SECRET: ${{ secrets.EBAY_CLIENT_SECRET }}

@@ -4093,7 +4093,7 @@ async function loadCollectorReleases() {
     state.collectorReleases = await publicResources.getJson(CONFIG.collectorReleaseConfigUrl, { cache: "no-store" });
   } catch {
     state.collectorReleases = {
-      fallbackReleasePageUrl: "https://github.com/badr-spacefoot/pc_inventory_2.0/releases",
+      fallbackReleasePageUrl: "https://github.com/spacefoot-citizen/pc_inventory_2.0/releases",
       assets: {},
     };
   }
@@ -4207,9 +4207,9 @@ function updateCollectorDownloadUi() {
   const releasePage =
     state.collectorReleases?.releasePageUrl ||
     state.collectorReleases?.fallbackReleasePageUrl ||
-    "https://github.com/badr-spacefoot/pc_inventory_2.0/releases";
+    "https://github.com/spacefoot-citizen/pc_inventory_2.0/releases";
   releases.href =
-    state.collectorReleases?.fallbackReleasePageUrl || "https://github.com/badr-spacefoot/pc_inventory_2.0/releases";
+    state.collectorReleases?.fallbackReleasePageUrl || "https://github.com/spacefoot-citizen/pc_inventory_2.0/releases";
   const detected = state.detectedPlatform;
   const asset = collectorAsset(detected);
   const canLaunch = Boolean(state.collectorLaunchUrl);

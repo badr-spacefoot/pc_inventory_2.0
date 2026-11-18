@@ -2,6 +2,11 @@ name: Deploy GitHub Pages
 
 on:
   workflow_dispatch:
+    inputs:
+      refresh_fallback:
+        description: Refresh the GitHub Pages fallback while Vercel serves production
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -14,7 +19,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: vars.PRODUCTION_FRONTEND == 'github-pages'
+    if: vars.PRODUCTION_FRONTEND == 'github-pages' || (vars.PRODUCTION_FRONTEND == 'vercel' && inputs.refresh_fallback)
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
