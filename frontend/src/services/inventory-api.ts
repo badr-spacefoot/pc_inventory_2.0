@@ -143,6 +143,10 @@ export class InventoryApi {
     return this.transport.request("/admin/devices");
   }
 
+  getAssignmentActivity(): Promise<ApiResponse> {
+    return this.transport.request("/admin/assignment-activity");
+  }
+
   getDevice(id: string): Promise<ApiResponse> {
     return this.transport.request(`/admin/devices/${encodePathSegment(id)}`);
   }

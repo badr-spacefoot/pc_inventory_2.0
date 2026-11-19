@@ -734,6 +734,18 @@ export const englishTranslations = {
   "Postes ignorés": "Devices skipped",
   Échecs: "Failures",
   "Total des postes": "Total devices",
+  Année: "Year",
+  "Resets et mises en service": "Resets and setups",
+  "Resets estimés": "Estimated resets",
+  "Premières mises en service": "First setups",
+  "Ordinateurs distincts": "Distinct computers",
+  "Interventions par mois": "Interventions by month",
+  "Historique des affectations indisponible.": "Assignment history is unavailable.",
+  "Aucune affectation comptabilisée pour cette année.": "No qualifying assignments for this year.",
+  "Parc entier. Un changement de titulaire compte comme un reset estimé. Une première affectation compte comme une mise en service, quel que soit l’état du matériel.":
+    "Fleet-wide. An owner change counts as an estimated reset. A first assignment counts as a setup, regardless of the condition of the device.",
+  "Les reprises d’inventaire et les affectations répétées au même titulaire sont exclues.":
+    "Inventory backfills and repeated assignments to the same owner are excluded.",
   "Postes actifs": "Active devices",
   "Postes sans remontée depuis plus de 30 jours": "Devices not reporting for more than 30 days",
   "Postes actuels dont la dernière remontée dépasse le seuil configuré":

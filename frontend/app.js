@@ -43,6 +43,9 @@ let activeEnrichmentJobProgress = null;
 let unifiedEnrichmentRunActive = false;
 let pendingFilterFrame = null;
 let detailRequestSequence = 0;
+let assignmentActivity = null;
+let assignmentActivityError = false;
+let assignmentActivityRequest = 0;
 const invoiceSubmissions = new invoiceDomain.InvoiceSubmissionTracker();
 
 function preserveFormDrafts() {
@@ -73,6 +76,11 @@ function preserveFormDrafts() {
 function clearAdminSession() {
   invoiceSubmissions.clear();
   detailRequestSequence += 1;
+  assignmentActivityRequest += 1;
+  assignmentActivity = null;
+  assignmentActivityError = false;
+  $("#assignment-activity-year")?.replaceChildren();
+  $("#assignment-activity-content")?.replaceChildren();
   state.adminToken = "";
   state.currentAdmin = null;
   localStorage.removeItem("it_inventory_admin_token");
@@ -326,6 +334,7 @@ function applyLanguage(language, persist = true) {
   );
   renderDevices();
   renderMetrics();
+  renderAssignmentActivity();
   renderOemMetrics();
   renderValuation();
   renderOrganization();
@@ -2792,6 +2801,85 @@ function renderFleetAgeCpu(items) {
   `;
 }
 
+function renderAssignmentActivity() {
+  const year = $("#assignment-activity-year");
+  const content = $("#assignment-activity-content");
+  if (!year || !content) return;
+  year.disabled = !assignmentActivity;
+  if (!assignmentActivity) {
+    content.textContent = translate(
+      assignmentActivityError ? "Historique des affectations indisponible." : "Chargement...",
+    );
+    return;
+  }
+
+  const { currentYear, currentMonth, years } = assignmentActivity;
+  const earliestYear = Math.min(currentYear - 1, ...years.map((summary) => summary.year));
+  const availableYears = Array.from({ length: currentYear - earliestYear + 1 }, (_, index) => currentYear - index);
+  const selectedYear = availableYears.includes(Number(year.value)) ? Number(year.value) : currentYear;
+  if (Array.from(year.options, (option) => Number(option.value)).join() !== availableYears.join()) {
+    year.replaceChildren(...availableYears.map((value) => new Option(String(value), String(value))));
+  }
+  year.value = String(selectedYear);
+  const summary = years.find((entry) => entry.year === selectedYear);
+  const months = (summary?.months || []).slice(0, selectedYear === currentYear ? currentMonth : 12);
+  const max = Math.max(1, ...months.flatMap(({ estimatedResets, firstSetups }) => [estimatedResets, firstSetups]));
+  const shortMonth = new Intl.DateTimeFormat(fleetLocale(), { month: "short", timeZone: "UTC" });
+  const longMonth = new Intl.DateTimeFormat(fleetLocale(), { month: "long", timeZone: "UTC" });
+  const resetLabel = translate("Resets estimés");
+  const setupLabel = translate("Premières mises en service");
+  const ordinate = (count, type) => `
+    <span class="assignment-bar assignment-${type}" style="--assignment-height:${(count / max) * 100}%">
+      ${count ? `<span>${formatFleetNumber(count)}</span>` : ""}
+    </span>`;
+
+  content.innerHTML = `
+    <dl class="assignment-totals">
+      <div class="assignment-resets"><dt>${resetLabel}</dt><dd>${formatFleetNumber(summary?.estimatedResets ?? 0)}</dd></div>
+      <div class="assignment-setups"><dt>${setupLabel}</dt><dd>${formatFleetNumber(summary?.firstSetups ?? 0)}</dd></div>
+      <div><dt>${translate("Ordinateurs distincts")}</dt><dd>${formatFleetNumber(summary?.distinctDevices ?? 0)}</dd></div>
+    </dl>
+    ${
+      months.length
+        ? `<div class="assignment-chart-scroll" tabindex="0" role="region" aria-label="${escapeHtml(translate("Interventions par mois"))}">
+        <ul class="assignment-chart" role="list">
+          ${months
+            .map(({ month, estimatedResets, firstSetups }) => {
+              const date = new Date(Date.UTC(selectedYear, month - 1, 1));
+              const accessibleLabel = `${longMonth.format(date)} · ${resetLabel} ${formatFleetNumber(estimatedResets)} · ${setupLabel} ${formatFleetNumber(firstSetups)}`;
+              return `<li aria-label="${escapeHtml(accessibleLabel)}" title="${escapeHtml(accessibleLabel)}">
+              <div class="assignment-chart-bars" aria-hidden="true">
+                ${ordinate(estimatedResets, "resets")}${ordinate(firstSetups, "setups")}
+              </div>
+              <span aria-hidden="true">${escapeHtml(shortMonth.format(date))}</span>
+            </li>`;
+            })
+            .join("")}
+        </ul>
+      </div>`
+        : `<p class="helper">${translate("Aucune affectation comptabilisée pour cette année.")}</p>`
+    }
+    <p class="fleet-card-note">${translate("Parc entier. Un changement de titulaire compte comme un reset estimé. Une première affectation compte comme une mise en service, quel que soit l’état du matériel.")}</p>
+    <p class="fleet-card-note">${translate("Les reprises d’inventaire et les affectations répétées au même titulaire sont exclues.")}</p>
+  `;
+}
+
+async function loadAssignmentActivity() {
+  if (!canPerformAction("VIEW_DASHBOARD")) return;
+  const sequence = ++assignmentActivityRequest;
+  try {
+    const result = await inventoryApi.getAssignmentActivity();
+    if (sequence !== assignmentActivityRequest) return;
+    assignmentActivity = result;
+    assignmentActivityError = false;
+  } catch {
+    if (sequence !== assignmentActivityRequest) return;
+    assignmentActivity = null;
+    assignmentActivityError = true;
+  }
+  renderAssignmentActivity();
+}
+
 function renderFleetDashboard() {
   if (!$("#fleet-dashboard")) return;
   const items = state.filtered;
@@ -4954,6 +5042,7 @@ async function selectAddressSuggestion(placeId) {
 async function loadAdminData() {
   applyPermissions();
   const data = await inventoryApi.listDevices();
+  void loadAssignmentActivity();
   loadAccessTokens().catch((error) => {
     state.accessTokens = [];
     renderAccessTokens();
@@ -5851,6 +5940,7 @@ function bindEvents() {
   });
 
   $("#refresh-admin").addEventListener("click", () => loadAdminData().catch((error) => toast(error.message)));
+  $("#assignment-activity-year").addEventListener("change", renderAssignmentActivity);
   $("#refresh-tokens").addEventListener("click", () => {
     loadAccessTokens().catch((error) => toast(error.message));
     loadCollectionInvites().catch((error) => toast(error.message));

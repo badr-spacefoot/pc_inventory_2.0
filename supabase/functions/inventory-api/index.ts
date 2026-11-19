@@ -12,6 +12,7 @@ import {
 } from "./core/input.ts";
 import { canPerformAction, normalizedRole } from "./core/permissions.ts";
 import { createResponseHelpers } from "./core/responses.ts";
+import { assignmentActivity } from "./domain/assignment-activity.ts";
 import {
   collectKeysetRows,
   fetchBoundedText,
@@ -3479,6 +3480,24 @@ async function handleAdminDeleteAccessToken(request: Request, id: string) {
   return json(request, { deleted: true });
 }
 
+async function handleAdminAssignmentActivity(request: Request) {
+  if (!(await isAdmin(request, "VIEW_DASHBOARD"))) {
+    return badRequest(request, "Action non autorisee pour ce role.", 403);
+  }
+  const now = new Date();
+  const periods = await collectKeysetRows(async (after) => {
+    let query = supabase.from("device_assignment_periods")
+      .select("id,device_id,user_id,started_at,created_at,source")
+      .not("user_id", "is", null)
+      .lte("started_at", now.toISOString()).order("id").limit(500);
+    if (after) query = query.gt("id", after);
+    const { data, error } = await query;
+    if (error) throw error;
+    return data ?? [];
+  });
+  return json(request, assignmentActivity(periods, now));
+}
+
 async function handleAdminDevices(request: Request) {
   if (!(await isAdmin(request, "DEVICE_VIEW"))) {
     return badRequest(request, "Action non autorisee pour ce role.", 403);
@@ -6915,6 +6934,11 @@ Deno.serve(async (request) => {
     }
     if (request.method === "POST" && path.endsWith("/collect/legacy-scan")) {
       return await handleLegacyScan(request);
+    }
+    if (
+      request.method === "GET" && path.endsWith("/admin/assignment-activity")
+    ) {
+      return await handleAdminAssignmentActivity(request);
     }
     if (request.method === "GET" && path.endsWith("/admin/devices")) {
       return await handleAdminDevices(request);
