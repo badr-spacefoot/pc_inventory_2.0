@@ -3420,6 +3420,115 @@ tbody tr.is-selected {
   margin-top: 18px;
 }
 
+.fleet-assignment-activity {
+  min-width: 0;
+}
+
+.fleet-assignment-activity .panel-head {
+  flex-wrap: wrap;
+}
+
+.fleet-assignment-activity label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fleet-assignment-activity select {
+  width: auto;
+}
+
+.assignment-totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+  gap: 10px;
+  margin: 0 0 16px;
+}
+
+.assignment-resets {
+  --assignment-color: var(--brand);
+}
+
+.assignment-setups {
+  --assignment-color: #2f89c7;
+}
+
+.assignment-totals > div {
+  border: 1px solid var(--line);
+  border-inline-start: 4px solid var(--assignment-color, var(--line));
+  border-radius: 8px;
+  padding: 10px 14px;
+  background: var(--soft);
+}
+
+.assignment-totals dt {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.assignment-totals dd {
+  margin: 4px 0 0;
+  font-size: 28px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.assignment-chart-scroll {
+  overflow-x: auto;
+}
+
+.assignment-chart {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 23px 0 8px;
+  min-width: 575px;
+  list-style: none;
+}
+
+.assignment-chart li {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.assignment-chart-bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+  height: 138px;
+  margin-bottom: 7px;
+  border-bottom: 1px solid var(--line);
+}
+
+.assignment-bar {
+  position: relative;
+  width: min(23px, 42%);
+  height: var(--assignment-height);
+  border-radius: 3px 3px 0 0;
+  background: var(--assignment-color);
+}
+
+.assignment-bar > span {
+  position: absolute;
+  bottom: calc(100% + 3px);
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--ink);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.fleet-assignment-activity .fleet-card-note {
+  margin: 6px 0 0;
+  max-width: none;
+  text-align: start;
+  font-size: 13px;
+}
+
 .fleet-kpi-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

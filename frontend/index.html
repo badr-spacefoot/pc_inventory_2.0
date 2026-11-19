@@ -1337,6 +1337,20 @@
             aria-label="Dashboard parc informatique"
           >
             <section class="fleet-kpi-grid" id="fleet-kpis" aria-label="Indicateurs principaux du parc"></section>
+            <section
+              class="panel fleet-assignment-activity"
+              aria-labelledby="assignment-activity-title"
+              data-permission="VIEW_DASHBOARD"
+            >
+              <div class="panel-head inline">
+                <h3 id="assignment-activity-title">Resets et mises en service</h3>
+                <label for="assignment-activity-year">
+                  Année
+                  <select id="assignment-activity-year" disabled></select>
+                </label>
+              </div>
+              <div id="assignment-activity-content" aria-live="polite"></div>
+            </section>
             <section class="panel fleet-priority-panel" id="fleet-priority"></section>
             <section class="fleet-section-grid">
               <section class="panel fleet-section-card" id="fleet-distribution"></section>
