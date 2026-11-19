@@ -3504,12 +3504,56 @@ tbody tr.is-selected {
   border-bottom: 1px solid var(--line);
 }
 
+.assignment-bar-hit {
+  display: flex;
+  align-items: flex-end;
+  width: min(23px, 42%);
+  height: 100%;
+}
+
+button.assignment-bar-hit {
+  border: 0;
+  border-radius: 3px;
+  padding: 0;
+  background: transparent;
+}
+
+button.assignment-bar-hit:hover .assignment-bar,
+button.assignment-bar-hit[aria-expanded="true"] .assignment-bar {
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+button.assignment-bar-hit:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
 .assignment-bar {
   position: relative;
-  width: min(23px, 42%);
+  width: 100%;
   height: var(--assignment-height);
   border-radius: 3px 3px 0 0;
   background: var(--assignment-color);
+}
+
+#assignment-activity-details {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+#assignment-details-title {
+  margin: 0;
+}
+
+.assignment-details-table {
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.assignment-details-table td,
+.assignment-details-table th {
+  overflow-wrap: anywhere;
 }
 
 .assignment-bar > span {

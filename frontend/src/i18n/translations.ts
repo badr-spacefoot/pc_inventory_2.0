@@ -740,6 +740,12 @@ export const englishTranslations = {
   "Premières mises en service": "First setups",
   "Ordinateurs distincts": "Distinct computers",
   "Interventions par mois": "Interventions by month",
+  "Sélectionnez une barre pour afficher les postes concernés.": "Select a bar to see the computers involved.",
+  Fermer: "Close",
+  "Date d’affectation": "Assignment date",
+  "Titulaire à cette date": "Holder at that date",
+  "Détail des interventions indisponible.": "Intervention details are unavailable.",
+  "Aucune intervention pour cette barre.": "No interventions for this bar.",
   "Historique des affectations indisponible.": "Assignment history is unavailable.",
   "Aucune affectation comptabilisée pour cette année.": "No qualifying assignments for this year.",
   "Parc entier. Un changement de titulaire compte comme un reset estimé. Une première affectation compte comme une mise en service, quel que soit l’état du matériel.":

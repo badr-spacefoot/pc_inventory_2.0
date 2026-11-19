@@ -15,6 +15,25 @@ export interface AssignmentPeriod {
   source: string;
 }
 
+export interface AssignmentActivityFilter {
+  year: number;
+  month: number;
+  category: "resets" | "setups";
+}
+
+export function parseAssignmentActivityFilter(
+  params: URLSearchParams,
+): AssignmentActivityFilter | null {
+  const year = params.get("year") ?? "";
+  const month = params.get("month") ?? "";
+  const category = params.get("category");
+  if (!/^[1-9]\d{3}$/.test(year) || !/^(?:[1-9]|1[0-2])$/.test(month)) {
+    return null;
+  }
+  if (category !== "resets" && category !== "setups") return null;
+  return { year: Number(year), month: Number(month), category };
+}
+
 function parisMonth(date: number) {
   const parts = parisMonthFormat.formatToParts(date);
   return {
@@ -23,18 +42,10 @@ function parisMonth(date: number) {
   };
 }
 
-export function assignmentActivity(
+function* assignmentInterventions(
   periods: readonly AssignmentPeriod[],
   now: Date,
 ) {
-  const { year: currentYear, month: currentMonth } = parisMonth(now.getTime());
-  const byYear = new Map<number, {
-    year: number;
-    estimatedResets: number;
-    firstSetups: number;
-    devices: Set<string>;
-    months: { month: number; estimatedResets: number; firstSetups: number }[];
-  }>();
   const previousUsers = new Map<string, string>();
   const timeline = periods
     .map((period) => ({
@@ -60,7 +71,46 @@ export function assignmentActivity(
     previousUsers.set(device_id, user_id);
     if (!countedSources.has(source) || user_id === previousUser) continue;
 
-    const { year, month } = parisMonth(started);
+    yield {
+      ...parisMonth(started),
+      period,
+      category: previousUser ? "resets" as const : "setups" as const,
+    };
+  }
+}
+
+export function assignmentPeriodsForMonth(
+  periods: readonly AssignmentPeriod[],
+  now: Date,
+  filter: AssignmentActivityFilter,
+) {
+  return Array.from(assignmentInterventions(periods, now))
+    .filter(({ year, month, category }) =>
+      year === filter.year && month === filter.month &&
+      category === filter.category
+    )
+    .map(({ period }) => period)
+    .reverse();
+}
+
+export function assignmentActivity(
+  periods: readonly AssignmentPeriod[],
+  now: Date,
+) {
+  const { year: currentYear, month: currentMonth } = parisMonth(now.getTime());
+  const byYear = new Map<number, {
+    year: number;
+    estimatedResets: number;
+    firstSetups: number;
+    devices: Set<string>;
+    months: { month: number; estimatedResets: number; firstSetups: number }[];
+  }>();
+  for (
+    const { year, month, period, category } of assignmentInterventions(
+      periods,
+      now,
+    )
+  ) {
     let summary = byYear.get(year);
     if (!summary) {
       summary = {
@@ -76,10 +126,10 @@ export function assignmentActivity(
       };
       byYear.set(year, summary);
     }
-    const category = previousUser ? "estimatedResets" : "firstSetups";
-    summary[category]++;
-    summary.months[month - 1]![category]++;
-    summary.devices.add(device_id);
+    const metric = category === "resets" ? "estimatedResets" : "firstSetups";
+    summary[metric]++;
+    summary.months[month - 1]![metric]++;
+    summary.devices.add(period.device_id);
   }
 
   return {

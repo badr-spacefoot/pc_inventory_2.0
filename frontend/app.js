@@ -46,6 +46,7 @@ let detailRequestSequence = 0;
 let assignmentActivity = null;
 let assignmentActivityError = false;
 let assignmentActivityRequest = 0;
+let selectedAssignmentDetails = null;
 const invoiceSubmissions = new invoiceDomain.InvoiceSubmissionTracker();
 
 function preserveFormDrafts() {
@@ -79,8 +80,10 @@ function clearAdminSession() {
   assignmentActivityRequest += 1;
   assignmentActivity = null;
   assignmentActivityError = false;
+  selectedAssignmentDetails = null;
   $("#assignment-activity-year")?.replaceChildren();
   $("#assignment-activity-content")?.replaceChildren();
+  renderAssignmentDetails();
   state.adminToken = "";
   state.currentAdmin = null;
   localStorage.removeItem("it_inventory_admin_token");
@@ -2801,12 +2804,91 @@ function renderFleetAgeCpu(items) {
   `;
 }
 
+function assignmentCategoryLabel(category) {
+  return translate(category === "resets" ? "Resets estimés" : "Premières mises en service");
+}
+
+function renderAssignmentDetails() {
+  const panel = $("#assignment-activity-details");
+  const entries = $("#assignment-details-entries");
+  if (!panel || !entries) return;
+  const details = selectedAssignmentDetails;
+  $$("#assignment-activity-content [data-assignment-month]").forEach((button) => {
+    button.setAttribute(
+      "aria-expanded",
+      String(
+        details?.month === Number(button.dataset.assignmentMonth) &&
+          details?.category === button.dataset.assignmentCategory,
+      ),
+    );
+  });
+  panel.hidden = !details;
+  if (!details) {
+    entries.replaceChildren();
+    $("#assignment-details-title").textContent = "";
+    return;
+  }
+
+  const monthLabel = new Intl.DateTimeFormat(fleetLocale(), { month: "long", year: "numeric", timeZone: "UTC" }).format(
+    new Date(Date.UTC(details.year, details.month - 1, 1)),
+  );
+  const dateFormat = new Intl.DateTimeFormat(fleetLocale(), {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Europe/Paris",
+  });
+  const title = `${assignmentCategoryLabel(details.category)} · ${monthLabel}`;
+  $("#assignment-details-title").textContent = title;
+  entries.innerHTML = `
+      ${
+        details.error
+          ? `<p class="helper">${translate("Détail des interventions indisponible.")}</p>`
+          : !details.entries
+            ? `<p class="helper">${translate("Chargement...")}</p>`
+            : details.entries.length
+              ? `<table class="assignment-details-table" aria-labelledby="assignment-details-title">
+                <thead><tr><th scope="col">${translate("Poste")}</th><th scope="col">${translate("Date d’affectation")}</th><th scope="col">${translate("Titulaire à cette date")}</th></tr></thead>
+                <tbody>${details.entries
+                  .map(
+                    ({ hostname, assignedAt, holder }) => `
+                  <tr>
+                    <td>${escapeHtml(hostname || translate("Non renseigné"))}</td>
+                    <td><time datetime="${escapeHtml(assignedAt)}">${escapeHtml(dateFormat.format(new Date(assignedAt)))}</time></td>
+                    <td>${escapeHtml(holder || translate("Non renseigné"))}</td>
+                  </tr>`,
+                  )
+                  .join("")}</tbody>
+              </table>`
+              : `<p class="helper">${translate("Aucune intervention pour cette barre.")}</p>`
+      }
+  `;
+}
+
+async function openAssignmentDetails(year, month, category) {
+  const selection = { year, month, category, entries: null, error: false };
+  selectedAssignmentDetails = selection;
+  renderAssignmentDetails();
+  $("#assignment-activity-details")?.scrollIntoView({ block: "nearest" });
+  try {
+    const { interventions } = await inventoryApi.getAssignmentActivityDetails(year, month, category);
+    if (selectedAssignmentDetails !== selection) return;
+    if (!Array.isArray(interventions)) throw new Error("Invalid assignment activity response");
+    selection.entries = interventions;
+  } catch {
+    if (selectedAssignmentDetails !== selection) return;
+    selection.error = true;
+  }
+  renderAssignmentDetails();
+}
+
 function renderAssignmentActivity() {
   const year = $("#assignment-activity-year");
   const content = $("#assignment-activity-content");
   if (!year || !content) return;
   year.disabled = !assignmentActivity;
   if (!assignmentActivity) {
+    selectedAssignmentDetails = null;
+    renderAssignmentDetails();
     content.textContent = translate(
       assignmentActivityError ? "Historique des affectations indisponible." : "Chargement...",
     );
@@ -2826,12 +2908,19 @@ function renderAssignmentActivity() {
   const max = Math.max(1, ...months.flatMap(({ estimatedResets, firstSetups }) => [estimatedResets, firstSetups]));
   const shortMonth = new Intl.DateTimeFormat(fleetLocale(), { month: "short", timeZone: "UTC" });
   const longMonth = new Intl.DateTimeFormat(fleetLocale(), { month: "long", timeZone: "UTC" });
-  const resetLabel = translate("Resets estimés");
-  const setupLabel = translate("Premières mises en service");
-  const ordinate = (count, type) => `
-    <span class="assignment-bar assignment-${type}" style="--assignment-height:${(count / max) * 100}%">
+  const resetLabel = assignmentCategoryLabel("resets");
+  const setupLabel = assignmentCategoryLabel("setups");
+  const canViewDetails = canPerformAction("VIEW_HISTORY");
+  const ordinate = (month, count, type, monthLabel) => {
+    const bar = `<span class="assignment-bar assignment-${type}" style="--assignment-height:${(count / max) * 100}%" aria-hidden="true">
       ${count ? `<span>${formatFleetNumber(count)}</span>` : ""}
     </span>`;
+    if (!count || !canViewDetails) return `<span class="assignment-bar-hit">${bar}</span>`;
+    const label = `${monthLabel} · ${assignmentCategoryLabel(type)} ${formatFleetNumber(count)}`;
+    return `<button type="button" class="assignment-bar-hit" data-assignment-month="${month}"
+      data-assignment-category="${type}" aria-label="${escapeHtml(label)}"
+      aria-controls="assignment-activity-details" aria-expanded="false" title="${escapeHtml(label)}">${bar}</button>`;
+  };
 
   content.innerHTML = `
     <dl class="assignment-totals">
@@ -2847,9 +2936,9 @@ function renderAssignmentActivity() {
             .map(({ month, estimatedResets, firstSetups }) => {
               const date = new Date(Date.UTC(selectedYear, month - 1, 1));
               const accessibleLabel = `${longMonth.format(date)} · ${resetLabel} ${formatFleetNumber(estimatedResets)} · ${setupLabel} ${formatFleetNumber(firstSetups)}`;
-              return `<li aria-label="${escapeHtml(accessibleLabel)}" title="${escapeHtml(accessibleLabel)}">
-              <div class="assignment-chart-bars" aria-hidden="true">
-                ${ordinate(estimatedResets, "resets")}${ordinate(firstSetups, "setups")}
+              return `<li aria-label="${escapeHtml(accessibleLabel)}">
+              <div class="assignment-chart-bars">
+                ${ordinate(month, estimatedResets, "resets", longMonth.format(date))}${ordinate(month, firstSetups, "setups", longMonth.format(date))}
               </div>
               <span aria-hidden="true">${escapeHtml(shortMonth.format(date))}</span>
             </li>`;
@@ -2859,9 +2948,11 @@ function renderAssignmentActivity() {
       </div>`
         : `<p class="helper">${translate("Aucune affectation comptabilisée pour cette année.")}</p>`
     }
+    ${canViewDetails && months.length ? `<p class="fleet-card-note">${translate("Sélectionnez une barre pour afficher les postes concernés.")}</p>` : ""}
     <p class="fleet-card-note">${translate("Parc entier. Un changement de titulaire compte comme un reset estimé. Une première affectation compte comme une mise en service, quel que soit l’état du matériel.")}</p>
     <p class="fleet-card-note">${translate("Les reprises d’inventaire et les affectations répétées au même titulaire sont exclues.")}</p>
   `;
+  renderAssignmentDetails();
 }
 
 async function loadAssignmentActivity() {
@@ -2872,6 +2963,7 @@ async function loadAssignmentActivity() {
     if (sequence !== assignmentActivityRequest) return;
     assignmentActivity = result;
     assignmentActivityError = false;
+    selectedAssignmentDetails = null;
   } catch {
     if (sequence !== assignmentActivityRequest) return;
     assignmentActivity = null;
@@ -5940,7 +6032,34 @@ function bindEvents() {
   });
 
   $("#refresh-admin").addEventListener("click", () => loadAdminData().catch((error) => toast(error.message)));
-  $("#assignment-activity-year").addEventListener("change", renderAssignmentActivity);
+  $("#assignment-activity-year").addEventListener("change", () => {
+    selectedAssignmentDetails = null;
+    renderAssignmentActivity();
+  });
+  $("#assignment-activity-content").addEventListener("click", (event) => {
+    const bar = event.target.closest("[data-assignment-month]");
+    if (!bar) return;
+    const year = Number($("#assignment-activity-year").value);
+    const month = Number(bar.dataset.assignmentMonth);
+    const category = bar.dataset.assignmentCategory;
+    if (
+      selectedAssignmentDetails?.year === year &&
+      selectedAssignmentDetails.month === month &&
+      selectedAssignmentDetails.category === category &&
+      !selectedAssignmentDetails.error
+    ) {
+      selectedAssignmentDetails = null;
+      renderAssignmentDetails();
+    } else {
+      void openAssignmentDetails(year, month, category);
+    }
+  });
+  $("#assignment-activity-details").addEventListener("click", (event) => {
+    if (!event.target.closest("[data-assignment-close]")) return;
+    $("#assignment-activity-content [aria-expanded='true']")?.focus();
+    selectedAssignmentDetails = null;
+    renderAssignmentDetails();
+  });
   $("#refresh-tokens").addEventListener("click", () => {
     loadAccessTokens().catch((error) => toast(error.message));
     loadCollectionInvites().catch((error) => toast(error.message));
