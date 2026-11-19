@@ -12,7 +12,11 @@ import {
 } from "./core/input.ts";
 import { canPerformAction, normalizedRole } from "./core/permissions.ts";
 import { createResponseHelpers } from "./core/responses.ts";
-import { assignmentActivity } from "./domain/assignment-activity.ts";
+import {
+  assignmentActivity,
+  assignmentPeriodsForMonth,
+  parseAssignmentActivityFilter,
+} from "./domain/assignment-activity.ts";
 import {
   collectKeysetRows,
   fetchBoundedText,
@@ -3480,12 +3484,8 @@ async function handleAdminDeleteAccessToken(request: Request, id: string) {
   return json(request, { deleted: true });
 }
 
-async function handleAdminAssignmentActivity(request: Request) {
-  if (!(await isAdmin(request, "VIEW_DASHBOARD"))) {
-    return badRequest(request, "Action non autorisee pour ce role.", 403);
-  }
-  const now = new Date();
-  const periods = await collectKeysetRows(async (after) => {
+function loadAssignmentActivityPeriods(now: Date) {
+  return collectKeysetRows(async (after) => {
     let query = supabase.from("device_assignment_periods")
       .select("id,device_id,user_id,started_at,created_at,source")
       .not("user_id", "is", null)
@@ -3495,7 +3495,59 @@ async function handleAdminAssignmentActivity(request: Request) {
     if (error) throw error;
     return data ?? [];
   });
+}
+
+async function handleAdminAssignmentActivity(request: Request) {
+  if (!(await isAdmin(request, "VIEW_DASHBOARD"))) {
+    return badRequest(request, "Action non autorisee pour ce role.", 403);
+  }
+  const now = new Date();
+  const periods = await loadAssignmentActivityPeriods(now);
   return json(request, assignmentActivity(periods, now));
+}
+
+async function handleAdminAssignmentActivityDetails(
+  request: Request,
+  url: URL,
+) {
+  if (!(await isAdmin(request, "VIEW_HISTORY"))) {
+    return badRequest(request, "Action non autorisee pour ce role.", 403);
+  }
+  const filter = parseAssignmentActivityFilter(url.searchParams);
+  if (!filter) {
+    return badRequest(request, "Période ou type d’intervention invalide.");
+  }
+
+  const now = new Date();
+  const periods = assignmentPeriodsForMonth(
+    await loadAssignmentActivityPeriods(now),
+    now,
+    filter,
+  );
+  const labels = new Map<string, { holder: string; hostname: string }>();
+  for (let index = 0; index < periods.length; index += 100) {
+    const ids = periods.slice(index, index + 100).map(({ id }) => id);
+    const { data, error } = await supabase.from("device_assignment_periods")
+      .select("id,user_name,device:devices(hostname)")
+      .in("id", ids)
+      .returns<{
+        id: string;
+        user_name: string | null;
+        device: { hostname: string | null } | null;
+      }[]>();
+    if (error) throw error;
+    for (const row of data ?? []) {
+      labels.set(row.id, {
+        holder: safeString(row.user_name),
+        hostname: safeString(row.device?.hostname),
+      });
+    }
+  }
+  const interventions = periods.flatMap(({ id, started_at }) => {
+    const label = labels.get(id);
+    return label ? [{ ...label, assignedAt: started_at }] : [];
+  });
+  return json(request, { interventions });
 }
 
 async function handleAdminDevices(request: Request) {
@@ -6934,6 +6986,12 @@ Deno.serve(async (request) => {
     }
     if (request.method === "POST" && path.endsWith("/collect/legacy-scan")) {
       return await handleLegacyScan(request);
+    }
+    if (
+      request.method === "GET" &&
+      path.endsWith("/admin/assignment-activity/details")
+    ) {
+      return await handleAdminAssignmentActivityDetails(request, url);
     }
     if (
       request.method === "GET" && path.endsWith("/admin/assignment-activity")

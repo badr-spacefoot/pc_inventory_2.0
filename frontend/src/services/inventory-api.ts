@@ -147,6 +147,11 @@ export class InventoryApi {
     return this.transport.request("/admin/assignment-activity");
   }
 
+  getAssignmentActivityDetails(year: number, month: number, category: "resets" | "setups"): Promise<ApiResponse> {
+    const query = new URLSearchParams({ year: String(year), month: String(month), category });
+    return this.transport.request(`/admin/assignment-activity/details?${query}`);
+  }
+
   getDevice(id: string): Promise<ApiResponse> {
     return this.transport.request(`/admin/devices/${encodePathSegment(id)}`);
   }

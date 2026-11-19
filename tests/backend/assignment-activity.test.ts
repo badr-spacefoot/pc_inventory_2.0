@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   assignmentActivity,
+  assignmentPeriodsForMonth,
+  parseAssignmentActivityFilter,
   type AssignmentPeriod,
 } from "../../supabase/functions/inventory-api/domain/assignment-activity.ts";
 
@@ -40,6 +42,44 @@ describe("assignment activity", () => {
       currentYear: 2027,
       currentMonth: 1,
       years: [],
+    });
+  });
+
+  it("returns the exact assignments behind a bar, most recent first", () => {
+    const now = new Date("2026-03-01T09:00:00Z");
+    const periods = [
+      period("1", "backfilled", "a", "2025-09-01T12:00:00Z", "SYSTEM"),
+      period("2", "backfilled", "b", "2026-01-31T23:20:00Z"),
+      period("3", "backfilled", "b", "2026-02-14T09:00:00Z", "MANUAL_ADMIN"),
+      period("4", "new", "a", "2026-02-12T09:00:00Z"),
+      period("5", "backfilled", "c", "2026-02-28T21:58:00Z"),
+      period("6", "backfilled", "a", "2026-02-28T23:45:00Z", "MANUAL_ADMIN"),
+    ];
+    const resets = assignmentPeriodsForMonth(periods, now, { year: 2026, month: 2, category: "resets" });
+    const setups = assignmentPeriodsForMonth(periods, now, { year: 2026, month: 2, category: "setups" });
+    expect(resets.map((event) => event.id)).toEqual(["5", "2"]);
+    expect(setups.map((event) => event.id)).toEqual(["4"]);
+    expect(assignmentActivity(periods, now).years[0]!.months[1]).toEqual({
+      month: 2,
+      estimatedResets: resets.length,
+      firstSetups: setups.length,
+    });
+  });
+
+  it("rejects incomplete or invalid detail filters", () => {
+    for (const query of [
+      "",
+      "year=2026&month=0&category=resets",
+      "year=2026&month=13&category=resets",
+      "year=2026&month=11&category=all",
+      "year=2026e0&month=11&category=setups",
+    ]) {
+      expect(parseAssignmentActivityFilter(new URLSearchParams(query))).toBeNull();
+    }
+    expect(parseAssignmentActivityFilter(new URLSearchParams("year=2026&month=11&category=setups"))).toEqual({
+      year: 2026,
+      month: 11,
+      category: "setups",
     });
   });
 });
